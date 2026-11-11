@@ -10,6 +10,9 @@ for display, audio, storage, and input.
 - **Run original JARs directly.** Import MIDlet `.jar` files and run them with
   the FreeJ2ME-based engine; no source changes or JAR-to-DEX conversion are
   required.
+- **Import games in batches or from ZIP files.** Select multiple JARs at once,
+  or choose a ZIP archive and let J2MEX find and import its contained JARs;
+  manual extraction is not needed.
 - **Organize a game library.** Add games to collections, keep each game's saved
   data separate, and retain the original game files.
 - **Tune the display per game.** Set virtual canvas dimensions, scaling,
