@@ -62,6 +62,25 @@ your intended use.
 and UI smoke checks. Host-side tests do not replace Android device testing.
 The standalone framebuffer protocol test requires a working Android font bridge.
 
+## Release signing
+
+Release APKs are signed with `keys/j2mex-release.p12` and the alias
+`j2mex-release`. The keystore is intentionally excluded from version control.
+Keep an offline backup of the keystore and its password; losing either prevents
+users from installing future updates over this release.
+
+Set `J2MEX_RELEASE_KEYSTORE_PASSWORD` through a secret manager, then build from
+this directory with an incremented version code and the release version name:
+
+```sh
+./gradlew :app:assembleRelease \
+  -PbuildVersionCode=263 \
+  -PbuildVersionName=0.1.0
+```
+
+The release keystore is not included in this repository. A release build must
+fail rather than fall back to the debug signing key.
+
 ## License notes
 
 See `app/src/main/assets/NOTICE.txt` and `app/src/main/assets/licenses/` for

@@ -5,6 +5,7 @@ import android.bluetooth.*;
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.IntentFilter;
@@ -16,6 +17,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -29,6 +31,8 @@ import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.text.method.LinkMovementMethod;
+import android.text.util.Linkify;
 import android.util.SparseIntArray;
 import android.view.*;
 import android.view.inputmethod.BaseInputConnection;
@@ -144,6 +148,14 @@ public final class RuntimeActivity extends LocalizedActivity {
     private interface MemoryEditorCallback {
         void onReply(MemoryEditorReply reply);
     }
+    private static final class ResponsiveDialog {
+        final Dialog dialog;
+        final Runnable resize;
+        ResponsiveDialog(Dialog dialog, Runnable resize) {
+            this.dialog = dialog;
+            this.resize = resize;
+        }
+    }
 
     private FrameLayout root;
     private FramePresentation screen;
@@ -180,6 +192,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     private final ConcurrentMap<Integer, MemoryEditorCallback> memoryEditorReplies =
             new ConcurrentHashMap<>();
     private final AtomicInteger nextMemoryEditorRequest = new AtomicInteger();
+    private final ArrayList<ResponsiveDialog> responsiveDialogs = new ArrayList<>();
     private final ArrayDeque<BluetoothRequest> bluetoothQueue = new ArrayDeque<>();
     private final ExecutorService bluetoothWorkers = Executors.newCachedThreadPool();
     private final ConcurrentMap<Integer, BluetoothServerSocket> bluetoothServers = new ConcurrentHashMap<>();
@@ -319,7 +332,12 @@ public final class RuntimeActivity extends LocalizedActivity {
                 oldLeft, oldTop, oldRight, oldBottom) -> updateCanvasLayout());
         root.addOnLayoutChangeListener((view, left, top, right, bottom,
                 oldLeft, oldTop, oldRight, oldBottom) -> {
-            if (right > left && bottom > top) updateCanvasLayout();
+            if (right <= left || bottom <= top) return;
+            updateCanvasLayout();
+            if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                if (edgeMenu != null) edgeMenu.refreshForCurrentViewport();
+                resizeResponsiveDialogs();
+            }
         });
         updateCanvasLayout();
         root.requestApplyInsets();
@@ -686,10 +704,11 @@ public final class RuntimeActivity extends LocalizedActivity {
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            int maxWidth = getResources().getDisplayMetrics().widthPixels - dp(36);
-            window.setLayout(Math.min(maxWidth, dp(480)),
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        registerResponsiveDialog(dialog,
+                () -> setDialogWindowSize(dialog, 36, 480,
+                        ViewGroup.LayoutParams.WRAP_CONTENT),
+                null);
     }
 
     private final class MemoryEditorDialog {
@@ -790,10 +809,10 @@ public final class RuntimeActivity extends LocalizedActivity {
 
             dialog.setContentView(card);
             dialog.setCancelable(true);
-            dialog.setOnDismissListener(ignored -> {
+            DialogInterface.OnDismissListener dismissListener = ignored -> {
                 if (!closing) sendMemoryEditorRequest(4, "", 0, "", null);
                 if (memoryEditorDialog == this) memoryEditorDialog = null;
-            });
+            };
             dialog.show();
             Window window = dialog.getWindow();
             if (window != null) {
@@ -803,16 +822,14 @@ public final class RuntimeActivity extends LocalizedActivity {
                 attributes.dimAmount = 0.60f;
                 window.setAttributes(attributes);
                 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-                resizeToAvailableArea();
             }
+            registerResponsiveDialog(dialog, this::resizeToAvailableArea, dismissListener);
         }
 
         void resizeToAvailableArea() {
             Window window = dialog.getWindow();
             if (window == null || !dialog.isShowing()) return;
-            int width = Math.max(dp(240),
-                    getResources().getDisplayMetrics().widthPixels - dp(28));
-            window.setLayout(width, availableDialogHeight());
+            setDialogWindowSize(dialog, 28, 520, availableDialogHeight());
         }
 
         private void runSearch() {
@@ -977,10 +994,11 @@ public final class RuntimeActivity extends LocalizedActivity {
             if (window != null) {
                 window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                 window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-                int maxWidth = getResources().getDisplayMetrics().widthPixels - dp(36);
-                window.setLayout(Math.min(maxWidth, dp(480)),
-                        ViewGroup.LayoutParams.WRAP_CONTENT);
             }
+            registerResponsiveDialog(editDialog,
+                    () -> setDialogWindowSize(editDialog, 36, 480,
+                            ViewGroup.LayoutParams.WRAP_CONTENT),
+                    null);
         }
 
         private void close() {
@@ -1098,10 +1116,11 @@ public final class RuntimeActivity extends LocalizedActivity {
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            int maxWidth = getResources().getDisplayMetrics().widthPixels - dp(40);
-            window.setLayout(Math.min(maxWidth, dp(480)),
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        registerResponsiveDialog(dialog,
+                () -> setDialogWindowSize(dialog, 40, 480,
+                        ViewGroup.LayoutParams.WRAP_CONTENT),
+                null);
     }
 
     private TextView dialogAction(String label) {
@@ -1139,15 +1158,52 @@ public final class RuntimeActivity extends LocalizedActivity {
         send(15, bounded);
     }
 
+    private int currentViewportWidthPx() {
+        if (root != null && root.getWidth() > 0) return root.getWidth();
+        Rect visibleFrame = new Rect();
+        getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
+        if (visibleFrame.width() > 0) return visibleFrame.width();
+        return getResources().getDisplayMetrics().widthPixels;
+    }
+
+    private void setDialogWindowSize(Dialog dialog, int sideMarginDp, int maxWidthDp,
+            int height) {
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        int availableWidth = Math.max(dp(1), currentViewportWidthPx() - dp(sideMarginDp));
+        window.setLayout(Math.min(availableWidth, dp(maxWidthDp)), height);
+    }
+
+    private void registerResponsiveDialog(Dialog dialog, Runnable resize,
+            DialogInterface.OnDismissListener onDismiss) {
+        ResponsiveDialog entry = new ResponsiveDialog(dialog, resize);
+        responsiveDialogs.add(entry);
+        dialog.setOnDismissListener(dismissed -> {
+            responsiveDialogs.remove(entry);
+            if (onDismiss != null) onDismiss.onDismiss(dismissed);
+        });
+        resize.run();
+    }
+
+    private void resizeResponsiveDialogs() {
+        for (ResponsiveDialog entry : new ArrayList<>(responsiveDialogs)) {
+            if (!entry.dialog.isShowing()) {
+                responsiveDialogs.remove(entry);
+            } else {
+                entry.resize.run();
+            }
+        }
+    }
+
     private int availableDialogHeight() {
-        int available = getResources().getDisplayMetrics().heightPixels;
+        int available = root != null && root.getHeight() > 0
+                ? root.getHeight() : getResources().getDisplayMetrics().heightPixels;
         android.graphics.Rect visibleFrame = new android.graphics.Rect();
         getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
         if (visibleFrame.height() > dp(200)) available = Math.min(available, visibleFrame.height());
-        int margin = getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE ? dp(20) : dp(36);
-        int minimum = getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE ? dp(180) : dp(220);
+        boolean landscape = isLandscapeViewport();
+        int margin = landscape ? dp(20) : dp(36);
+        int minimum = landscape ? dp(180) : dp(220);
         return Math.max(minimum, available - margin);
     }
 
@@ -1250,9 +1306,9 @@ public final class RuntimeActivity extends LocalizedActivity {
                             : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
                     : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         });
-        dialog.setOnDismissListener(ignored -> {
+        DialogInterface.OnDismissListener dismissListener = ignored -> {
             if (runtimeSettingsDialog == dialog) runtimeSettingsDialog = null;
-        });
+        };
         dialog.setContentView(panel);
         dialog.setCancelable(true);
         dialog.show();
@@ -1263,19 +1319,13 @@ public final class RuntimeActivity extends LocalizedActivity {
             WindowManager.LayoutParams attributes = window.getAttributes();
             attributes.dimAmount = 0.58f;
             window.setAttributes(attributes);
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            window.setLayout(Math.min(screenWidth - dp(28), dp(520)),
-                    availableDialogHeight());
         }
+        registerResponsiveDialog(dialog, this::resizeRuntimeSettingsDialog, dismissListener);
     }
 
     private void resizeRuntimeSettingsDialog() {
         if (runtimeSettingsDialog == null || !runtimeSettingsDialog.isShowing()) return;
-        Window window = runtimeSettingsDialog.getWindow();
-        if (window == null) return;
-        int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        window.setLayout(Math.min(screenWidth - dp(28), dp(520)),
-                availableDialogHeight());
+        setDialogWindowSize(runtimeSettingsDialog, 28, 520, availableDialogHeight());
     }
 
     private String runtimeLanguageChoiceLabel() {
@@ -1423,9 +1473,14 @@ public final class RuntimeActivity extends LocalizedActivity {
 
         TextView body = runtimeSettingsText(message, 14, UI_TEXT);
         body.setTextIsSelectable(true);
+        if (message.contains("https://github.com/huongdino443/J2MEX")) {
+            Linkify.addLinks(body, Linkify.WEB_URLS);
+            body.setLinkTextColor(UI_ACCENT);
+            body.setMovementMethod(LinkMovementMethod.getInstance());
+        }
         body.setLineSpacing(dp(2), 1f);
+        final ScrollView scroll = scrollable ? new ScrollView(this) : null;
         if (scrollable) {
-            ScrollView scroll = new ScrollView(this);
             scroll.setVerticalScrollBarEnabled(false);
             scroll.addView(body, new ScrollView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1457,10 +1512,19 @@ public final class RuntimeActivity extends LocalizedActivity {
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            window.setLayout(Math.min(screenWidth - dp(28), dp(520)),
-                    scrollable ? availableDialogHeight() : ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        registerResponsiveDialog(dialog, () -> {
+            if (scroll != null) {
+                ViewGroup.LayoutParams scrollParams = scroll.getLayoutParams();
+                int scrollHeight = Math.max(dp(160), availableDialogHeight() - dp(132));
+                if (scrollParams.height != scrollHeight) {
+                    scrollParams.height = scrollHeight;
+                    scroll.setLayoutParams(scrollParams);
+                }
+            }
+            setDialogWindowSize(dialog, 28, 520,
+                    scrollable ? availableDialogHeight() : ViewGroup.LayoutParams.WRAP_CONTENT);
+        }, null);
         close.setOnClickListener(view -> dialog.dismiss());
     }
 
@@ -1604,7 +1668,6 @@ public final class RuntimeActivity extends LocalizedActivity {
         private boolean open;
         private float downX;
         private int contentTopInset;
-        private int stablePanelWidth;
 
         EdgeSwipeMenu(Context context) {
             super(context);
@@ -1742,6 +1805,7 @@ public final class RuntimeActivity extends LocalizedActivity {
 
         private void openMenu() {
             if (open) return;
+            updatePanelWidth(getWidth() > 0 ? getWidth() : currentViewportWidthPx());
             open = true;
             panel.animate().cancel();
             panel.setVisibility(View.VISIBLE);
@@ -1791,17 +1855,38 @@ public final class RuntimeActivity extends LocalizedActivity {
             updatePosition(getHeight());
         }
 
+        private void updatePanelWidth(int viewportWidth) {
+            if (viewportWidth <= 0) return;
+            int widthLimit = Math.max(dp(1), viewportWidth - dp(24));
+            int preferredWidth = Math.min(dp(360), Math.round(viewportWidth * 0.90f));
+            int nextWidth = Math.min(preferredWidth, widthLimit);
+            FrameLayout.LayoutParams panelParams =
+                    (FrameLayout.LayoutParams) panel.getLayoutParams();
+            if (panelParams.width != nextWidth) {
+                panelParams.width = nextWidth;
+                panel.setLayoutParams(panelParams);
+            }
+        }
+
+        void refreshForCurrentViewport() {
+            int width = getWidth() > 0 ? getWidth() : currentViewportWidthPx();
+            if (width <= 0) return;
+            updatePanelWidth(width);
+            panel.requestLayout();
+            requestLayout();
+            post(() -> {
+                if (getHeight() > 0) updatePosition(getHeight());
+            });
+        }
+
         @Override protected void onSizeChanged(int width, int height,
                 int oldWidth, int oldHeight) {
             super.onSizeChanged(width, height, oldWidth, oldHeight);
-            FrameLayout.LayoutParams panelParams =
-                    (FrameLayout.LayoutParams) panel.getLayoutParams();
-            int widthLimit = Math.max(dp(1), width - dp(24));
-            if (stablePanelWidth == 0)
-                stablePanelWidth = Math.min(dp(360), widthLimit);
-            panelParams.width = Math.min(stablePanelWidth, widthLimit);
-            panel.setLayoutParams(panelParams);
+            updatePanelWidth(width);
             updatePosition(height);
+            panel.post(() -> {
+                if (getHeight() > 0) updatePosition(getHeight());
+            });
         }
 
         private void updatePosition(int height) {
@@ -3258,10 +3343,11 @@ public final class RuntimeActivity extends LocalizedActivity {
         super.onConfigurationChanged(configuration);
         if (root != null) {
             root.requestApplyInsets();
+            root.requestLayout();
             root.post(() -> {
                 updateCanvasLayout();
-                resizeRuntimeSettingsDialog();
-                if (memoryEditorDialog != null) memoryEditorDialog.resizeToAvailableArea();
+                if (edgeMenu != null) edgeMenu.refreshForCurrentViewport();
+                resizeResponsiveDialogs();
             });
         }
     }
@@ -3326,10 +3412,11 @@ public final class RuntimeActivity extends LocalizedActivity {
             WindowManager.LayoutParams attributes = window.getAttributes();
             attributes.dimAmount = 0.58f;
             window.setAttributes(attributes);
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            window.setLayout(Math.min(screenWidth - dp(36), dp(480)),
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        registerResponsiveDialog(dialog,
+                () -> setDialogWindowSize(dialog, 36, 480,
+                        ViewGroup.LayoutParams.WRAP_CONTENT),
+                null);
         cancel.setOnClickListener(view -> dialog.dismiss());
         confirm.setOnClickListener(view -> {
             dialog.dismiss();

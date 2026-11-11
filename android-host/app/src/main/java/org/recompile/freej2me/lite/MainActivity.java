@@ -32,7 +32,9 @@ import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextWatcher;
 import android.text.TextPaint;
+import android.text.method.LinkMovementMethod;
 import android.text.style.ForegroundColorSpan;
+import android.text.util.Linkify;
 import android.transition.AutoTransition;
 import android.transition.TransitionManager;
 import android.util.TypedValue;
@@ -823,6 +825,17 @@ import java.util.concurrent.Executors;
                         : "Show received frames per second while playing.",
                 AppPreferences.showFps(this), AppPreferences::setShowFps);
         addMoreSwitch(preferencesCard,
+                vietnamese ? "Thanh trạng thái" : "Status bar",
+                vietnamese ? "Hiện thanh trạng thái trong lúc chơi game."
+                        : "Keep the Android status bar visible while playing.",
+                AppPreferences.statusBarVisible(this), AppPreferences::setStatusBarVisible);
+
+        addMoreSwitch(preferencesCard,
+                vietnamese ? "Giữ hướng xoay hiện tại" : "Lock current orientation",
+                vietnamese ? "Khóa hướng màn hình theo chiều đang dùng khi mở game."
+                        : "Lock the screen to its current orientation when a game starts.",
+                AppPreferences.orientationLocked(this), AppPreferences::setOrientationLocked);
+        addMoreSwitch(preferencesCard,
                 vietnamese ? "Ghi log để gỡ lỗi" : "Diagnostic logging",
                 vietnamese ? "Cho phép ghi log runtime và bật chức năng lưu log trong menu cạnh."
                         : "Write runtime logs and enable log export in the edge menu.",
@@ -837,17 +850,6 @@ import java.util.concurrent.Executors;
                 vietnamese ? "Xuất" : "Export",
                 null);
         setLatestLogExportRowEnabled(AppPreferences.debugLogsEnabled(this));
-        addMoreSwitch(preferencesCard,
-                vietnamese ? "Thanh trạng thái" : "Status bar",
-                vietnamese ? "Hiện thanh trạng thái trong lúc chơi game."
-                        : "Keep the Android status bar visible while playing.",
-                AppPreferences.statusBarVisible(this), AppPreferences::setStatusBarVisible);
-
-        addMoreSwitch(preferencesCard,
-                vietnamese ? "Giữ hướng xoay hiện tại" : "Lock current orientation",
-                vietnamese ? "Khóa hướng màn hình theo chiều đang dùng khi mở game."
-                        : "Lock the screen to its current orientation when a game starts.",
-                AppPreferences.orientationLocked(this), AppPreferences::setOrientationLocked);
         addMoreRow(preferencesCard,
                 vietnamese ? "Ngôn ngữ" : "Language",
                 vietnamese ? "Chọn ngôn ngữ hoặc dựa theo thiết bị."
@@ -2134,6 +2136,11 @@ import java.util.concurrent.Executors;
         body.setTextColor(COLOR_TEXT);
         body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         body.setTextIsSelectable(true);
+        if (message.contains("https://github.com/huongdino443/J2MEX")) {
+            Linkify.addLinks(body, Linkify.WEB_URLS);
+            body.setLinkTextColor(COLOR_ACCENT);
+            body.setMovementMethod(LinkMovementMethod.getInstance());
+        }
         body.setLineSpacing(dp(this, 2), 1f);
         if (scrollable) {
             ScrollView scroll = new ScrollView(this);

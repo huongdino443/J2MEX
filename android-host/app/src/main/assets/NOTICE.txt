@@ -11,7 +11,8 @@ OpenJDK 8 Android ARM64: runtime reused from the existing local PoC.
 Its LICENSE, ASSEMBLY_EXCEPTION and third-party notices are retained
 inside the runtime package. OpenJDK is GPL v2 with applicable exceptions.
 FreeType ARM64: see licenses/FREETYPE-LICENSE.txt.
-XZ for Java 1.10: pure-Java XZ decompressor, 0BSD license.
+XZ for Java 1.10: pure-Java XZ decompressor, 0BSD license; see
+licenses/XZ-0BSD.txt.
 
 Native List/Form UI includes modified ports of J2ME Loader's Apache-2.0
 Form / CompoundListAdapter / CompoundAdapter presentation code.
@@ -66,7 +67,8 @@ OpenJDK 8 Android ARM64: runtime được dùng lại từ PoC hiện có trong 
 Các tệp LICENSE, ASSEMBLY_EXCEPTION và thông báo bên thứ ba được giữ trong
 gói runtime. OpenJDK dùng GPL phiên bản 2 cùng các ngoại lệ áp dụng.
 FreeType ARM64: xem licenses/FREETYPE-LICENSE.txt.
-XZ for Java 1.10: bộ giải nén XZ thuần Java, giấy phép 0BSD.
+XZ for Java 1.10: bộ giải nén XZ thuần Java, giấy phép 0BSD; xem
+licenses/XZ-0BSD.txt.
 
 Giao diện List/Form native có các phần trình bày được chuyển đổi và chỉnh sửa
 từ Form / CompoundListAdapter / CompoundAdapter của J2ME Loader theo Apache 2.0.
