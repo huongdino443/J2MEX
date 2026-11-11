@@ -1,0 +1,1216 @@
+{
+  "format": "corebridge-vietnamese-native-sheet-v1",
+  "cellWidth": 16,
+  "cellHeight": 13,
+  "columns": 16,
+  "rows": 9,
+  "glyphCount": 134,
+  "entries": [
+    {
+      "order": 0,
+      "character": "À",
+      "codepoint": "U+00C0",
+      "atlasIndex": 160,
+      "nativeWidth": 7,
+      "sheetX": 0,
+      "sheetY": 0
+    },
+    {
+      "order": 1,
+      "character": "Á",
+      "codepoint": "U+00C1",
+      "atlasIndex": 159,
+      "nativeWidth": 7,
+      "sheetX": 16,
+      "sheetY": 0
+    },
+    {
+      "order": 2,
+      "character": "Ả",
+      "codepoint": "U+1EA2",
+      "atlasIndex": 161,
+      "nativeWidth": 7,
+      "sheetX": 32,
+      "sheetY": 0
+    },
+    {
+      "order": 3,
+      "character": "Ã",
+      "codepoint": "U+00C3",
+      "atlasIndex": 162,
+      "nativeWidth": 7,
+      "sheetX": 48,
+      "sheetY": 0
+    },
+    {
+      "order": 4,
+      "character": "Ạ",
+      "codepoint": "U+1EA0",
+      "atlasIndex": 163,
+      "nativeWidth": 7,
+      "sheetX": 64,
+      "sheetY": 0
+    },
+    {
+      "order": 5,
+      "character": "Ă",
+      "codepoint": "U+0102",
+      "atlasIndex": 164,
+      "nativeWidth": 7,
+      "sheetX": 80,
+      "sheetY": 0
+    },
+    {
+      "order": 6,
+      "character": "Ắ",
+      "codepoint": "U+1EAE",
+      "atlasIndex": 165,
+      "nativeWidth": 7,
+      "sheetX": 96,
+      "sheetY": 0
+    },
+    {
+      "order": 7,
+      "character": "Ằ",
+      "codepoint": "U+1EB0",
+      "atlasIndex": 166,
+      "nativeWidth": 7,
+      "sheetX": 112,
+      "sheetY": 0
+    },
+    {
+      "order": 8,
+      "character": "Ẳ",
+      "codepoint": "U+1EB2",
+      "atlasIndex": 167,
+      "nativeWidth": 7,
+      "sheetX": 128,
+      "sheetY": 0
+    },
+    {
+      "order": 9,
+      "character": "Ẵ",
+      "codepoint": "U+1EB4",
+      "atlasIndex": 168,
+      "nativeWidth": 7,
+      "sheetX": 144,
+      "sheetY": 0
+    },
+    {
+      "order": 10,
+      "character": "Ặ",
+      "codepoint": "U+1EB6",
+      "atlasIndex": 169,
+      "nativeWidth": 7,
+      "sheetX": 160,
+      "sheetY": 0
+    },
+    {
+      "order": 11,
+      "character": "Â",
+      "codepoint": "U+00C2",
+      "atlasIndex": 170,
+      "nativeWidth": 7,
+      "sheetX": 176,
+      "sheetY": 0
+    },
+    {
+      "order": 12,
+      "character": "Ấ",
+      "codepoint": "U+1EA4",
+      "atlasIndex": 171,
+      "nativeWidth": 7,
+      "sheetX": 192,
+      "sheetY": 0
+    },
+    {
+      "order": 13,
+      "character": "Ầ",
+      "codepoint": "U+1EA6",
+      "atlasIndex": 172,
+      "nativeWidth": 7,
+      "sheetX": 208,
+      "sheetY": 0
+    },
+    {
+      "order": 14,
+      "character": "Ẩ",
+      "codepoint": "U+1EA8",
+      "atlasIndex": 173,
+      "nativeWidth": 7,
+      "sheetX": 224,
+      "sheetY": 0
+    },
+    {
+      "order": 15,
+      "character": "Ẫ",
+      "codepoint": "U+1EAA",
+      "atlasIndex": 174,
+      "nativeWidth": 7,
+      "sheetX": 240,
+      "sheetY": 0
+    },
+    {
+      "order": 16,
+      "character": "Ậ",
+      "codepoint": "U+1EAC",
+      "atlasIndex": 175,
+      "nativeWidth": 7,
+      "sheetX": 0,
+      "sheetY": 13
+    },
+    {
+      "order": 17,
+      "character": "Đ",
+      "codepoint": "U+0110",
+      "atlasIndex": 92,
+      "nativeWidth": 8,
+      "sheetX": 16,
+      "sheetY": 13
+    },
+    {
+      "order": 18,
+      "character": "È",
+      "codepoint": "U+00C8",
+      "atlasIndex": 177,
+      "nativeWidth": 6,
+      "sheetX": 32,
+      "sheetY": 13
+    },
+    {
+      "order": 19,
+      "character": "É",
+      "codepoint": "U+00C9",
+      "atlasIndex": 176,
+      "nativeWidth": 6,
+      "sheetX": 48,
+      "sheetY": 13
+    },
+    {
+      "order": 20,
+      "character": "Ẻ",
+      "codepoint": "U+1EBA",
+      "atlasIndex": 178,
+      "nativeWidth": 6,
+      "sheetX": 64,
+      "sheetY": 13
+    },
+    {
+      "order": 21,
+      "character": "Ẽ",
+      "codepoint": "U+1EBC",
+      "atlasIndex": 179,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 13
+    },
+    {
+      "order": 22,
+      "character": "Ẹ",
+      "codepoint": "U+1EB8",
+      "atlasIndex": 180,
+      "nativeWidth": 6,
+      "sheetX": 96,
+      "sheetY": 13
+    },
+    {
+      "order": 23,
+      "character": "Ê",
+      "codepoint": "U+00CA",
+      "atlasIndex": 181,
+      "nativeWidth": 6,
+      "sheetX": 112,
+      "sheetY": 13
+    },
+    {
+      "order": 24,
+      "character": "Ế",
+      "codepoint": "U+1EBE",
+      "atlasIndex": 182,
+      "nativeWidth": 6,
+      "sheetX": 128,
+      "sheetY": 13
+    },
+    {
+      "order": 25,
+      "character": "Ề",
+      "codepoint": "U+1EC0",
+      "atlasIndex": 183,
+      "nativeWidth": 6,
+      "sheetX": 144,
+      "sheetY": 13
+    },
+    {
+      "order": 26,
+      "character": "Ể",
+      "codepoint": "U+1EC2",
+      "atlasIndex": 184,
+      "nativeWidth": 6,
+      "sheetX": 160,
+      "sheetY": 13
+    },
+    {
+      "order": 27,
+      "character": "Ễ",
+      "codepoint": "U+1EC4",
+      "atlasIndex": 185,
+      "nativeWidth": 6,
+      "sheetX": 176,
+      "sheetY": 13
+    },
+    {
+      "order": 28,
+      "character": "Ệ",
+      "codepoint": "U+1EC6",
+      "atlasIndex": 186,
+      "nativeWidth": 6,
+      "sheetX": 192,
+      "sheetY": 13
+    },
+    {
+      "order": 29,
+      "character": "Ì",
+      "codepoint": "U+00CC",
+      "atlasIndex": 188,
+      "nativeWidth": 4,
+      "sheetX": 208,
+      "sheetY": 13
+    },
+    {
+      "order": 30,
+      "character": "Í",
+      "codepoint": "U+00CD",
+      "atlasIndex": 187,
+      "nativeWidth": 4,
+      "sheetX": 224,
+      "sheetY": 13
+    },
+    {
+      "order": 31,
+      "character": "Ỉ",
+      "codepoint": "U+1EC8",
+      "atlasIndex": 189,
+      "nativeWidth": 4,
+      "sheetX": 240,
+      "sheetY": 13
+    },
+    {
+      "order": 32,
+      "character": "Ĩ",
+      "codepoint": "U+0128",
+      "atlasIndex": 190,
+      "nativeWidth": 4,
+      "sheetX": 0,
+      "sheetY": 26
+    },
+    {
+      "order": 33,
+      "character": "Ị",
+      "codepoint": "U+1ECA",
+      "atlasIndex": 191,
+      "nativeWidth": 4,
+      "sheetX": 16,
+      "sheetY": 26
+    },
+    {
+      "order": 34,
+      "character": "Ò",
+      "codepoint": "U+00D2",
+      "atlasIndex": 193,
+      "nativeWidth": 8,
+      "sheetX": 32,
+      "sheetY": 26
+    },
+    {
+      "order": 35,
+      "character": "Ó",
+      "codepoint": "U+00D3",
+      "atlasIndex": 192,
+      "nativeWidth": 8,
+      "sheetX": 48,
+      "sheetY": 26
+    },
+    {
+      "order": 36,
+      "character": "Ỏ",
+      "codepoint": "U+1ECE",
+      "atlasIndex": 194,
+      "nativeWidth": 8,
+      "sheetX": 64,
+      "sheetY": 26
+    },
+    {
+      "order": 37,
+      "character": "Õ",
+      "codepoint": "U+00D5",
+      "atlasIndex": 195,
+      "nativeWidth": 8,
+      "sheetX": 80,
+      "sheetY": 26
+    },
+    {
+      "order": 38,
+      "character": "Ọ",
+      "codepoint": "U+1ECC",
+      "atlasIndex": 196,
+      "nativeWidth": 8,
+      "sheetX": 96,
+      "sheetY": 26
+    },
+    {
+      "order": 39,
+      "character": "Ô",
+      "codepoint": "U+00D4",
+      "atlasIndex": 197,
+      "nativeWidth": 8,
+      "sheetX": 112,
+      "sheetY": 26
+    },
+    {
+      "order": 40,
+      "character": "Ố",
+      "codepoint": "U+1ED0",
+      "atlasIndex": 198,
+      "nativeWidth": 8,
+      "sheetX": 128,
+      "sheetY": 26
+    },
+    {
+      "order": 41,
+      "character": "Ồ",
+      "codepoint": "U+1ED2",
+      "atlasIndex": 199,
+      "nativeWidth": 8,
+      "sheetX": 144,
+      "sheetY": 26
+    },
+    {
+      "order": 42,
+      "character": "Ổ",
+      "codepoint": "U+1ED4",
+      "atlasIndex": 200,
+      "nativeWidth": 8,
+      "sheetX": 160,
+      "sheetY": 26
+    },
+    {
+      "order": 43,
+      "character": "Ỗ",
+      "codepoint": "U+1ED6",
+      "atlasIndex": 201,
+      "nativeWidth": 8,
+      "sheetX": 176,
+      "sheetY": 26
+    },
+    {
+      "order": 44,
+      "character": "Ộ",
+      "codepoint": "U+1ED8",
+      "atlasIndex": 202,
+      "nativeWidth": 8,
+      "sheetX": 192,
+      "sheetY": 26
+    },
+    {
+      "order": 45,
+      "character": "Ơ",
+      "codepoint": "U+01A0",
+      "atlasIndex": 203,
+      "nativeWidth": 8,
+      "sheetX": 208,
+      "sheetY": 26
+    },
+    {
+      "order": 46,
+      "character": "Ớ",
+      "codepoint": "U+1EDA",
+      "atlasIndex": 204,
+      "nativeWidth": 8,
+      "sheetX": 224,
+      "sheetY": 26
+    },
+    {
+      "order": 47,
+      "character": "Ờ",
+      "codepoint": "U+1EDC",
+      "atlasIndex": 205,
+      "nativeWidth": 8,
+      "sheetX": 240,
+      "sheetY": 26
+    },
+    {
+      "order": 48,
+      "character": "Ở",
+      "codepoint": "U+1EDE",
+      "atlasIndex": 206,
+      "nativeWidth": 8,
+      "sheetX": 0,
+      "sheetY": 39
+    },
+    {
+      "order": 49,
+      "character": "Ỡ",
+      "codepoint": "U+1EE0",
+      "atlasIndex": 207,
+      "nativeWidth": 8,
+      "sheetX": 16,
+      "sheetY": 39
+    },
+    {
+      "order": 50,
+      "character": "Ợ",
+      "codepoint": "U+1EE2",
+      "atlasIndex": 208,
+      "nativeWidth": 8,
+      "sheetX": 32,
+      "sheetY": 39
+    },
+    {
+      "order": 51,
+      "character": "Ù",
+      "codepoint": "U+00D9",
+      "atlasIndex": 210,
+      "nativeWidth": 7,
+      "sheetX": 48,
+      "sheetY": 39
+    },
+    {
+      "order": 52,
+      "character": "Ú",
+      "codepoint": "U+00DA",
+      "atlasIndex": 209,
+      "nativeWidth": 7,
+      "sheetX": 64,
+      "sheetY": 39
+    },
+    {
+      "order": 53,
+      "character": "Ủ",
+      "codepoint": "U+1EE6",
+      "atlasIndex": 211,
+      "nativeWidth": 7,
+      "sheetX": 80,
+      "sheetY": 39
+    },
+    {
+      "order": 54,
+      "character": "Ũ",
+      "codepoint": "U+0168",
+      "atlasIndex": 212,
+      "nativeWidth": 7,
+      "sheetX": 96,
+      "sheetY": 39
+    },
+    {
+      "order": 55,
+      "character": "Ụ",
+      "codepoint": "U+1EE4",
+      "atlasIndex": 213,
+      "nativeWidth": 7,
+      "sheetX": 112,
+      "sheetY": 39
+    },
+    {
+      "order": 56,
+      "character": "Ư",
+      "codepoint": "U+01AF",
+      "atlasIndex": 214,
+      "nativeWidth": 8,
+      "sheetX": 128,
+      "sheetY": 39
+    },
+    {
+      "order": 57,
+      "character": "Ứ",
+      "codepoint": "U+1EE8",
+      "atlasIndex": 215,
+      "nativeWidth": 8,
+      "sheetX": 144,
+      "sheetY": 39
+    },
+    {
+      "order": 58,
+      "character": "Ừ",
+      "codepoint": "U+1EEA",
+      "atlasIndex": 216,
+      "nativeWidth": 8,
+      "sheetX": 160,
+      "sheetY": 39
+    },
+    {
+      "order": 59,
+      "character": "Ử",
+      "codepoint": "U+1EEC",
+      "atlasIndex": 217,
+      "nativeWidth": 8,
+      "sheetX": 176,
+      "sheetY": 39
+    },
+    {
+      "order": 60,
+      "character": "Ữ",
+      "codepoint": "U+1EEE",
+      "atlasIndex": 218,
+      "nativeWidth": 8,
+      "sheetX": 192,
+      "sheetY": 39
+    },
+    {
+      "order": 61,
+      "character": "Ự",
+      "codepoint": "U+1EF0",
+      "atlasIndex": 219,
+      "nativeWidth": 8,
+      "sheetX": 208,
+      "sheetY": 39
+    },
+    {
+      "order": 62,
+      "character": "Ỳ",
+      "codepoint": "U+1EF2",
+      "atlasIndex": 221,
+      "nativeWidth": 6,
+      "sheetX": 224,
+      "sheetY": 39
+    },
+    {
+      "order": 63,
+      "character": "Ý",
+      "codepoint": "U+00DD",
+      "atlasIndex": 220,
+      "nativeWidth": 6,
+      "sheetX": 240,
+      "sheetY": 39
+    },
+    {
+      "order": 64,
+      "character": "Ỷ",
+      "codepoint": "U+1EF6",
+      "atlasIndex": 222,
+      "nativeWidth": 6,
+      "sheetX": 0,
+      "sheetY": 52
+    },
+    {
+      "order": 65,
+      "character": "Ỹ",
+      "codepoint": "U+1EF8",
+      "atlasIndex": 223,
+      "nativeWidth": 6,
+      "sheetX": 16,
+      "sheetY": 52
+    },
+    {
+      "order": 66,
+      "character": "Ỵ",
+      "codepoint": "U+1EF4",
+      "atlasIndex": 224,
+      "nativeWidth": 6,
+      "sheetX": 32,
+      "sheetY": 52
+    },
+    {
+      "order": 67,
+      "character": "à",
+      "codepoint": "U+00E0",
+      "atlasIndex": 94,
+      "nativeWidth": 6,
+      "sheetX": 48,
+      "sheetY": 52
+    },
+    {
+      "order": 68,
+      "character": "á",
+      "codepoint": "U+00E1",
+      "atlasIndex": 93,
+      "nativeWidth": 6,
+      "sheetX": 64,
+      "sheetY": 52
+    },
+    {
+      "order": 69,
+      "character": "ả",
+      "codepoint": "U+1EA3",
+      "atlasIndex": 95,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 52
+    },
+    {
+      "order": 70,
+      "character": "ã",
+      "codepoint": "U+00E3",
+      "atlasIndex": 96,
+      "nativeWidth": 6,
+      "sheetX": 96,
+      "sheetY": 52
+    },
+    {
+      "order": 71,
+      "character": "ạ",
+      "codepoint": "U+1EA1",
+      "atlasIndex": 97,
+      "nativeWidth": 6,
+      "sheetX": 112,
+      "sheetY": 52
+    },
+    {
+      "order": 72,
+      "character": "ă",
+      "codepoint": "U+0103",
+      "atlasIndex": 98,
+      "nativeWidth": 6,
+      "sheetX": 128,
+      "sheetY": 52
+    },
+    {
+      "order": 73,
+      "character": "ắ",
+      "codepoint": "U+1EAF",
+      "atlasIndex": 99,
+      "nativeWidth": 6,
+      "sheetX": 144,
+      "sheetY": 52
+    },
+    {
+      "order": 74,
+      "character": "ằ",
+      "codepoint": "U+1EB1",
+      "atlasIndex": 100,
+      "nativeWidth": 6,
+      "sheetX": 160,
+      "sheetY": 52
+    },
+    {
+      "order": 75,
+      "character": "ẳ",
+      "codepoint": "U+1EB3",
+      "atlasIndex": 101,
+      "nativeWidth": 6,
+      "sheetX": 176,
+      "sheetY": 52
+    },
+    {
+      "order": 76,
+      "character": "ẵ",
+      "codepoint": "U+1EB5",
+      "atlasIndex": 102,
+      "nativeWidth": 6,
+      "sheetX": 192,
+      "sheetY": 52
+    },
+    {
+      "order": 77,
+      "character": "ặ",
+      "codepoint": "U+1EB7",
+      "atlasIndex": 103,
+      "nativeWidth": 6,
+      "sheetX": 208,
+      "sheetY": 52
+    },
+    {
+      "order": 78,
+      "character": "â",
+      "codepoint": "U+00E2",
+      "atlasIndex": 104,
+      "nativeWidth": 6,
+      "sheetX": 224,
+      "sheetY": 52
+    },
+    {
+      "order": 79,
+      "character": "ấ",
+      "codepoint": "U+1EA5",
+      "atlasIndex": 105,
+      "nativeWidth": 6,
+      "sheetX": 240,
+      "sheetY": 52
+    },
+    {
+      "order": 80,
+      "character": "ầ",
+      "codepoint": "U+1EA7",
+      "atlasIndex": 106,
+      "nativeWidth": 6,
+      "sheetX": 0,
+      "sheetY": 65
+    },
+    {
+      "order": 81,
+      "character": "ẩ",
+      "codepoint": "U+1EA9",
+      "atlasIndex": 107,
+      "nativeWidth": 6,
+      "sheetX": 16,
+      "sheetY": 65
+    },
+    {
+      "order": 82,
+      "character": "ẫ",
+      "codepoint": "U+1EAB",
+      "atlasIndex": 108,
+      "nativeWidth": 6,
+      "sheetX": 32,
+      "sheetY": 65
+    },
+    {
+      "order": 83,
+      "character": "ậ",
+      "codepoint": "U+1EAD",
+      "atlasIndex": 109,
+      "nativeWidth": 6,
+      "sheetX": 48,
+      "sheetY": 65
+    },
+    {
+      "order": 84,
+      "character": "đ",
+      "codepoint": "U+0111",
+      "atlasIndex": 91,
+      "nativeWidth": 6,
+      "sheetX": 64,
+      "sheetY": 65
+    },
+    {
+      "order": 85,
+      "character": "è",
+      "codepoint": "U+00E8",
+      "atlasIndex": 111,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 65
+    },
+    {
+      "order": 86,
+      "character": "é",
+      "codepoint": "U+00E9",
+      "atlasIndex": 110,
+      "nativeWidth": 6,
+      "sheetX": 96,
+      "sheetY": 65
+    },
+    {
+      "order": 87,
+      "character": "ẻ",
+      "codepoint": "U+1EBB",
+      "atlasIndex": 112,
+      "nativeWidth": 6,
+      "sheetX": 112,
+      "sheetY": 65
+    },
+    {
+      "order": 88,
+      "character": "ẽ",
+      "codepoint": "U+1EBD",
+      "atlasIndex": 113,
+      "nativeWidth": 6,
+      "sheetX": 128,
+      "sheetY": 65
+    },
+    {
+      "order": 89,
+      "character": "ẹ",
+      "codepoint": "U+1EB9",
+      "atlasIndex": 114,
+      "nativeWidth": 6,
+      "sheetX": 144,
+      "sheetY": 65
+    },
+    {
+      "order": 90,
+      "character": "ê",
+      "codepoint": "U+00EA",
+      "atlasIndex": 115,
+      "nativeWidth": 6,
+      "sheetX": 160,
+      "sheetY": 65
+    },
+    {
+      "order": 91,
+      "character": "ế",
+      "codepoint": "U+1EBF",
+      "atlasIndex": 116,
+      "nativeWidth": 6,
+      "sheetX": 176,
+      "sheetY": 65
+    },
+    {
+      "order": 92,
+      "character": "ề",
+      "codepoint": "U+1EC1",
+      "atlasIndex": 117,
+      "nativeWidth": 6,
+      "sheetX": 192,
+      "sheetY": 65
+    },
+    {
+      "order": 93,
+      "character": "ể",
+      "codepoint": "U+1EC3",
+      "atlasIndex": 118,
+      "nativeWidth": 6,
+      "sheetX": 208,
+      "sheetY": 65
+    },
+    {
+      "order": 94,
+      "character": "ễ",
+      "codepoint": "U+1EC5",
+      "atlasIndex": 119,
+      "nativeWidth": 6,
+      "sheetX": 224,
+      "sheetY": 65
+    },
+    {
+      "order": 95,
+      "character": "ệ",
+      "codepoint": "U+1EC7",
+      "atlasIndex": 120,
+      "nativeWidth": 6,
+      "sheetX": 240,
+      "sheetY": 65
+    },
+    {
+      "order": 96,
+      "character": "ì",
+      "codepoint": "U+00EC",
+      "atlasIndex": 122,
+      "nativeWidth": 3,
+      "sheetX": 0,
+      "sheetY": 78
+    },
+    {
+      "order": 97,
+      "character": "í",
+      "codepoint": "U+00ED",
+      "atlasIndex": 121,
+      "nativeWidth": 3,
+      "sheetX": 16,
+      "sheetY": 78
+    },
+    {
+      "order": 98,
+      "character": "ỉ",
+      "codepoint": "U+1EC9",
+      "atlasIndex": 123,
+      "nativeWidth": 3,
+      "sheetX": 32,
+      "sheetY": 78
+    },
+    {
+      "order": 99,
+      "character": "ĩ",
+      "codepoint": "U+0129",
+      "atlasIndex": 124,
+      "nativeWidth": 3,
+      "sheetX": 48,
+      "sheetY": 78
+    },
+    {
+      "order": 100,
+      "character": "ị",
+      "codepoint": "U+1ECB",
+      "atlasIndex": 125,
+      "nativeWidth": 2,
+      "sheetX": 64,
+      "sheetY": 78
+    },
+    {
+      "order": 101,
+      "character": "ò",
+      "codepoint": "U+00F2",
+      "atlasIndex": 127,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 78
+    },
+    {
+      "order": 102,
+      "character": "ó",
+      "codepoint": "U+00F3",
+      "atlasIndex": 126,
+      "nativeWidth": 6,
+      "sheetX": 96,
+      "sheetY": 78
+    },
+    {
+      "order": 103,
+      "character": "ỏ",
+      "codepoint": "U+1ECF",
+      "atlasIndex": 128,
+      "nativeWidth": 6,
+      "sheetX": 112,
+      "sheetY": 78
+    },
+    {
+      "order": 104,
+      "character": "õ",
+      "codepoint": "U+00F5",
+      "atlasIndex": 129,
+      "nativeWidth": 6,
+      "sheetX": 128,
+      "sheetY": 78
+    },
+    {
+      "order": 105,
+      "character": "ọ",
+      "codepoint": "U+1ECD",
+      "atlasIndex": 130,
+      "nativeWidth": 6,
+      "sheetX": 144,
+      "sheetY": 78
+    },
+    {
+      "order": 106,
+      "character": "ô",
+      "codepoint": "U+00F4",
+      "atlasIndex": 131,
+      "nativeWidth": 6,
+      "sheetX": 160,
+      "sheetY": 78
+    },
+    {
+      "order": 107,
+      "character": "ố",
+      "codepoint": "U+1ED1",
+      "atlasIndex": 132,
+      "nativeWidth": 6,
+      "sheetX": 176,
+      "sheetY": 78
+    },
+    {
+      "order": 108,
+      "character": "ồ",
+      "codepoint": "U+1ED3",
+      "atlasIndex": 133,
+      "nativeWidth": 6,
+      "sheetX": 192,
+      "sheetY": 78
+    },
+    {
+      "order": 109,
+      "character": "ổ",
+      "codepoint": "U+1ED5",
+      "atlasIndex": 134,
+      "nativeWidth": 6,
+      "sheetX": 208,
+      "sheetY": 78
+    },
+    {
+      "order": 110,
+      "character": "ỗ",
+      "codepoint": "U+1ED7",
+      "atlasIndex": 135,
+      "nativeWidth": 6,
+      "sheetX": 224,
+      "sheetY": 78
+    },
+    {
+      "order": 111,
+      "character": "ộ",
+      "codepoint": "U+1ED9",
+      "atlasIndex": 136,
+      "nativeWidth": 6,
+      "sheetX": 240,
+      "sheetY": 78
+    },
+    {
+      "order": 112,
+      "character": "ơ",
+      "codepoint": "U+01A1",
+      "atlasIndex": 137,
+      "nativeWidth": 6,
+      "sheetX": 0,
+      "sheetY": 91
+    },
+    {
+      "order": 113,
+      "character": "ớ",
+      "codepoint": "U+1EDB",
+      "atlasIndex": 138,
+      "nativeWidth": 6,
+      "sheetX": 16,
+      "sheetY": 91
+    },
+    {
+      "order": 114,
+      "character": "ờ",
+      "codepoint": "U+1EDD",
+      "atlasIndex": 139,
+      "nativeWidth": 6,
+      "sheetX": 32,
+      "sheetY": 91
+    },
+    {
+      "order": 115,
+      "character": "ở",
+      "codepoint": "U+1EDF",
+      "atlasIndex": 140,
+      "nativeWidth": 6,
+      "sheetX": 48,
+      "sheetY": 91
+    },
+    {
+      "order": 116,
+      "character": "ỡ",
+      "codepoint": "U+1EE1",
+      "atlasIndex": 141,
+      "nativeWidth": 6,
+      "sheetX": 64,
+      "sheetY": 91
+    },
+    {
+      "order": 117,
+      "character": "ợ",
+      "codepoint": "U+1EE3",
+      "atlasIndex": 142,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 91
+    },
+    {
+      "order": 118,
+      "character": "ù",
+      "codepoint": "U+00F9",
+      "atlasIndex": 144,
+      "nativeWidth": 6,
+      "sheetX": 96,
+      "sheetY": 91
+    },
+    {
+      "order": 119,
+      "character": "ú",
+      "codepoint": "U+00FA",
+      "atlasIndex": 143,
+      "nativeWidth": 6,
+      "sheetX": 112,
+      "sheetY": 91
+    },
+    {
+      "order": 120,
+      "character": "ủ",
+      "codepoint": "U+1EE7",
+      "atlasIndex": 145,
+      "nativeWidth": 6,
+      "sheetX": 128,
+      "sheetY": 91
+    },
+    {
+      "order": 121,
+      "character": "ũ",
+      "codepoint": "U+0169",
+      "atlasIndex": 146,
+      "nativeWidth": 6,
+      "sheetX": 144,
+      "sheetY": 91
+    },
+    {
+      "order": 122,
+      "character": "ụ",
+      "codepoint": "U+1EE5",
+      "atlasIndex": 147,
+      "nativeWidth": 6,
+      "sheetX": 160,
+      "sheetY": 91
+    },
+    {
+      "order": 123,
+      "character": "ư",
+      "codepoint": "U+01B0",
+      "atlasIndex": 148,
+      "nativeWidth": 7,
+      "sheetX": 176,
+      "sheetY": 91
+    },
+    {
+      "order": 124,
+      "character": "ứ",
+      "codepoint": "U+1EE9",
+      "atlasIndex": 149,
+      "nativeWidth": 7,
+      "sheetX": 192,
+      "sheetY": 91
+    },
+    {
+      "order": 125,
+      "character": "ừ",
+      "codepoint": "U+1EEB",
+      "atlasIndex": 150,
+      "nativeWidth": 7,
+      "sheetX": 208,
+      "sheetY": 91
+    },
+    {
+      "order": 126,
+      "character": "ử",
+      "codepoint": "U+1EED",
+      "atlasIndex": 151,
+      "nativeWidth": 7,
+      "sheetX": 224,
+      "sheetY": 91
+    },
+    {
+      "order": 127,
+      "character": "ữ",
+      "codepoint": "U+1EEF",
+      "atlasIndex": 152,
+      "nativeWidth": 7,
+      "sheetX": 240,
+      "sheetY": 91
+    },
+    {
+      "order": 128,
+      "character": "ự",
+      "codepoint": "U+1EF1",
+      "atlasIndex": 153,
+      "nativeWidth": 7,
+      "sheetX": 0,
+      "sheetY": 104
+    },
+    {
+      "order": 129,
+      "character": "ỳ",
+      "codepoint": "U+1EF3",
+      "atlasIndex": 155,
+      "nativeWidth": 6,
+      "sheetX": 16,
+      "sheetY": 104
+    },
+    {
+      "order": 130,
+      "character": "ý",
+      "codepoint": "U+00FD",
+      "atlasIndex": 154,
+      "nativeWidth": 6,
+      "sheetX": 32,
+      "sheetY": 104
+    },
+    {
+      "order": 131,
+      "character": "ỷ",
+      "codepoint": "U+1EF7",
+      "atlasIndex": 156,
+      "nativeWidth": 6,
+      "sheetX": 48,
+      "sheetY": 104
+    },
+    {
+      "order": 132,
+      "character": "ỹ",
+      "codepoint": "U+1EF9",
+      "atlasIndex": 157,
+      "nativeWidth": 6,
+      "sheetX": 64,
+      "sheetY": 104
+    },
+    {
+      "order": 133,
+      "character": "ỵ",
+      "codepoint": "U+1EF5",
+      "atlasIndex": 158,
+      "nativeWidth": 6,
+      "sheetX": 80,
+      "sheetY": 104
+    }
+  ]
+}

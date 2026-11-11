@@ -1,0 +1,2952 @@
+{
+  "format": "phoneme-turbo-bitmap-font-keymap-v1",
+  "atlasFile": "turbo-corebridge-atlas.png",
+  "atlasSha256": "4c34bb3caba852c8a068c9bb5e0200779f656a0e6b6ffe43abfc00340b4a0aaf",
+  "atlasWidth": 256,
+  "atlasHeight": 225,
+  "columns": 16,
+  "cellWidth": 16,
+  "cellHeight": 15,
+  "glyphCount": 226,
+  "coordinateOrigin": "top-left; x/y are pixel coordinates",
+  "entries": [
+    {
+      "index": 0,
+      "character": "A",
+      "codepoint": "U+0041",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 1,
+      "character": "B",
+      "codepoint": "U+0042",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 2,
+      "character": "C",
+      "codepoint": "U+0043",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 32,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 3,
+      "character": "D",
+      "codepoint": "U+0044",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 48,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 4,
+      "character": "E",
+      "codepoint": "U+0045",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 5,
+      "character": "F",
+      "codepoint": "U+0046",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 6,
+      "character": "G",
+      "codepoint": "U+0047",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 96,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 7,
+      "character": "H",
+      "codepoint": "U+0048",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 112,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 8,
+      "character": "I",
+      "codepoint": "U+0049",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 128,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 9,
+      "character": "J",
+      "codepoint": "U+004A",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 144,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 10,
+      "character": "K",
+      "codepoint": "U+004B",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 11,
+      "character": "L",
+      "codepoint": "U+004C",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 176,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 12,
+      "character": "M",
+      "codepoint": "U+004D",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 192,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 13,
+      "character": "N",
+      "codepoint": "U+004E",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 208,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 14,
+      "character": "O",
+      "codepoint": "U+004F",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 224,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 15,
+      "character": "P",
+      "codepoint": "U+0050",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 0,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 16,
+      "character": "Q",
+      "codepoint": "U+0051",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 0,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 17,
+      "character": "R",
+      "codepoint": "U+0052",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 16,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 18,
+      "character": "S",
+      "codepoint": "U+0053",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 19,
+      "character": "T",
+      "codepoint": "U+0054",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 20,
+      "character": "U",
+      "codepoint": "U+0055",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 64,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 21,
+      "character": "V",
+      "codepoint": "U+0056",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 22,
+      "character": "W",
+      "codepoint": "U+0057",
+      "advanceWidth": 10,
+      "cell": {
+        "x": 96,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 10
+    },
+    {
+      "index": 23,
+      "character": "X",
+      "codepoint": "U+0058",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 24,
+      "character": "Y",
+      "codepoint": "U+0059",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 25,
+      "character": "Z",
+      "codepoint": "U+005A",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 26,
+      "character": "a",
+      "codepoint": "U+0061",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 27,
+      "character": "b",
+      "codepoint": "U+0062",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 28,
+      "character": "c",
+      "codepoint": "U+0063",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 192,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 29,
+      "character": "d",
+      "codepoint": "U+0064",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 30,
+      "character": "e",
+      "codepoint": "U+0065",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 31,
+      "character": "f",
+      "codepoint": "U+0066",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 240,
+        "y": 15,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 32,
+      "character": "g",
+      "codepoint": "U+0067",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 33,
+      "character": "h",
+      "codepoint": "U+0068",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 34,
+      "character": "i",
+      "codepoint": "U+0069",
+      "advanceWidth": 2,
+      "cell": {
+        "x": 32,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 2
+    },
+    {
+      "index": 35,
+      "character": "j",
+      "codepoint": "U+006A",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 48,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 36,
+      "character": "k",
+      "codepoint": "U+006B",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 64,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 37,
+      "character": "l",
+      "codepoint": "U+006C",
+      "advanceWidth": 2,
+      "cell": {
+        "x": 80,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 2
+    },
+    {
+      "index": 38,
+      "character": "m",
+      "codepoint": "U+006D",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 96,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 39,
+      "character": "n",
+      "codepoint": "U+006E",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 40,
+      "character": "o",
+      "codepoint": "U+006F",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 41,
+      "character": "p",
+      "codepoint": "U+0070",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 42,
+      "character": "q",
+      "codepoint": "U+0071",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 43,
+      "character": "r",
+      "codepoint": "U+0072",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 176,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 44,
+      "character": "s",
+      "codepoint": "U+0073",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 192,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 45,
+      "character": "t",
+      "codepoint": "U+0074",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 208,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 46,
+      "character": "u",
+      "codepoint": "U+0075",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 47,
+      "character": "v",
+      "codepoint": "U+0076",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 30,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 48,
+      "character": "w",
+      "codepoint": "U+0077",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 0,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 49,
+      "character": "x",
+      "codepoint": "U+0078",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 50,
+      "character": "y",
+      "codepoint": "U+0079",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 51,
+      "character": "z",
+      "codepoint": "U+007A",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 48,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 52,
+      "character": "0",
+      "codepoint": "U+0030",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 53,
+      "character": "1",
+      "codepoint": "U+0031",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 54,
+      "character": "2",
+      "codepoint": "U+0032",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 55,
+      "character": "3",
+      "codepoint": "U+0033",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 56,
+      "character": "4",
+      "codepoint": "U+0034",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 57,
+      "character": "5",
+      "codepoint": "U+0035",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 58,
+      "character": "6",
+      "codepoint": "U+0036",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 59,
+      "character": "7",
+      "codepoint": "U+0037",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 60,
+      "character": "8",
+      "codepoint": "U+0038",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 192,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 61,
+      "character": "9",
+      "codepoint": "U+0039",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 62,
+      "character": ".",
+      "codepoint": "U+002E",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 224,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 63,
+      "character": ",",
+      "codepoint": "U+002C",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 240,
+        "y": 45,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 64,
+      "character": ";",
+      "codepoint": "U+003B",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 0,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 65,
+      "character": ":",
+      "codepoint": "U+003A",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 16,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 66,
+      "character": "!",
+      "codepoint": "U+0021",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 32,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 67,
+      "character": "@",
+      "codepoint": "U+0040",
+      "advanceWidth": 10,
+      "cell": {
+        "x": 48,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 10
+    },
+    {
+      "index": 68,
+      "character": "/",
+      "codepoint": "U+002F",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 64,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 69,
+      "character": "\\",
+      "codepoint": "U+005C",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 80,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 70,
+      "character": "*",
+      "codepoint": "U+002A",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 71,
+      "character": "(",
+      "codepoint": "U+0028",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 112,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 72,
+      "character": ")",
+      "codepoint": "U+0029",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 128,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 73,
+      "character": "[",
+      "codepoint": "U+005B",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 144,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 74,
+      "character": "]",
+      "codepoint": "U+005D",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 160,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 75,
+      "character": "{",
+      "codepoint": "U+007B",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 176,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 76,
+      "character": "}",
+      "codepoint": "U+007D",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 192,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 77,
+      "character": "|",
+      "codepoint": "U+007C",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 208,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 78,
+      "character": "#",
+      "codepoint": "U+0023",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 224,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 79,
+      "character": "$",
+      "codepoint": "U+0024",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 60,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 80,
+      "character": "%",
+      "codepoint": "U+0025",
+      "advanceWidth": 11,
+      "cell": {
+        "x": 0,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 11
+    },
+    {
+      "index": 81,
+      "character": "^",
+      "codepoint": "U+005E",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 16,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 82,
+      "character": "&",
+      "codepoint": "U+0026",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 32,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 83,
+      "character": "<",
+      "codepoint": "U+003C",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 48,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 84,
+      "character": ">",
+      "codepoint": "U+003E",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 64,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 85,
+      "character": "?",
+      "codepoint": "U+003F",
+      "advanceWidth": 5,
+      "cell": {
+        "x": 80,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 5
+    },
+    {
+      "index": 86,
+      "character": "'",
+      "codepoint": "U+0027",
+      "advanceWidth": 2,
+      "cell": {
+        "x": 96,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 2
+    },
+    {
+      "index": 87,
+      "character": "\"",
+      "codepoint": "U+0022",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 112,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 88,
+      "character": "+",
+      "codepoint": "U+002B",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 128,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 89,
+      "character": "-",
+      "codepoint": "U+002D",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 144,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 90,
+      "character": " ",
+      "codepoint": "U+0020",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 160,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 91,
+      "character": "đ",
+      "codepoint": "U+0111",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 92,
+      "character": "Đ",
+      "codepoint": "U+0110",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 192,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 93,
+      "character": "á",
+      "codepoint": "U+00E1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 94,
+      "character": "à",
+      "codepoint": "U+00E0",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 95,
+      "character": "ả",
+      "codepoint": "U+1EA3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 75,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 96,
+      "character": "ã",
+      "codepoint": "U+00E3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 97,
+      "character": "ạ",
+      "codepoint": "U+1EA1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 98,
+      "character": "ă",
+      "codepoint": "U+0103",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 99,
+      "character": "ắ",
+      "codepoint": "U+1EAF",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 100,
+      "character": "ằ",
+      "codepoint": "U+1EB1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 101,
+      "character": "ẳ",
+      "codepoint": "U+1EB3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 102,
+      "character": "ẵ",
+      "codepoint": "U+1EB5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 103,
+      "character": "ặ",
+      "codepoint": "U+1EB7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 104,
+      "character": "â",
+      "codepoint": "U+00E2",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 105,
+      "character": "ấ",
+      "codepoint": "U+1EA5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 106,
+      "character": "ầ",
+      "codepoint": "U+1EA7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 107,
+      "character": "ẩ",
+      "codepoint": "U+1EA9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 108,
+      "character": "ẫ",
+      "codepoint": "U+1EAB",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 192,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 109,
+      "character": "ậ",
+      "codepoint": "U+1EAD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 110,
+      "character": "é",
+      "codepoint": "U+00E9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 111,
+      "character": "è",
+      "codepoint": "U+00E8",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 90,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 112,
+      "character": "ẻ",
+      "codepoint": "U+1EBB",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 113,
+      "character": "ẽ",
+      "codepoint": "U+1EBD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 114,
+      "character": "ẹ",
+      "codepoint": "U+1EB9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 115,
+      "character": "ê",
+      "codepoint": "U+00EA",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 116,
+      "character": "ế",
+      "codepoint": "U+1EBF",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 117,
+      "character": "ề",
+      "codepoint": "U+1EC1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 118,
+      "character": "ể",
+      "codepoint": "U+1EC3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 119,
+      "character": "ễ",
+      "codepoint": "U+1EC5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 120,
+      "character": "ệ",
+      "codepoint": "U+1EC7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 121,
+      "character": "í",
+      "codepoint": "U+00ED",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 144,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 122,
+      "character": "ì",
+      "codepoint": "U+00EC",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 160,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 123,
+      "character": "ỉ",
+      "codepoint": "U+1EC9",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 176,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 124,
+      "character": "ĩ",
+      "codepoint": "U+0129",
+      "advanceWidth": 3,
+      "cell": {
+        "x": 192,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 3
+    },
+    {
+      "index": 125,
+      "character": "ị",
+      "codepoint": "U+1ECB",
+      "advanceWidth": 2,
+      "cell": {
+        "x": 208,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 2
+    },
+    {
+      "index": 126,
+      "character": "ó",
+      "codepoint": "U+00F3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 127,
+      "character": "ò",
+      "codepoint": "U+00F2",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 105,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 128,
+      "character": "ỏ",
+      "codepoint": "U+1ECF",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 129,
+      "character": "õ",
+      "codepoint": "U+00F5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 130,
+      "character": "ọ",
+      "codepoint": "U+1ECD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 131,
+      "character": "ô",
+      "codepoint": "U+00F4",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 132,
+      "character": "ố",
+      "codepoint": "U+1ED1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 133,
+      "character": "ồ",
+      "codepoint": "U+1ED3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 134,
+      "character": "ổ",
+      "codepoint": "U+1ED5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 135,
+      "character": "ỗ",
+      "codepoint": "U+1ED7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 136,
+      "character": "ộ",
+      "codepoint": "U+1ED9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 137,
+      "character": "ơ",
+      "codepoint": "U+01A1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 138,
+      "character": "ớ",
+      "codepoint": "U+1EDB",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 139,
+      "character": "ờ",
+      "codepoint": "U+1EDD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 140,
+      "character": "ở",
+      "codepoint": "U+1EDF",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 192,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 141,
+      "character": "ỡ",
+      "codepoint": "U+1EE1",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 142,
+      "character": "ợ",
+      "codepoint": "U+1EE3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 143,
+      "character": "ú",
+      "codepoint": "U+00FA",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 120,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 144,
+      "character": "ù",
+      "codepoint": "U+00F9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 145,
+      "character": "ủ",
+      "codepoint": "U+1EE7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 146,
+      "character": "ũ",
+      "codepoint": "U+0169",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 147,
+      "character": "ụ",
+      "codepoint": "U+1EE5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 148,
+      "character": "ư",
+      "codepoint": "U+01B0",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 64,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 149,
+      "character": "ứ",
+      "codepoint": "U+1EE9",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 80,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 150,
+      "character": "ừ",
+      "codepoint": "U+1EEB",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 96,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 151,
+      "character": "ử",
+      "codepoint": "U+1EED",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 112,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 152,
+      "character": "ữ",
+      "codepoint": "U+1EEF",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 128,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 153,
+      "character": "ự",
+      "codepoint": "U+1EF1",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 144,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 154,
+      "character": "ý",
+      "codepoint": "U+00FD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 155,
+      "character": "ỳ",
+      "codepoint": "U+1EF3",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 176,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 156,
+      "character": "ỷ",
+      "codepoint": "U+1EF7",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 192,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 157,
+      "character": "ỹ",
+      "codepoint": "U+1EF9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 158,
+      "character": "ỵ",
+      "codepoint": "U+1EF5",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 159,
+      "character": "Á",
+      "codepoint": "U+00C1",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 240,
+        "y": 135,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 160,
+      "character": "À",
+      "codepoint": "U+00C0",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 0,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 161,
+      "character": "Ả",
+      "codepoint": "U+1EA2",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 16,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 162,
+      "character": "Ã",
+      "codepoint": "U+00C3",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 32,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 163,
+      "character": "Ạ",
+      "codepoint": "U+1EA0",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 48,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 164,
+      "character": "Ă",
+      "codepoint": "U+0102",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 64,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 165,
+      "character": "Ắ",
+      "codepoint": "U+1EAE",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 80,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 166,
+      "character": "Ằ",
+      "codepoint": "U+1EB0",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 96,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 167,
+      "character": "Ẳ",
+      "codepoint": "U+1EB2",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 112,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 168,
+      "character": "Ẵ",
+      "codepoint": "U+1EB4",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 128,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 169,
+      "character": "Ặ",
+      "codepoint": "U+1EB6",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 144,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 170,
+      "character": "Â",
+      "codepoint": "U+00C2",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 160,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 171,
+      "character": "Ấ",
+      "codepoint": "U+1EA4",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 176,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 172,
+      "character": "Ầ",
+      "codepoint": "U+1EA6",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 192,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 173,
+      "character": "Ẩ",
+      "codepoint": "U+1EA8",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 208,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 174,
+      "character": "Ẫ",
+      "codepoint": "U+1EAA",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 224,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 175,
+      "character": "Ậ",
+      "codepoint": "U+1EAC",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 240,
+        "y": 150,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 176,
+      "character": "É",
+      "codepoint": "U+00C9",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 177,
+      "character": "È",
+      "codepoint": "U+00C8",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 16,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 178,
+      "character": "Ẻ",
+      "codepoint": "U+1EBA",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 32,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 179,
+      "character": "Ẽ",
+      "codepoint": "U+1EBC",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 48,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 180,
+      "character": "Ẹ",
+      "codepoint": "U+1EB8",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 64,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 181,
+      "character": "Ê",
+      "codepoint": "U+00CA",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 80,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 182,
+      "character": "Ế",
+      "codepoint": "U+1EBE",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 96,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 183,
+      "character": "Ề",
+      "codepoint": "U+1EC0",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 112,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 184,
+      "character": "Ể",
+      "codepoint": "U+1EC2",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 128,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 185,
+      "character": "Ễ",
+      "codepoint": "U+1EC4",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 144,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 186,
+      "character": "Ệ",
+      "codepoint": "U+1EC6",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 160,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 187,
+      "character": "Í",
+      "codepoint": "U+00CD",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 176,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 188,
+      "character": "Ì",
+      "codepoint": "U+00CC",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 192,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 189,
+      "character": "Ỉ",
+      "codepoint": "U+1EC8",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 208,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 190,
+      "character": "Ĩ",
+      "codepoint": "U+0128",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 224,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 191,
+      "character": "Ị",
+      "codepoint": "U+1ECA",
+      "advanceWidth": 4,
+      "cell": {
+        "x": 240,
+        "y": 165,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 4
+    },
+    {
+      "index": 192,
+      "character": "Ó",
+      "codepoint": "U+00D3",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 0,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 193,
+      "character": "Ò",
+      "codepoint": "U+00D2",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 16,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 194,
+      "character": "Ỏ",
+      "codepoint": "U+1ECE",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 32,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 195,
+      "character": "Õ",
+      "codepoint": "U+00D5",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 48,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 196,
+      "character": "Ọ",
+      "codepoint": "U+1ECC",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 64,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 197,
+      "character": "Ô",
+      "codepoint": "U+00D4",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 80,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 198,
+      "character": "Ố",
+      "codepoint": "U+1ED0",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 96,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 199,
+      "character": "Ồ",
+      "codepoint": "U+1ED2",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 112,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 200,
+      "character": "Ổ",
+      "codepoint": "U+1ED4",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 128,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 201,
+      "character": "Ỗ",
+      "codepoint": "U+1ED6",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 144,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 202,
+      "character": "Ộ",
+      "codepoint": "U+1ED8",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 160,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 203,
+      "character": "Ơ",
+      "codepoint": "U+01A0",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 176,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 204,
+      "character": "Ớ",
+      "codepoint": "U+1EDA",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 192,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 205,
+      "character": "Ờ",
+      "codepoint": "U+1EDC",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 208,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 206,
+      "character": "Ở",
+      "codepoint": "U+1EDE",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 224,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 207,
+      "character": "Ỡ",
+      "codepoint": "U+1EE0",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 240,
+        "y": 180,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 208,
+      "character": "Ợ",
+      "codepoint": "U+1EE2",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 0,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 209,
+      "character": "Ú",
+      "codepoint": "U+00DA",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 16,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 210,
+      "character": "Ù",
+      "codepoint": "U+00D9",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 32,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 211,
+      "character": "Ủ",
+      "codepoint": "U+1EE6",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 48,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 212,
+      "character": "Ũ",
+      "codepoint": "U+0168",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 64,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 213,
+      "character": "Ụ",
+      "codepoint": "U+1EE4",
+      "advanceWidth": 7,
+      "cell": {
+        "x": 80,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 7
+    },
+    {
+      "index": 214,
+      "character": "Ư",
+      "codepoint": "U+01AF",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 96,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 215,
+      "character": "Ứ",
+      "codepoint": "U+1EE8",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 112,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 216,
+      "character": "Ừ",
+      "codepoint": "U+1EEA",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 128,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 217,
+      "character": "Ử",
+      "codepoint": "U+1EEC",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 144,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 218,
+      "character": "Ữ",
+      "codepoint": "U+1EEE",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 160,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 219,
+      "character": "Ự",
+      "codepoint": "U+1EF0",
+      "advanceWidth": 8,
+      "cell": {
+        "x": 176,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 8
+    },
+    {
+      "index": 220,
+      "character": "Ý",
+      "codepoint": "U+00DD",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 192,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 221,
+      "character": "Ỳ",
+      "codepoint": "U+1EF2",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 208,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 222,
+      "character": "Ỷ",
+      "codepoint": "U+1EF6",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 224,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 223,
+      "character": "Ỹ",
+      "codepoint": "U+1EF8",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 240,
+        "y": 195,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 224,
+      "character": "Ỵ",
+      "codepoint": "U+1EF4",
+      "advanceWidth": 6,
+      "cell": {
+        "x": 0,
+        "y": 210,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 6
+    },
+    {
+      "index": 225,
+      "character": "…",
+      "codepoint": "U+2026",
+      "advanceWidth": 9,
+      "cell": {
+        "x": 16,
+        "y": 210,
+        "width": 16,
+        "height": 15
+      },
+      "glyphWidth": 9
+    }
+  ]
+}

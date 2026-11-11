@@ -1,0 +1,31 @@
+<resources>
+    <style name="J2MEXTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0E1826</item>
+    </style>
+
+    <style name="NativeLcdUiSpinner" parent="@android:style/Widget.Material.Spinner">
+        <item name="android:dropDownSelector">@drawable/lcdui_dropdown_selector</item>
+    </style>
+
+    <style name="NativeChoiceDropdownAnimationDown">
+        <item name="android:windowEnterAnimation">@anim/native_choice_dropdown_enter_down</item>
+        <item name="android:windowExitAnimation">@anim/native_choice_dropdown_exit_down</item>
+    </style>
+
+    <style name="NativeChoiceDropdownAnimationUp">
+        <item name="android:windowEnterAnimation">@anim/native_choice_dropdown_enter_up</item>
+        <item name="android:windowExitAnimation">@anim/native_choice_dropdown_exit_up</item>
+    </style>
+
+    <style name="NativeLcdUiTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:spinnerStyle">@style/NativeLcdUiSpinner</item>
+        <item name="android:colorAccent">#B9C3FF</item>
+        <item name="android:colorControlActivated">#B9C3FF</item>
+        <item name="android:colorControlHighlight">#33B9C3FF</item>
+        <item name="android:colorControlNormal">#9C96A1</item>
+        <item name="android:colorButtonNormal">#192434</item>
+        <item name="android:textColorPrimary">#E8EFF7</item>
+        <item name="android:textColorSecondary">#9DAABB</item>
+        <item name="android:windowBackground">#0E1826</item>
+    </style>
+</resources>

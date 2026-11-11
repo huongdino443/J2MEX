@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+def fontScalePercent = (project.findProperty('fontScalePercent') ?: '85')
+        .toString().toInteger()
+def fontBuildVersionCode = (project.findProperty('buildVersionCode') ?: '144')
+        .toString().toInteger()
+def fontBuildVersionName = (project.findProperty('buildVersionName')
+        ?: "0.1-v${fontBuildVersionCode}-more-settings").toString()
+if (fontScalePercent < 1 || fontScalePercent > 200)
+    throw new GradleException("fontScalePercent must be between 1 and 200")
+android {
+    namespace 'org.recompile.freej2me.lite'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'io.github.huongdino443.j2mex'
+        minSdk 21
+        targetSdk 34
+        versionCode fontBuildVersionCode
+        versionName fontBuildVersionName
+        buildConfigField 'int', 'FONT_SCALE_PERCENT', "${fontScalePercent}"
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    buildFeatures { buildConfig true }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildTypes {
+        debug { debuggable true }
+    }
+    packaging { jniLibs { useLegacyPackaging true } }
+    sourceSets { main.java.srcDir '../../src/org/recompile/freej2me/protocol' }
+    androidResources { noCompress += ['xz'] }
+}
+dependencies { implementation 'org.tukaani:xz:1.10' }

@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+MIDlet-Name: FreeJ2ME Lite Diagnostic
+MIDlet-Version: 1.0
+MIDlet-Vendor: Local Test
+MIDlet-1: FreeJ2ME Lite Diagnostic,,DiagnosticMIDlet
+MicroEdition-Profile: MIDP-2.0
+MicroEdition-Configuration: CLDC-1.1
+

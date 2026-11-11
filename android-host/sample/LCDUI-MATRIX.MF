@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+MIDlet-1: J2MEX LCDUI Matrix,,LcdUiMatrixMIDlet
+MIDlet-Name: J2MEX LCDUI Matrix
+MIDlet-Version: 1.0.2
+MIDlet-Vendor: J2MEX Test
+MicroEdition-Profile: MIDP-2.0
+MicroEdition-Configuration: CLDC-1.1
+

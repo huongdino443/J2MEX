@@ -1,0 +1,9 @@
+/generated-apks/
+.gradle/
+build/
+app/build/
+app/src/main/assets/*.jar
+app/src/main/assets/runtime.zip
+app/src/main/assets/runtime.tar.xz
+app/src/main/jniLibs/
+local.properties

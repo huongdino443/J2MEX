@@ -1,0 +1,106 @@
+J2MEX — Android app for Java ME games
+
+HOW IT WORKS
+J2MEX runs FreeJ2ME on Android OpenJDK 8 ARM64 through the JNI Invocation API.
+FreeJ2ME runs headlessly: its BufferedImage framebuffer is sent over an
+authenticated loopback connection and Android renders the pixels directly.
+
+OPEN-SOURCE COMPONENTS AND LICENSES
+FreeJ2ME: upstream source in the parent repository, GPL v3.
+OpenJDK 8 Android ARM64: runtime reused from the existing local PoC.
+Its LICENSE, ASSEMBLY_EXCEPTION and third-party notices are retained
+inside the runtime package. OpenJDK is GPL v2 with applicable exceptions.
+FreeType ARM64: see licenses/FREETYPE-LICENSE.txt.
+XZ for Java 1.10: pure-Java XZ decompressor, 0BSD license.
+
+Native List/Form UI includes modified ports of J2ME Loader's Apache-2.0
+Form / CompoundListAdapter / CompoundAdapter presentation code.
+Upstream: https://github.com/nikita36078/J2ME-Loader
+Reference commit: 261c216c017e77391774ca10748c1229884cecd2
+Changes: detached screen model, ordered IPC events, Android framework widgets,
+bounded icons, in-place updates, and native/Canvas switching for this host.
+Upstream copyright headers are retained in ported source files.
+See licenses/J2ME-LOADER-APACHE-2.0.txt and android-host/NATIVE_UI_PROVENANCE.md.
+
+The per-game physical-key mapping workflow is adapted from J2ME Loader's
+KeyMapper and KeyMapperActivity under Apache License 2.0. The editor and
+per-game storage are adapted for this host's MIDP key codes.
+
+The edge-menu icons use Material Icons (Outlined) by Google, adapted from
+https://github.com/google/material-design-icons under the Apache License 2.0.
+The full Apache-2.0 license text is included at
+licenses/J2ME-LOADER-APACHE-2.0.txt.
+
+The integrated game file browser was developed for J2MEX using the folder
+browsing source supplied from Near Transfer 1.0.2 as a reference. The supplied
+source is GPL-3.0-or-later; its license is retained in
+licenses/NEAR-TRANSFER-GPL-3.0.txt.
+
+BUILD AND DISTRIBUTION
+This build is for testing. Before public distribution, review component
+provenance, license and source-offer obligations, and release signing.
+
+SAFETY AND COMPATIBILITY
+Only open trusted MIDlet JARs. A MIDlet runs with the app's permissions.
+Compatibility can vary by game, particularly when a game relies on
+manufacturer-specific APIs.
+
+FEATURE VERIFICATION
+All current J2MEX features have been tested directly on a device and confirmed
+to work normally.
+
+──────────────────────────────────────────────────────────────────────────────
+BẢN TIẾNG VIỆT
+──────────────────────────────────────────────────────────────────────────────
+
+J2MEX — ứng dụng Android hỗ trợ chạy trò chơi Java ME
+
+CÁCH HOẠT ĐỘNG
+J2MEX chạy FreeJ2ME trên Android OpenJDK 8 ARM64 thông qua JNI Invocation API.
+FreeJ2ME chạy ở chế độ headless: framebuffer BufferedImage được gửi qua kết
+nối loopback đã xác thực và Android vẽ trực tiếp các pixel.
+
+THÀNH PHẦN MÃ NGUỒN MỞ VÀ GIẤY PHÉP
+FreeJ2ME: mã nguồn upstream trong kho lưu trữ cha, giấy phép GPL phiên bản 3.
+OpenJDK 8 Android ARM64: runtime được dùng lại từ PoC hiện có trong máy.
+Các tệp LICENSE, ASSEMBLY_EXCEPTION và thông báo bên thứ ba được giữ trong
+gói runtime. OpenJDK dùng GPL phiên bản 2 cùng các ngoại lệ áp dụng.
+FreeType ARM64: xem licenses/FREETYPE-LICENSE.txt.
+XZ for Java 1.10: bộ giải nén XZ thuần Java, giấy phép 0BSD.
+
+Giao diện List/Form native có các phần trình bày được chuyển đổi và chỉnh sửa
+từ Form / CompoundListAdapter / CompoundAdapter của J2ME Loader theo Apache 2.0.
+Upstream: https://github.com/nikita36078/J2ME-Loader
+Commit tham chiếu: 261c216c017e77391774ca10748c1229884cecd2
+Các thay đổi gồm mô hình màn hình tách rời, sự kiện IPC có thứ tự, widget
+Android, giới hạn kích thước biểu tượng, cập nhật tại chỗ và chuyển đổi giữa
+màn hình native với Canvas cho máy chủ này. Các tiêu đề bản quyền upstream
+được giữ trong các tệp mã đã chuyển đổi. Xem licenses/J2ME-LOADER-APACHE-2.0.txt
+và android-host/NATIVE_UI_PROVENANCE.md.
+
+Luồng ánh xạ phím vật lý theo từng game được chuyển thể từ KeyMapper và
+KeyMapperActivity của J2ME Loader theo Apache License 2.0. Giao diện và cách
+lưu ánh xạ theo game được điều chỉnh cho mã phím MIDP của máy chủ này.
+
+Icon menu cạnh dùng Material Icons (Outlined) của Google, được chỉnh màu từ
+https://github.com/google/material-design-icons theo Apache License 2.0.
+Toàn văn giấy phép Apache 2.0 được giữ tại
+licenses/J2ME-LOADER-APACHE-2.0.txt.
+
+Trình duyệt tệp game tích hợp được phát triển cho J2MEX, có tham khảo mã nguồn
+duyệt thư mục do Near Transfer 1.0.2 cung cấp. Mã nguồn tham khảo dùng GPL
+3.0 trở lên; giấy phép được giữ tại
+licenses/NEAR-TRANSFER-GPL-3.0.txt.
+
+BẢN BUILD VÀ PHÂN PHỐI
+Bản build này dùng để kiểm thử. Trước khi phát hành công khai, cần rà soát
+nguồn gốc các thành phần, nghĩa vụ giấy phép/cung cấp mã nguồn và chữ ký phát hành.
+
+AN TOÀN VÀ TƯƠNG THÍCH
+Chỉ mở các tệp MIDlet JAR đáng tin cậy. MIDlet chạy với các quyền của ứng dụng.
+Mức độ tương thích có thể khác nhau giữa các game, đặc biệt với game sử dụng
+API riêng của nhà sản xuất.
+
+KIỂM CHỨNG TÍNH NĂNG
+Mọi tính năng hiện có của J2MEX đã được kiểm tra trực tiếp trên thiết bị và
+xác nhận hoạt động bình thường.
