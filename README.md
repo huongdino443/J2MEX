@@ -5,6 +5,13 @@ directly, without converting them to Android DEX. It uses the FreeJ2ME
 emulation engine, built and optimized for Android, alongside an Android host
 for display, audio, storage, and input.
 
+## Download
+
+**[Download the latest APK from GitHub Releases](https://github.com/huongdino443/J2MEX/releases/latest)**
+
+The release page includes the latest APK and release notes.
+
+
 ## Features
 
 - **Run original JARs directly.** Import MIDlet `.jar` files and run them with
