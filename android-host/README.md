@@ -44,8 +44,10 @@ runs host-side compatibility checks, packages the runtime, and assembles a
 debug-signed APK at `app/build/outputs/apk/debug/app-debug.apk`.
 
 Runtime archives, generated JARs, native build outputs, and APKs are not checked
-into the repository. Supply runtime binaries from a source whose license permits
-your intended use.
+into the repository. The JRE used for the release is based on OpenJDK tag
+`jdk8u482-ga` with Android patches from the build repository revision listed in
+`app/src/main/assets/NOTICE.txt`. Use those source references when preparing or
+replacing the local runtime inputs.
 
 ## Compatibility and verification
 

@@ -49,7 +49,10 @@ are in the Markdown documents under `android-host/`.
 
 The Android build uses JDK 21, Android SDK 34, and Android NDK 28.2.13676358.
 The embedded Java runtime and its FreeType library are local build inputs and
-are deliberately not stored in this repository. Provide them with
+are deliberately not stored in this repository. The runtime used by the
+release is based on OpenJDK 8u482 with Android patches; its exact source and
+build references are listed in the bundled
+[`NOTICE.txt`](android-host/app/src/main/assets/NOTICE.txt). Provide them with
 `RUNTIME_TAR` and `FREETYPE_SO` when the runtime has not already been unpacked
 under `android-host/build/runtime`.
 
@@ -71,6 +74,8 @@ preparation, device limitations, and additional test guidance.
 FreeJ2ME and other incorporated components retain their applicable licenses.
 See the root [`LICENSE`](LICENSE), `android-host/app/src/main/assets/NOTICE.txt`,
 and the notices in `android-host/app/src/main/assets/licenses/`. Review the
-source and binary redistribution terms before preparing a public release.
+source and binary redistribution terms before preparing a public release. The
+NOTICE identifies the exact OpenJDK tag and Android patch/build commit used by
+the embedded runtime.
 
 Only use MIDlet files from sources you trust.

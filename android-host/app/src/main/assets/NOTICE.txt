@@ -7,9 +7,16 @@ authenticated loopback connection and Android renders the pixels directly.
 
 OPEN-SOURCE COMPONENTS AND LICENSES
 FreeJ2ME: upstream source in the parent repository, GPL v3.
-OpenJDK 8 Android ARM64: runtime reused from the existing local PoC.
-Its LICENSE, ASSEMBLY_EXCEPTION and third-party notices are retained
-inside the runtime package. OpenJDK is GPL v2 with applicable exceptions.
+OpenJDK 8 Android ARM64: OpenJDK tag jdk8u482-ga, commit
+cea3cd4c1d7aa70e998d45ca2e419793a550321e, built with Android patches and
+scripts from AngelAuraMC/angelauramc-openjdk-build at commit
+62359f04413c3ffe339e652b88a96d9087840cbf. Corresponding source:
+https://github.com/openjdk/jdk8u/tree/cea3cd4c1d7aa70e998d45ca2e419793a550321e
+https://github.com/AngelAuraMC/angelauramc-openjdk-build/tree/62359f04413c3ffe339e652b88a96d9087840cbf
+Build workflow: https://github.com/AngelAuraMC/angelauramc-openjdk-build/actions/runs/22620663943
+The runtime's LICENSE, ASSEMBLY_EXCEPTION and THIRD_PARTY_README are retained
+in the package. OpenJDK is GPL v2 with the applicable Classpath and Assembly
+exceptions.
 FreeType ARM64: see licenses/FREETYPE-LICENSE.txt.
 XZ for Java 1.10: pure-Java XZ decompressor, 0BSD license; see
 licenses/XZ-0BSD.txt.
@@ -37,9 +44,10 @@ browsing source supplied from Near Transfer 1.0.2 as a reference. The supplied
 source is GPL-3.0-or-later; its license is retained in
 licenses/NEAR-TRANSFER-GPL-3.0.txt.
 
-BUILD AND DISTRIBUTION
-This build is for testing. Before public distribution, review component
-provenance, license and source-offer obligations, and release signing.
+SOURCE AVAILABILITY
+J2MEX source and license notices:
+https://github.com/huongdino443/J2MEX
+The OpenJDK source and Android build patches are linked above.
 
 SAFETY AND COMPATIBILITY
 Only open trusted MIDlet JARs. A MIDlet runs with the app's permissions.
@@ -63,9 +71,15 @@ nối loopback đã xác thực và Android vẽ trực tiếp các pixel.
 
 THÀNH PHẦN MÃ NGUỒN MỞ VÀ GIẤY PHÉP
 FreeJ2ME: mã nguồn upstream trong kho lưu trữ cha, giấy phép GPL phiên bản 3.
-OpenJDK 8 Android ARM64: runtime được dùng lại từ PoC hiện có trong máy.
-Các tệp LICENSE, ASSEMBLY_EXCEPTION và thông báo bên thứ ba được giữ trong
-gói runtime. OpenJDK dùng GPL phiên bản 2 cùng các ngoại lệ áp dụng.
+OpenJDK 8 Android ARM64: dùng tag OpenJDK jdk8u482-ga, commit
+cea3cd4c1d7aa70e998d45ca2e419793a550321e, cùng các bản vá Android và script
+build từ AngelAuraMC/angelauramc-openjdk-build tại commit
+62359f04413c3ffe339e652b88a96d9087840cbf. Mã nguồn tương ứng:
+https://github.com/openjdk/jdk8u/tree/cea3cd4c1d7aa70e998d45ca2e419793a550321e
+https://github.com/AngelAuraMC/angelauramc-openjdk-build/tree/62359f04413c3ffe339e652b88a96d9087840cbf
+Workflow build: https://github.com/AngelAuraMC/angelauramc-openjdk-build/actions/runs/22620663943
+Các tệp LICENSE, ASSEMBLY_EXCEPTION và THIRD_PARTY_README được giữ trong gói.
+OpenJDK dùng GPL phiên bản 2 cùng ngoại lệ Classpath và Assembly áp dụng.
 FreeType ARM64: xem licenses/FREETYPE-LICENSE.txt.
 XZ for Java 1.10: bộ giải nén XZ thuần Java, giấy phép 0BSD; xem
 licenses/XZ-0BSD.txt.
@@ -94,9 +108,10 @@ duyệt thư mục do Near Transfer 1.0.2 cung cấp. Mã nguồn tham khảo d�
 3.0 trở lên; giấy phép được giữ tại
 licenses/NEAR-TRANSFER-GPL-3.0.txt.
 
-BẢN BUILD VÀ PHÂN PHỐI
-Bản build này dùng để kiểm thử. Trước khi phát hành công khai, cần rà soát
-nguồn gốc các thành phần, nghĩa vụ giấy phép/cung cấp mã nguồn và chữ ký phát hành.
+KHẢ NĂNG TRUY CẬP MÃ NGUỒN
+Mã nguồn J2MEX và thông báo giấy phép:
+https://github.com/huongdino443/J2MEX
+Mã nguồn OpenJDK và các bản vá Android được dẫn ở trên.
 
 AN TOÀN VÀ TƯƠNG THÍCH
 Chỉ mở các tệp MIDlet JAR đáng tin cậy. MIDlet chạy với các quyền của ứng dụng.
