@@ -1,18 +1,30 @@
 # J2MEX
 
-J2MEX is an Android application for running classic Java ME (J2ME/MIDP) games.
-It combines the FreeJ2ME emulator engine with an Android host, an embedded
-ARM64 Java runtime, and touch and physical-input controls.
+J2MEX is an Android Java ME emulator that runs original MIDlet `.jar` files
+directly, without converting them to Android DEX. It uses the FreeJ2ME
+emulation engine, built and optimized for Android, alongside an Android host
+for display, audio, storage, and input.
 
 ## Features
 
-- Import and organize MIDlet `.jar` files into game collections.
-- Configure display, audio, touch controls, gamepad layouts, and physical-key
-  mappings per game.
-- Render the game framebuffer in a resizable Android surface and support
-  portrait and landscape play.
-- Provide Android-native text entry and LCDUI screens where supported.
-- Keep game data separate and export the latest runtime log for troubleshooting.
+- **Run original JARs directly.** Import MIDlet `.jar` files and run them with
+  the FreeJ2ME-based engine; no source changes or JAR-to-DEX conversion are
+  required.
+- **Organize a game library.** Add games to collections, keep each game's saved
+  data separate, and retain the original game files.
+- **Tune the display per game.** Set virtual canvas dimensions, scaling,
+  orientation, status-bar behavior, and other display options.
+- **Choose touch controls.** Use the virtual gamepad, select or create layouts,
+  and configure pointer-based touch support separately.
+- **Map physical inputs.** Assign keyboard or controller keys to game actions
+  for each game, alongside the on-screen controls.
+- **Use Android-native support.** Enter text with the Android keyboard and use
+  supported LCDUI compatibility screens.
+- **Play with common Java ME APIs.** The Android build supports core MIDP
+  graphics and input, RMS game storage, audio playback, and network features;
+  compatibility varies by game and API.
+- **Capture and diagnose.** View FPS, take screenshots, and export the latest
+  runtime log when troubleshooting.
 
 Compatibility depends on each MIDlet and its use of optional Java ME APIs.
 J2MEX currently packages the `arm64-v8a` runtime and targets Android API 21
