@@ -77,7 +77,8 @@ public final class RuntimeActivity extends LocalizedActivity {
     private static final int FONT_METRICS_CHARACTERS = 65536;
     private static final int FONT_METRICS_CHUNK_SIZE = 1024;
     private static final int[] EMULATION_SPEED_PRESETS = {
-            25, 50, 75, 100, 125, 150, 200, 300, 400, 600, 800, 1000
+            25, 50, 75, 100, 125, 150, 200, 300, 400, 600, 800, 1000,
+            1200, 1500, BluetoothProtocol.MAX_EMULATION_SPEED_PERCENT
     };
     private static final String FONT_MATCH_PROBE =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?+-_()[]{}";
@@ -1013,7 +1014,8 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
 
     private void showEmulationSpeedDialog() {
-        final int startingSpeed = Math.min(1000, emulationSpeedPercent);
+        final int startingSpeed = Math.min(
+                BluetoothProtocol.MAX_EMULATION_SPEED_PERCENT, emulationSpeedPercent);
         final Dialog dialog = new Dialog(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -1075,7 +1077,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         minimum.setTextColor(UI_MUTED);
         minimum.setTextSize(14);
         TextView maximum = new TextView(this);
-        maximum.setText("10x");
+        maximum.setText(formatSpeed(BluetoothProtocol.MAX_EMULATION_SPEED_PERCENT));
         maximum.setTextColor(UI_MUTED);
         maximum.setTextSize(14);
         range.addView(minimum, new LinearLayout.LayoutParams(0,
@@ -1157,7 +1159,8 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
 
     private void setEmulationSpeed(int percent) {
-        int bounded = Math.max(25, Math.min(1000, percent));
+        int bounded = Math.max(25,
+                Math.min(BluetoothProtocol.MAX_EMULATION_SPEED_PERCENT, percent));
         emulationSpeedPercent = bounded;
         send(BluetoothProtocol.SET_SPEED, bounded);
     }
@@ -2088,8 +2091,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                             Integer.toString(displayRefreshHz), deviceLocale,
                             Integer.toString(fontServer.getLocalPort()),
                             "--j2mex-touch-input=" + gameSettings.touchEnabled,
-                            "--j2mex-ui-language=" + AppLocalization.languageTag(this),
-                            "--j2mex-frame-trace=" + debugLogsEnabled});
+                            "--j2mex-ui-language=" + AppLocalization.languageTag(this)});
             appendSessionLog("[runtime-exit] native host result=" + result);
             update(result == -21
                     ? "Heap native không tương thích với Java 8. Hãy xuất log để xem chi tiết."
@@ -2377,6 +2379,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                 long lastFrameAt = 0, intervalTotal = 0, intervalMax = 0;
                 long readTotal = 0, readMax = 0, decodeTotal = 0, decodeMax = 0;
                 long bitmapTotal = 0, bitmapMax = 0;
+                long lastSlowFrameLogAt = 0;
                 int sampleFrames = 0, longIntervals = 0;
                 int lastFrameWidth = 0, lastFrameHeight = 0;
                 while (!stopping) {
@@ -2435,19 +2438,31 @@ public final class RuntimeActivity extends LocalizedActivity {
                         bitmapMax = Math.max(bitmapMax, bitmapFinished - decodeFinished);
                         sampleFrames++;
                         if (sampleFrames >= 300) {
-                            try {
-                                if (debugLogsEnabled) SessionLog.append(getFilesDir(), String.format(Locale.US,
-                                        "[frame-pipeline] frames=%d gapAvg/Max=%.2f/%.2fms >1.5vsync=%d " +
-                                        "readAvg/Max=%.2f/%.2fms decodeAvg/Max=%.2f/%.2fms bitmapAvg/Max=%.2f/%.2fms %s",
-                                        sampleFrames,
-                                        intervalTotal / ((sampleFrames - 1) * 1_000_000.0), intervalMax / 1_000_000.0,
-                                        longIntervals,
-                                        readTotal / (sampleFrames * 1_000_000.0), readMax / 1_000_000.0,
-                                        decodeTotal / (sampleFrames * 1_000_000.0), decodeMax / 1_000_000.0,
-                                        bitmapTotal / (sampleFrames * 1_000_000.0), bitmapMax / 1_000_000.0,
-                                        screen.drainFrameStats()));
-                            } catch (IOException error) {
-                                android.util.Log.w("FreeJ2ME", "Cannot append frame timing stats", error);
+                            String uiDrawStats = screen.drainFrameStats();
+                            boolean slowFramePipeline = longIntervals >= 3
+                                    || readMax > 10_000_000L
+                                    || decodeMax > 10_000_000L
+                                    || bitmapMax > 16_000_000L;
+                            long now = System.nanoTime();
+                            if (debugLogsEnabled && slowFramePipeline
+                                    && (lastSlowFrameLogAt == 0
+                                            || now - lastSlowFrameLogAt >= 15_000_000_000L)) {
+                                try {
+                                    SessionLog.append(getFilesDir(), String.format(Locale.US,
+                                            "[frame-pipeline] slow window frames=%d gapAvg/Max=%.2f/%.2fms " +
+                                            ">1.5vsync=%d readAvg/Max=%.2f/%.2fms " +
+                                            "decodeAvg/Max=%.2f/%.2fms bitmapAvg/Max=%.2f/%.2fms %s",
+                                            sampleFrames,
+                                            intervalTotal / ((sampleFrames - 1) * 1_000_000.0),
+                                            intervalMax / 1_000_000.0, longIntervals,
+                                            readTotal / (sampleFrames * 1_000_000.0), readMax / 1_000_000.0,
+                                            decodeTotal / (sampleFrames * 1_000_000.0), decodeMax / 1_000_000.0,
+                                            bitmapTotal / (sampleFrames * 1_000_000.0), bitmapMax / 1_000_000.0,
+                                            uiDrawStats));
+                                    lastSlowFrameLogAt = now;
+                                } catch (IOException error) {
+                                    android.util.Log.w("FreeJ2ME", "Cannot append slow frame stats", error);
+                                }
                             }
                             intervalTotal = intervalMax = readTotal = readMax = 0;
                             decodeTotal = decodeMax = bitmapTotal = bitmapMax = 0;
@@ -2456,10 +2471,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                     } else if (type == 2 || type == 3) {
                         String message = incoming.readUTF();
                         if (message.startsWith("[frame-host]")) {
-                            try { if (debugLogsEnabled) SessionLog.append(getFilesDir(), message); }
-                            catch (IOException error) {
-                                android.util.Log.w("FreeJ2ME", "Cannot append host frame stats", error);
-                            }
+                            // HeadlessMain already writes these summaries to the native console log.
                         } else update(message);
                     }
                     else if (type == 4) {

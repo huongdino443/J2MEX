@@ -11,11 +11,12 @@ package org.recompile.mobile;
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
+import org.recompile.freej2me.protocol.BluetoothProtocol;
 
 /** Session-scoped virtual timing used only by transformed MIDlet bytecode. */
 public final class RuntimeTiming {
     public static final int MIN_PERCENT = 25;
-    public static final int MAX_PERCENT = 1000;
+    public static final int MAX_PERCENT = BluetoothProtocol.MAX_EMULATION_SPEED_PERCENT;
     public static final int NORMAL_PERCENT = 100;
 
     private static final Object LOCK = new Object();
@@ -43,7 +44,8 @@ public final class RuntimeTiming {
 
     public static void setSpeedPercent(int percent) {
         if (percent < MIN_PERCENT || percent > MAX_PERCENT)
-            throw new IllegalArgumentException("MIDlet speed must be between 25% and 1000%");
+            throw new IllegalArgumentException("MIDlet speed must be between "
+                    + MIN_PERCENT + "% and " + MAX_PERCENT + "%");
         synchronized (LOCK) {
             long now = System.nanoTime();
             guestAnchorNanos += scaleElapsed(now - hostAnchorNanos, speedPercent);

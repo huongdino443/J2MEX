@@ -205,6 +205,22 @@ public final class M3GCompositingSmoke {
         check((read(directWaterOcclusion)[32*64+32]&0xffffff)==0xffff00,
                 "Deferred direct water covered nearer opaque geometry");
 
+        int noDepthOffset=renderDepthOffset(renderer,camera,indices,polygon,0,0,false);
+        int unitsDepthOffset=renderDepthOffset(renderer,camera,indices,polygon,0,-200,false);
+        int awayUnitsDepthOffset=renderDepthOffset(renderer,camera,indices,polygon,0,200,false);
+        check((noDepthOffset&0xffffff)==0x00ff00,
+                String.format("Farther surface unexpectedly won without depth offset: #%08x",noDepthOffset));
+        check((unitsDepthOffset&0xffffff)==0xff0000,
+                String.format("M3G depth-offset units did not resolve overlapping surfaces: #%08x",
+                        unitsDepthOffset));
+        check((awayUnitsDepthOffset&0xffffff)==0x00ff00,
+                String.format("Positive M3G depth offset pulled a farther surface forward: #%08x",
+                        awayUnitsDepthOffset));
+        int factorDepthOffset=renderDepthOffset(renderer,camera,indices,polygon,-24,0,true);
+        check((factorDepthOffset&0xffffff)==0xff0000,
+                String.format("M3G depth-offset factor did not resolve sloped surfaces: #%08x",
+                        factorDepthOffset));
+
         int fogFirst=renderFogBoat(renderer,camera,indices,polygon,true);
         int boatFirst=renderFogBoat(renderer,camera,indices,polygon,false);
         check((fogFirst&0xffffff)==0xffff00,
@@ -233,8 +249,32 @@ public final class M3GCompositingSmoke {
         int unlitCenter=read(unlit)[32*64+32];
         check((unlitCenter&0xffffff)==0xffffff,
                 String.format("No-material textured mesh lost its opaque texture: #%08x",unlitCenter));
-        System.out.println("M3GCompositingSmoke: "+checks+" checks passed; per-pixel alpha depth, mesh overlap, clips and unlit textures");
+        System.out.println("M3GCompositingSmoke: "+checks+" checks passed; alpha depth, polygon offsets, mesh overlap, clips and unlit textures");
     }
+    private static int renderDepthOffset(Graphics3D renderer,Camera camera,
+            TriangleStripArray indices,PolygonMode polygon,float factor,float units,boolean sloped) {
+        Image target=Image.createImage(64,64);
+        Graphics graphics=target.getGraphics(); graphics.setColor(0); graphics.fillRect(0,0,64,64);
+        Appearance nearAppearance=new Appearance(); nearAppearance.setPolygonMode(polygon);
+        CompositingMode replace=new CompositingMode(); replace.setBlending(CompositingMode.REPLACE);
+        nearAppearance.setCompositingMode(replace);
+        Material nearMaterial=new Material(); nearMaterial.setColor(Material.DIFFUSE,0xff00ff00);
+        nearAppearance.setMaterial(nearMaterial);
+
+        Appearance offsetAppearance=new Appearance(); offsetAppearance.setPolygonMode(polygon);
+        CompositingMode offsetMode=new CompositingMode(); offsetMode.setBlending(CompositingMode.REPLACE);
+        offsetMode.setDepthOffset(factor,units); offsetAppearance.setCompositingMode(offsetMode);
+        Material offsetMaterial=new Material(); offsetMaterial.setColor(Material.DIFFUSE,0xffff0000);
+        offsetAppearance.setMaterial(offsetMaterial);
+
+        renderer.bindTarget(graphics); renderer.clear(new Background()); renderer.setCamera(camera,new Transform());
+        renderer.render(triangleAt(0xffffffff,-20),indices,nearAppearance,null);
+        VertexBuffer farther=sloped?slopedTriangle(-22,-20,-21):triangleAt(0xffffffff,-21);
+        renderer.render(farther,indices,offsetAppearance,null);
+        renderer.releaseTarget();
+        return read(target)[32*64+32];
+    }
+
     private static VertexBuffer triangle(int color) {
         return triangleAt(color,-30);
     }
@@ -243,6 +283,12 @@ public final class M3GCompositingSmoke {
         positions.set(0,3,new short[]{-6,-6,(short)z,6,-6,(short)z,0,6,(short)z});
         VertexBuffer result=new VertexBuffer(); result.setPositions(positions,0.1f,null); result.setDefaultColor(color);
         return result;
+    }
+    private static VertexBuffer slopedTriangle(int zA,int zB,int zC) {
+        VertexArray positions=new VertexArray(3,3,VertexArray.SHORT);
+        positions.set(0,3,new short[]{-6,-6,(short)zA,6,-6,(short)zB,0,6,(short)zC});
+        VertexBuffer result=new VertexBuffer(); result.setPositions(positions,0.1f,null);
+        result.setDefaultColor(0xffffffff); return result;
     }
     private static int renderFogBoat(Graphics3D renderer,Camera camera,TriangleStripArray indices,
             PolygonMode polygon,boolean fogFirst) {

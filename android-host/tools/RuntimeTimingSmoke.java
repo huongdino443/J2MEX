@@ -31,15 +31,15 @@ public final class RuntimeTimingSmoke {
         if (!rejected) throw new AssertionError("Invalid speed was accepted");
 
         RuntimeTiming.setSpeedPercent(RuntimeTiming.MAX_PERCENT);
-        if (RuntimeTiming.getSpeedPercent() != 1000)
-            throw new AssertionError("The 10x speed limit was not accepted");
+        if (RuntimeTiming.getSpeedPercent() != 2000)
+            throw new AssertionError("The 20x speed limit was not accepted");
         rejected = false;
         try {
             RuntimeTiming.setSpeedPercent(RuntimeTiming.MAX_PERCENT + 1);
         } catch (IllegalArgumentException expected) {
             rejected = true;
         }
-        if (!rejected) throw new AssertionError("Speed above 10x was accepted");
+        if (!rejected) throw new AssertionError("Speed above 20x was accepted");
 
         MemoryEditorGuard.resetSession();
         if (!MemoryEditorGuard.openEditor())

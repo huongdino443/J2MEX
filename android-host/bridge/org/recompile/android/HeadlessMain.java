@@ -34,10 +34,8 @@ public final class HeadlessMain {
     private static final AtomicBoolean exitRequested = new AtomicBoolean();
     private static final AtomicLong revision = new AtomicLong();
     private static volatile Thread frameWriterThread;
-    private static volatile boolean frameTraceEnabled;
     private static final String TOUCH_INPUT_ARGUMENT = "--j2mex-touch-input=";
     private static final String UI_LANGUAGE_ARGUMENT = "--j2mex-ui-language=";
-    private static final String FRAME_TRACE_ARGUMENT = "--j2mex-frame-trace=";
 
     private static boolean parseTouchInputEnabled(String value) {
         if ("true".equalsIgnoreCase(value)) return true;
@@ -114,15 +112,6 @@ public final class HeadlessMain {
         int launchArgumentCount = args.length;
         boolean touchInputEnabled = true;
         String uiLanguage = "en";
-        if (launchArgumentCount > 10
-                && args[launchArgumentCount - 1].startsWith(FRAME_TRACE_ARGUMENT)) {
-            String value = args[launchArgumentCount - 1]
-                    .substring(FRAME_TRACE_ARGUMENT.length());
-            if ("true".equalsIgnoreCase(value)) frameTraceEnabled = true;
-            else if ("false".equalsIgnoreCase(value)) frameTraceEnabled = false;
-            else throw new IllegalArgumentException("Invalid framebuffer trace setting: " + value);
-            launchArgumentCount--;
-        }
         if (launchArgumentCount > 10
                 && args[launchArgumentCount - 1].startsWith(UI_LANGUAGE_ARGUMENT)) {
             uiLanguage = args[launchArgumentCount - 1]
@@ -295,11 +284,12 @@ public final class HeadlessMain {
             });
 
             Thread frames = new Thread(() -> {
-                long sent = 0, sentFrames = 0;
+                long sent = 0;
                 int[] pixels = null;
                 byte[] bytes = null;
                 IntBuffer frameBuffer = null;
-                long sampleFrames = 0, lastSentAt = 0, gapTotal = 0, gapMax = 0;
+                long sampleFrames = 0, lastSentAt = 0, lastFrameStatsLogAt = 0;
+                long gapTotal = 0, gapMax = 0;
                 long snapshotTotal = 0, snapshotMax = 0, encodeTotal = 0, encodeMax = 0;
                 long socketTotal = 0, socketMax = 0, coalescedRevisions = 0;
                 try {
@@ -337,9 +327,6 @@ public final class HeadlessMain {
                             synchronized (HeadlessMain.class) {
                                 output.writeInt(1); output.writeInt(w); output.writeInt(h);
                                 output.write(bytes); output.flush();
-                                if (frameTraceEnabled)
-                                    System.out.println("[frame-tx] index=" + (++sentFrames)
-                                            + " size=" + w + "x" + h + " bytes=" + bytes.length);
                             }
                             sent = current;
                             long sendFinishedAt = System.nanoTime();
@@ -358,16 +345,30 @@ public final class HeadlessMain {
                             coalescedRevisions += Math.max(0L, current - previousSentRevision - 1L);
                             sampleFrames++;
                             if (sampleFrames >= 300) {
-                                status(2, String.format(Locale.US,
-                                        "[frame-host] sent=%d gapAvg/Max=%.2f/%.2fms " +
-                                        "snapshotAvg/Max=%.2f/%.2fms encodeAvg/Max=%.2f/%.2fms " +
-                                        "socketAvg/Max=%.2f/%.2fms coalesced=%d",
-                                        sampleFrames,
-                                        gapTotal / ((sampleFrames - 1) * 1_000_000.0), gapMax / 1_000_000.0,
-                                        snapshotTotal / (sampleFrames * 1_000_000.0), snapshotMax / 1_000_000.0,
-                                        encodeTotal / (sampleFrames * 1_000_000.0), encodeMax / 1_000_000.0,
-                                        socketTotal / (sampleFrames * 1_000_000.0), socketMax / 1_000_000.0,
-                                        coalescedRevisions));
+                                long expectedFrameNs = 1_000_000_000L
+                                        / (displayRefreshHz > 0 ? displayRefreshHz : 60);
+                                boolean slowFramePath = gapMax > expectedFrameNs * 3
+                                        || snapshotMax > 10_000_000L
+                                        || encodeMax > 10_000_000L
+                                        || socketMax > 20_000_000L;
+                                long now = System.nanoTime();
+                                if (slowFramePath && (lastFrameStatsLogAt == 0
+                                        || now - lastFrameStatsLogAt >= 15_000_000_000L)) {
+                                    status(2, String.format(Locale.US,
+                                            "[frame-host] slow window sent=%d gapAvg/Max=%.2f/%.2fms " +
+                                            "snapshotAvg/Max=%.2f/%.2fms encodeAvg/Max=%.2f/%.2fms " +
+                                            "socketAvg/Max=%.2f/%.2fms coalesced=%d",
+                                            sampleFrames,
+                                            gapTotal / ((sampleFrames - 1) * 1_000_000.0),
+                                            gapMax / 1_000_000.0,
+                                            snapshotTotal / (sampleFrames * 1_000_000.0),
+                                            snapshotMax / 1_000_000.0,
+                                            encodeTotal / (sampleFrames * 1_000_000.0),
+                                            encodeMax / 1_000_000.0,
+                                            socketTotal / (sampleFrames * 1_000_000.0),
+                                            socketMax / 1_000_000.0, coalescedRevisions));
+                                    lastFrameStatsLogAt = now;
+                                }
                                 sampleFrames = gapTotal = gapMax = snapshotTotal = snapshotMax = 0;
                                 encodeTotal = encodeMax = socketTotal = socketMax = coalescedRevisions = 0;
                             }
@@ -413,13 +414,7 @@ public final class HeadlessMain {
                 if (command == 1 || command == 2) {
                     int key = input.readInt();
                     if (Mobile.getDisplay() != null && Mobile.getDisplay().getCurrent() != null) {
-                        long dispatchStartedAt = System.nanoTime();
-                        System.out.println("[midlet-input] dispatch "
-                                + (command == 1 ? "key-down" : "key-up") + " key=" + key);
                         if (command == 1) platform.keyPressed(key); else platform.keyReleased(key);
-                        System.out.println("[midlet-input] complete "
-                                + (command == 1 ? "key-down" : "key-up") + " key=" + key
-                                + " duration-us=" + ((System.nanoTime() - dispatchStartedAt) / 1000L));
                     }
                 } else if (command >= 3 && command <= 5) {
                     int x = input.readInt(), y = input.readInt();

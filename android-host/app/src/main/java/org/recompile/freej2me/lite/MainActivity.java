@@ -82,6 +82,10 @@ import java.util.concurrent.Executors;
     private static final int REQUEST_ALL_FILES_SETTINGS = 75;
     private static final int REQUEST_GAME_SETTINGS = 76;
     private static final int PICK_STORAGE_FOLDER = 77;
+    private static final String STATE_PENDING_EXTERNAL_GAME_URI =
+            "main.pendingExternalGameUri";
+    private static final String EXTRA_EXTERNAL_GAME_OPEN_HANDLED =
+            "org.recompile.freej2me.lite.EXTRA_EXTERNAL_GAME_OPEN_HANDLED";
     private static final int TAB_HOME = 0;
     private static final int TAB_COLLECTION = 1;
     private static final int TAB_ADD = 2;
@@ -153,6 +157,7 @@ import java.util.concurrent.Executors;
     private boolean waitingForAllFilesSettings;
     private String restoredSearchQuery;
     private boolean headerOverlayMode;
+    private Uri pendingExternalGameUri;
 
     static int dp(Activity activity, int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
@@ -187,7 +192,12 @@ import java.util.concurrent.Executors;
             searchScrollY = state.getInt("main.searchScrollY", 0);
             moreScrollY = state.getInt("main.moreScrollY", 0);
             restoredSearchQuery = state.getString("main.searchQuery", "");
+            String pendingUri = state.getString(STATE_PENDING_EXTERNAL_GAME_URI);
+            if (pendingUri != null && !pendingUri.isEmpty()) {
+                pendingExternalGameUri = Uri.parse(pendingUri);
+            }
         }
+        if (pendingExternalGameUri == null) captureExternalGameOpen(getIntent());
         Window window = getWindow();
         window.setStatusBarColor(COLOR_BACKGROUND);
         window.setNavigationBarColor(COLOR_BACKGROUND);
@@ -223,6 +233,7 @@ import java.util.concurrent.Executors;
         setActiveNavigation(currentScreen);
         renderGames(scrollYForCurrentScreen());
         prepareRuntimeOnStartup();
+        processPendingExternalGameOpen();
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -234,7 +245,47 @@ import java.util.concurrent.Executors;
         state.putInt("main.moreScrollY", moreScrollY);
         state.putString("main.searchQuery", searchField == null
                 ? restoredSearchQuery : searchField.getText().toString());
+        if (pendingExternalGameUri != null) {
+            state.putString(STATE_PENDING_EXTERNAL_GAME_URI,
+                    pendingExternalGameUri.toString());
+        }
         super.onSaveInstanceState(state);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        captureExternalGameOpen(intent);
+        processPendingExternalGameOpen();
+    }
+
+    private void captureExternalGameOpen(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())
+                || intent.getBooleanExtra(EXTRA_EXTERNAL_GAME_OPEN_HANDLED, false)) {
+            return;
+        }
+        Uri uri = intent.getData();
+        if (uri != null) pendingExternalGameUri = uri;
+    }
+
+    private void processPendingExternalGameOpen() {
+        if (pendingExternalGameUri == null || !interfaceInitialized || busy
+                || !hasStorageAccess()) {
+            return;
+        }
+        Uri uri = pendingExternalGameUri;
+        pendingExternalGameUri = null;
+        Intent current = getIntent();
+        if (current != null && Intent.ACTION_VIEW.equals(current.getAction())
+                && uri.equals(current.getData())) {
+            Intent handled = new Intent(current);
+            handled.putExtra(EXTRA_EXTERNAL_GAME_OPEN_HANDLED, true);
+            setIntent(handled);
+        }
+        startImportTask(
+                () -> GameImportManager.importDocuments(
+                        this, Collections.singletonList(uri)),
+                this::openImportedGames);
     }
 
     private int scrollYForCurrentScreen() {
@@ -2681,6 +2732,7 @@ import java.util.concurrent.Executors;
         super.onResume();
         AppUpdateManager.resumePendingInstall(this);
         completeStorageSettingsReturn();
+        processPendingExternalGameOpen();
         if (contentScroll != null) {
             if (currentScreen == TAB_MORE) renderMore(contentScroll.getScrollY());
             refreshLibrary();
@@ -2702,6 +2754,7 @@ import java.util.concurrent.Executors;
             if (!interfaceInitialized) initializeApplicationInterface();
             showStorageAccessRequiredPopup();
         }
+        processPendingExternalGameOpen();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions,
@@ -2726,6 +2779,7 @@ import java.util.concurrent.Executors;
             if (!interfaceInitialized) initializeApplicationInterface();
             showStorageAccessRequiredPopup();
         }
+        processPendingExternalGameOpen();
     }
 
     @Override public void onBackPressed() {
@@ -2855,6 +2909,14 @@ import java.util.concurrent.Executors;
     }
 
     private void startImportTask(ImportTask task) {
+        startImportTask(task, null);
+    }
+
+    private interface ImportCompletion {
+        void onComplete(GameImportManager.Result result);
+    }
+
+    private void startImportTask(ImportTask task, ImportCompletion completion) {
         setBusy(true);
         worker.execute(() -> {
             GameImportManager.Result imported;
@@ -2871,7 +2933,9 @@ import java.util.concurrent.Executors;
                 if (isFinishing() || isDestroyed()) return;
                 changeScreen(TAB_HOME);
                 refreshLibrary();
-                if (finalResult.errors.isEmpty()) {
+                if (completion != null) {
+                    completion.onComplete(finalResult);
+                } else if (finalResult.errors.isEmpty()) {
                     Toast.makeText(this, finalResult.summary(this), Toast.LENGTH_LONG).show();
                 } else {
                     new AlertDialog.Builder(this)
@@ -2879,8 +2943,55 @@ import java.util.concurrent.Executors;
                             .setMessage(finalResult.summary(this))
                             .setPositiveButton(AppLocalization.text(this, "Đóng"), null).show();
                 }
+                processPendingExternalGameOpen();
             });
         });
+    }
+
+    private void openImportedGames(GameImportManager.Result result) {
+        ArrayList<GameLibrary.Game> candidates = new ArrayList<>();
+        ArrayList<String> seenPaths = new ArrayList<>();
+        for (GameLibrary.Game game : result.games) {
+            String path = game.jar.getAbsolutePath();
+            if (!seenPaths.contains(path)) {
+                seenPaths.add(path);
+                candidates.add(game);
+            }
+        }
+        if (candidates.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle(AppLocalization.text(this, "Không thể mở game"))
+                    .setMessage(result.summary(this))
+                    .setPositiveButton(AppLocalization.text(this, "Đóng"), null)
+                    .show();
+            return;
+        }
+        Runnable openSelection = () -> {
+            if (candidates.size() == 1) {
+                openGame(candidates.get(0));
+                return;
+            }
+            String[] titles = new String[candidates.size()];
+            for (int i = 0; i < candidates.size(); i++) {
+                titles[i] = candidates.get(i).title;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle(AppLocalization.text(this, "Chọn game để mở"))
+                    .setItems(titles, (dialog, which) -> openGame(candidates.get(which)))
+                    .setNegativeButton(AppLocalization.text(this, "Đóng"), null)
+                    .show();
+        };
+        if (result.errors.isEmpty()) {
+            openSelection.run();
+        } else {
+            new AlertDialog.Builder(this)
+                    .setTitle(AppLocalization.text(this, "Hoàn tất thêm game"))
+                    .setMessage(result.summary(this))
+                    .setPositiveButton(AppLocalization.text(this, "Tiếp tục"),
+                            (dialog, which) -> openSelection.run())
+                    .setNegativeButton(AppLocalization.text(this, "Đóng"), null)
+                    .show();
+        }
     }
 
     private GradientDrawable rounded(int fill, int radiusDp, int stroke) {

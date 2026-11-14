@@ -1,7 +1,7 @@
 plugins { id 'com.android.application' }
 def fontScalePercent = (project.findProperty('fontScalePercent') ?: '85')
         .toString().toInteger()
-def fontBuildVersionCode = (project.findProperty('buildVersionCode') ?: '289')
+def fontBuildVersionCode = (project.findProperty('buildVersionCode') ?: '295')
         .toString().toInteger()
 def fontBuildVersionName = (project.findProperty('buildVersionName')
         ?: "0.1.1").toString()

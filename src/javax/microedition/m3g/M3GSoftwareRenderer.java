@@ -16,6 +16,8 @@ import javax.microedition.lcdui.Graphics;
 /** Small framebuffer renderer for the M3G feature set used by the Android MVP. */
 final class M3GSoftwareRenderer
 {
+// Emulate normalized 16-bit GLES depth units for M3G polygon offsets.
+	private static final float DEPTH_OFFSET_UNIT = 1f / 65535f;
 	private Graphics target;
 	private int viewportX, viewportY, width, height;
 	private int[] color;
@@ -709,6 +711,14 @@ if (Math.abs(area)<0.0001f) return;
 		float dwaDx=(c.y-b.y)*invArea, dwaDy=(b.x-c.x)*invArea;
 		float dwbDx=(a.y-c.y)*invArea, dwbDy=(c.x-a.x)*invArea;
 		float dwcDx=(b.y-a.y)*invArea, dwcDy=(a.x-b.x)*invArea;
+	float polygonOffset=0f;
+		if (mode!=null) {
+			float depthSlopeX=dwaDx*a.depth+dwbDx*b.depth+dwcDx*c.depth;
+			float depthSlopeY=dwaDy*a.depth+dwbDy*b.depth+dwcDy*c.depth;
+		polygonOffset=mode.getDepthOffsetFactor()
+					*Math.max(Math.abs(depthSlopeX),Math.abs(depthSlopeY))
+					+mode.getDepthOffsetUnits()*DEPTH_OFFSET_UNIT;
+		}
 		float invZDx=dwaDx*a.invZ+dwbDx*b.invZ+dwcDx*c.invZ;
 		float invZDy=dwaDy*a.invZ+dwbDy*b.invZ+dwcDy*c.invZ;
 		for (int py=minY;py<=maxY;py++) {
@@ -722,7 +732,9 @@ if (Math.abs(area)<0.0001f) return;
 				float invZ=wa*a.invZ+wb*b.invZ+wc*c.invZ;
 				if (invZ<=0) continue;
 				int pos=(py-viewportY)*width+(px-viewportX);
-			float fragmentDepth=wa*a.depth+wb*b.depth+wc*c.depth;
+			// The renderer stores reversed window depth (near=1, far=0), while
+			// M3G depth offsets follow the normal GL window-depth convention.
+			float fragmentDepth=clamp(wa*a.depth+wb*b.depth+wc*c.depth-polygonOffset);
 if (depthTest&&fragmentDepth<depth[pos]) continue;
 				// J2ME Loader configures the native M3G fog from eye-space Z.
 				// GL interpolates that coordinate linearly in screen space before

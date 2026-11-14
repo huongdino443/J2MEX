@@ -10,6 +10,7 @@ public final class BluetoothProtocol {
     public static final int HOST_REQUEST = 10;
     /** Android-to-engine command ids already used by the runtime. */
     public static final int SET_SPEED = 15;
+    public static final int MAX_EMULATION_SPEED_PERCENT = 2000;
     public static final int MEMORY_EDITOR_COMMAND = 16;
     /** Bluetooth packets use ids above the runtime command range. */
     public static final int ENGINE_RESPONSE = 17;

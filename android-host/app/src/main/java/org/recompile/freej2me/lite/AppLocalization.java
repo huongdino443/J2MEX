@@ -293,6 +293,8 @@ public final class AppLocalization {
         add("Đóng", "Close");
         add("Không thể thực hiện", "Couldn't complete the action");
         add("Hoàn tất thêm game", "Game import complete");
+        add("Không thể mở game", "Could not open game");
+        add("Chọn game để mở", "Choose a game to open");
         add("Cần quyền truy cập bộ nhớ", "Storage access required");
         add("J2MEX cần quyền truy cập bộ nhớ để duyệt thư mục và tìm game. Hãy cấp quyền để tiếp tục, hoặc thoát ứng dụng.",
                 "J2MEX needs storage access to browse folders and find games. Allow access to continue, or exit the app.");

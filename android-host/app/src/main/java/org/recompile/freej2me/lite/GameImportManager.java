@@ -29,6 +29,7 @@ final class GameImportManager {
     static final class Result {
         int imported;
         int duplicates;
+        final ArrayList<GameLibrary.Game> games = new ArrayList<>();
         final ArrayList<String> errors = new ArrayList<>();
 
         String summary() {
@@ -101,6 +102,7 @@ final class GameImportManager {
         for (Uri uri : uris) {
             try {
                 String name = displayName(context, uri);
+                if (!isSupported(name)) name = nameFromMimeType(context, uri, name);
                 if (isSupported(name)) files.add(new SourceFile(uri, name));
                 else result.errors.add(name + ": chỉ hỗ trợ JAR, JAD hoặc ZIP.");
             } catch (Exception error) {
@@ -367,6 +369,8 @@ final class GameImportManager {
             result.imported++;
         }
         GameLibrary.saveDisplayName(directory, sourceName);
+        result.games.add(new GameLibrary.Game(
+                gameJar, importedGame.title, sourceName, importedGame.icon));
     }
 
     private static void validateJar(File file) throws IOException {
@@ -418,6 +422,28 @@ final class GameImportManager {
         } catch (Exception ignored) { }
         String last = uri.getLastPathSegment();
         return last == null ? uri.toString() : last;
+    }
+
+    private static String nameFromMimeType(Context context, Uri uri, String name) {
+        String mimeType;
+        try {
+            mimeType = context.getContentResolver().getType(uri);
+        } catch (Exception ignored) {
+            return name;
+        }
+        if (mimeType == null) return name;
+        String lower = mimeType.toLowerCase(Locale.ROOT);
+        if (lower.equals("application/java-archive")
+                || lower.equals("application/x-java-archive")
+                || lower.equals("application/x-jar")) {
+            return name + ".jar";
+        }
+        if (lower.equals("application/zip")
+                || lower.equals("application/x-zip")
+                || lower.equals("application/x-zip-compressed")) {
+            return name + ".zip";
+        }
+        return name;
     }
 
     private static boolean isSupported(String name) {
