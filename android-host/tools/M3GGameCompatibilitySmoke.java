@@ -39,6 +39,30 @@ public final class M3GGameCompatibilitySmoke {
         int meshes = count(world, Mesh.class);
         check(meshes >= 10, "City Bloxx world did not expose its model meshes: " + meshes);
         check(world.find(31) instanceof Mesh, "City Bloxx named mesh lookup failed");
+        Mesh sling = (Mesh)world.find(7);
+        Mesh block = (Mesh)world.find(20);
+        check(sling != null && block != null, "City Bloxx crane sling or block mesh is missing");
+        VertexBuffer slingVertices = sling.getVertexBuffer();
+        float slingCenterDepth = slingVertices.position(5, 2);
+        check(slingVertices.position(5, 1) > 50f && slingVertices.position(5, 1) < 53f
+                        && slingVertices.position(7, 1) > 50f && slingVertices.position(7, 1) < 53f,
+                "City Bloxx sling attachment vertices no longer match the original model");
+        for (int tip : new int[]{5, 7, 9, 10})
+            check(Math.abs(slingVertices.position(tip, 2) - slingCenterDepth) < 0.01f,
+                    "City Bloxx sling contact vertex " + tip + " left the shared center-depth plane");
+        float minBlockDepth = Float.POSITIVE_INFINITY, maxBlockDepth = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i < block.getVertexBuffer().getVertexCount(); i++) {
+            float depth = block.getVertexBuffer().position(i, 2);
+            minBlockDepth = Math.min(minBlockDepth, depth);
+            maxBlockDepth = Math.max(maxBlockDepth, depth);
+        }
+        check(Math.abs(slingCenterDepth - (minBlockDepth + maxBlockDepth) * 0.5f) < 10f,
+                "City Bloxx sling is not centered across the block depth");
+        for (int submesh = 0; submesh < sling.getSubmeshCount(); submesh++) {
+            Texture2D mask = sling.getAppearance(submesh).getTexture(0);
+            check(mask != null && hasBinaryAlphaMask(mask.getImage()),
+                    "City Bloxx sling submesh " + submesh + " is not a binary-alpha cutout");
+        }
 
         Image target = Image.createImage(240, 320);
         Graphics3D graphics = new Graphics3D();
@@ -57,6 +81,18 @@ public final class M3GGameCompatibilitySmoke {
         image.setRGB(0, 0, 240, 320, pixels, 0, 240);
         javax.imageio.ImageIO.write(image, "png", new File(output, "citybloxx-m3g-world.png"));
         System.out.println("City Bloxx M3G: " + meshes + " meshes, " + colors.size() + " rendered colors");
+    }
+
+    private static boolean hasBinaryAlphaMask(Image2D image) {
+        if (image == null || image.getFormat() != Image2D.RGBA) return false;
+        int transparent = 0, opaque = 0;
+        for (int pixel : image.pixels()) {
+            int alpha = (pixel >>> 24) & 255;
+            if (alpha == 0) transparent++;
+            else if (alpha == 255) opaque++;
+            else return false;
+        }
+        return transparent > 0 && opaque > 0;
     }
 
     private static void snake(File jar) throws Exception {

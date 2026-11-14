@@ -1,11 +1,19 @@
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.m3g.Appearance;
 import javax.microedition.m3g.Camera;
+import javax.microedition.m3g.CompositingMode;
 import javax.microedition.m3g.Graphics3D;
 import javax.microedition.m3g.Group;
 import javax.microedition.m3g.Image2D;
+import javax.microedition.m3g.IndexBuffer;
+import javax.microedition.m3g.Material;
+import javax.microedition.m3g.Mesh;
+import javax.microedition.m3g.PolygonMode;
 import javax.microedition.m3g.Sprite3D;
+import javax.microedition.m3g.TriangleStripArray;
 import javax.microedition.m3g.Transform;
+import javax.microedition.m3g.VertexArray;
+import javax.microedition.m3g.VertexBuffer;
 import javax.microedition.m3g.World;
 
 public final class M3GSprite3DSmoke {
@@ -67,6 +75,12 @@ public final class M3GSprite3DSmoke {
         }
         return count==0?Double.NaN:sum/(double)count;
     }
+    private static VertexBuffer triangle(float z,int color) {
+        VertexArray positions=new VertexArray(3,3,VertexArray.SHORT);
+        positions.set(0,3,new short[]{-3,-3,(short)z,3,-3,(short)z,0,3,(short)z});
+        VertexBuffer vertices=new VertexBuffer(); vertices.setPositions(positions,1f,null);
+        vertices.setDefaultColor(color); return vertices;
+    }
     public static void main(String[] args) {
         Camera camera=new Camera();
         camera.setPerspective(90,1,0.1f,100);
@@ -103,6 +117,21 @@ public final class M3GSprite3DSmoke {
         int center=draw(fixedSize,camera,fixedSizeTransform);
         require((center&0xffffff)==0xff0000,"Direct Sprite3D render path omitted the sprite");
 
+        for(int alpha:new int[]{255,254}) {
+            Appearance thresholdAppearance=new Appearance();
+            CompositingMode thresholdMode=new CompositingMode();
+            thresholdMode.setAlphaThreshold(1f);
+            thresholdAppearance.setCompositingMode(thresholdMode);
+            Sprite3D thresholdSprite=new Sprite3D(true,
+                    new Image2D(Image2D.RGBA,1,1,new byte[]{(byte)255,0,0,(byte)alpha}),
+                    thresholdAppearance);
+            thresholdSprite.setTranslation(0,0,-4);
+            int pixel=draw(thresholdSprite,camera,true);
+            require(((pixel>>>16)&255)>=alpha-1,
+                    "Sprite3D discarded alpha "+alpha+" at threshold 1.0: #"
+                            +Integer.toHexString(pixel));
+        }
+
         Sprite3D cameraTarget=new Sprite3D(true,new Image2D(Image2D.RGBA,2,2,new byte[]{
                 (byte)255,0,0,(byte)255, (byte)255,0,0,(byte)255,
                 (byte)255,0,0,(byte)255, (byte)255,0,0,(byte)255}),appearance);
@@ -115,6 +144,31 @@ public final class M3GSprite3DSmoke {
         require(!Double.isNaN(centeredX)&&!Double.isNaN(shiftedX)&&shiftedX<centeredX-4,
                 "World render did not apply an updated active-camera translation: centered="
                         +centeredX+", shifted="+shiftedX);
+
+        // Transparent Sprite3D pixels must not write depth when the default
+        // alpha threshold is zero.
+        byte[] transparentPixel={0,0,0,0};
+        Sprite3D transparentSprite=new Sprite3D(true,new Image2D(Image2D.RGBA,1,1,transparentPixel),appearance);
+        transparentSprite.setTranslation(0,0,-5);
+        Appearance greenAppearance=new Appearance();
+        PolygonMode noCull=new PolygonMode(); noCull.setCulling(PolygonMode.CULL_NONE);
+        greenAppearance.setPolygonMode(noCull);
+        Mesh fartherMesh=new Mesh(triangle(-30,0xff00ff00),
+                new IndexBuffer[]{new TriangleStripArray(new int[]{0,1,2},new int[]{3})},
+                new Appearance[]{greenAppearance});
+        CaptureGraphics depthTarget=new CaptureGraphics(64,64);
+        Graphics3D depthGraphics=new Graphics3D();
+        depthGraphics.bindTarget(depthTarget,true,0);
+        depthGraphics.setViewport(0,0,64,64);
+        depthGraphics.setCamera(camera,new Transform());
+        World depthWorld=new World();
+        depthWorld.setActiveCamera(camera);
+        depthWorld.addChild(transparentSprite);
+        depthWorld.addChild(fartherMesh);
+        depthGraphics.render(depthWorld);
+        depthGraphics.releaseTarget();
+        require((depthTarget.pixels[32*64+32]&0xffffff)==0x00ff00,
+                "A fully transparent Sprite3D texel occluded farther geometry");
         System.out.println("M3GSprite3DSmoke: crop, one-unit world sizing, perspective distance and fixed-pixel sizing passed");
     }
 }

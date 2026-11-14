@@ -20,20 +20,29 @@ import java.util.ArrayList;
 
 public class FigureLayout
 {
-	private int scalex=1;
-	private int scaley=1;
-	private int centerx=1;
-	private int centery=1;
+private int scalex=512;
+private int scaley=512;
+private int centerx=0;
+private int centery=0;
 
-	private int pwidth=1;
-	private int pheight=1;
+private int pwidth=0;
+private int pheight=0;
+private int near=1;
+private int far=32767;
+private int angle=1024;
+private int perspectiveWidth=0;
+private int perspectiveHeight=0;
+private int projection=Graphics3D.COMMAND_PARALLEL_SCALE;
 
 	private int selected = 0;
 
 	private ArrayList<AffineTrans> trans = new ArrayList<AffineTrans>();
 
 
-	public FigureLayout() {  }
+public FigureLayout()
+{
+setAffineTrans((AffineTrans)null);
+}
 
 	public FigureLayout(AffineTrans atrans, int sx, int sy, int cx, int cy)
 	{
@@ -41,7 +50,7 @@ public class FigureLayout
 		scaley = sy;
 		centerx = cx;
 		centery = cy;
-		trans.add(atrans);
+setAffineTrans(atrans);
 	}
 
 
@@ -49,6 +58,11 @@ public class FigureLayout
 
 	public final void setAffineTrans(AffineTrans atrans)
 	{
+if(atrans==null)
+{
+atrans = new AffineTrans(4096, 0, 0, 0, 0, 4096, 0, 0, 0, 0, 4096, 0);
+}
+
 		if(trans.size()==0)
 		{
 			trans.add(atrans);
@@ -75,14 +89,18 @@ public class FigureLayout
 
 	public final int getScaleY() { return scaley; }
 
-	public final void setScale(int x, int y) { scalex=x; scaley=y; }
+public final void setScale(int x, int y) { scalex=x; scaley=y; projection=Graphics3D.COMMAND_PARALLEL_SCALE; }
 
 
 	public final int getParallelWidth() { return pwidth; }
 
 	public final int getParallelHeight() { return pheight; }
 
-	public final void setParallelSize(int w, int h) { pwidth=w; pheight=h; }
+public final void setParallelSize(int w, int h)
+{
+if(w < 0 || h < 0) throw new IllegalArgumentException();
+pwidth=w; pheight=h; projection=Graphics3D.COMMAND_PARALLEL_SIZE;
+}
 
 
 	public final int getCenterX() { return centerx; }
@@ -91,7 +109,25 @@ public class FigureLayout
 
 	public final void setCenter(int x, int y) { centerx=x; centery=y; }
 
-	public final void setPerspective(int x, int y, int z) {  }
+	public final void setPerspective(int zNear, int zFar, int viewAngle)
+	{
+if(zNear >= zFar || zNear < 1 || zFar > 32767 || viewAngle < 1 || viewAngle > 2047)
+throw new IllegalArgumentException();
+near=zNear; far=zFar; angle=viewAngle; projection=Graphics3D.COMMAND_PERSPECTIVE_FOV;
+	}
 
-	public final void setPerspective(int x, int y, int z, int w) {  }
+	public final void setPerspective(int zNear, int zFar, int width, int height)
+	{
+if(zNear >= zFar || zNear < 1 || zFar > 32767 || width < 0 || height < 0)
+throw new IllegalArgumentException();
+near=zNear; far=zFar; perspectiveWidth=width; perspectiveHeight=height;
+projection=Graphics3D.COMMAND_PERSPECTIVE_WH;
+	}
+
+final int getProjection() { return projection; }
+final int getNear() { return near; }
+final int getFar() { return far; }
+final int getAngle() { return angle; }
+final int getPerspectiveWidth() { return perspectiveWidth; }
+final int getPerspectiveHeight() { return perspectiveHeight; }
 }

@@ -3,8 +3,14 @@ package org.recompile.mobile;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.objectweb.asm.ClassAdapter;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodAdapter;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.commons.EmptyVisitor;
 
 /**
  * Applies narrowly scoped class-file compatibility changes before definition.
@@ -87,6 +93,141 @@ final class ClassFileCompatibility {
 			return bytecode;
 		} catch (LinkageError unavailableOrUnsupportedAsm) {
 			return bytecode;
+		}
+	}
+
+	/**
+	 * Repairs a narrowly recognizable package-relocation error in multi-variant
+	 * MIDlet JARs: a package-local factory declares a package-local result type
+	 * but constructs the same-named class in the default package. Only redirect
+	 * that constructor pair when the package-local sibling is present, extends
+	 * the declared result type, and has the exact constructor signature.
+	 */
+	static byte[] adaptPackageQualifiedFactoryConstruction(
+			byte[] bytecode, String className, byte[] siblingBytecode) {
+		if (bytecode == null || siblingBytecode == null || className == null) return bytecode;
+		try {
+			final String internalName = className.replace('.', '/');
+			final int separator = internalName.lastIndexOf('/');
+			if (separator <= 0 || !"dl".equals(internalName.substring(separator + 1))) return bytecode;
+			final String packageName = internalName.substring(0, separator);
+			final String siblingName = packageName + "/Z";
+			final String resultName = packageName + "/G";
+			final String constructorDescriptor = "(L" + internalName
+					+ ";Ljava/lang/String;II)V";
+			if (!hasMatchingFactoryAndSibling(bytecode, internalName, siblingName,
+					resultName, constructorDescriptor, siblingBytecode)) return bytecode;
+
+			final int[] rewrites = new int[2];
+			ClassWriter writer = new ClassWriter(0);
+			ClassVisitorBridge visitor = new ClassVisitorBridge(writer, packageName,
+					constructorDescriptor, rewrites);
+			new ClassReader(bytecode).accept(visitor, 0);
+			if (rewrites[0] != 1 || rewrites[1] != 1) return bytecode;
+
+			byte[] adapted = writer.toByteArray();
+			System.out.println("ClassFileCompatibility: repaired package-relative factory target "
+					+ className + " -> " + siblingName);
+			return adapted;
+		} catch (RuntimeException malformedOrUnsupportedClass) {
+			return bytecode;
+		} catch (LinkageError unavailableOrUnsupportedAsm) {
+			return bytecode;
+		}
+	}
+
+	private static boolean hasMatchingFactoryAndSibling(
+			byte[] bytecode, final String internalName, final String siblingName,
+			final String resultName, final String constructorDescriptor, byte[] siblingBytecode) {
+		final boolean[] classMatches = new boolean[1];
+		final int[] factoryCounts = new int[3]; // method, NEW, constructor call
+		new ClassReader(bytecode).accept(new ClassAdapter(new EmptyVisitor()) {
+			public void visit(int version, int access, String name, String signature,
+					String superName, String[] interfaces) {
+				classMatches[0] = internalName.equals(name);
+			}
+
+			public MethodVisitor visitMethod(int access, String name, String descriptor,
+					String signature, String[] exceptions) {
+				if (!"a".equals(name)
+						|| !("(Ljava/lang/String;II)L" + resultName + ";").equals(descriptor)) return null;
+				factoryCounts[0]++;
+				return new MethodAdapter(new EmptyVisitor()) {
+					public void visitTypeInsn(int opcode, String type) {
+						if (opcode == Opcodes.NEW && "Z".equals(type)) factoryCounts[1]++;
+					}
+
+					public void visitMethodInsn(int opcode, String owner, String methodName,
+							String methodDescriptor) {
+						if (opcode == Opcodes.INVOKESPECIAL && "Z".equals(owner)
+								&& "<init>".equals(methodName)
+								&& constructorDescriptor.equals(methodDescriptor)) factoryCounts[2]++;
+					}
+				};
+			}
+		}, 0);
+		if (!classMatches[0] || factoryCounts[0] != 1
+				|| factoryCounts[1] != 1 || factoryCounts[2] != 1) return false;
+
+		final boolean[] siblingMatches = new boolean[2]; // class + matching constructor
+		new ClassReader(siblingBytecode).accept(new ClassAdapter(new EmptyVisitor()) {
+			public void visit(int version, int access, String name, String signature,
+					String superName, String[] interfaces) {
+				siblingMatches[0] = siblingName.equals(name) && resultName.equals(superName);
+			}
+
+			public MethodVisitor visitMethod(int access, String name, String descriptor,
+					String signature, String[] exceptions) {
+				if ("<init>".equals(name) && constructorDescriptor.equals(descriptor))
+					siblingMatches[1] = true;
+				return null;
+			}
+		}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+		return siblingMatches[0] && siblingMatches[1];
+	}
+
+	private static final class ClassVisitorBridge extends ClassAdapter {
+		private final String packageName;
+		private final String constructorDescriptor;
+		private final int[] rewrites;
+
+		ClassVisitorBridge(ClassVisitor visitor, String packageName,
+				String constructorDescriptor, int[] rewrites) {
+			super(visitor);
+			this.packageName = packageName;
+			this.constructorDescriptor = constructorDescriptor;
+			this.rewrites = rewrites;
+		}
+
+		public MethodVisitor visitMethod(int access, String name, String descriptor,
+				String signature, String[] exceptions) {
+			MethodVisitor downstream = super.visitMethod(access, name, descriptor, signature, exceptions);
+			if (!"a".equals(name)
+					|| !("(Ljava/lang/String;II)L" + packageName + "/G;").equals(descriptor))
+				return downstream;
+			return new MethodAdapter(downstream) {
+				public void visitTypeInsn(int opcode, String type) {
+					if (opcode == Opcodes.NEW && "Z".equals(type)) {
+						rewrites[0]++;
+						super.visitTypeInsn(opcode, packageName + "/Z");
+					} else {
+						super.visitTypeInsn(opcode, type);
+					}
+				}
+
+				public void visitMethodInsn(int opcode, String owner, String methodName,
+						String methodDescriptor) {
+					if (opcode == Opcodes.INVOKESPECIAL && "Z".equals(owner)
+							&& "<init>".equals(methodName)
+							&& constructorDescriptor.equals(methodDescriptor)) {
+						rewrites[1]++;
+						super.visitMethodInsn(opcode, packageName + "/Z", methodName,
+								methodDescriptor);
+					} else {
+						super.visitMethodInsn(opcode, owner, methodName, methodDescriptor);
+					}
+				}
+			};
 		}
 	}
 

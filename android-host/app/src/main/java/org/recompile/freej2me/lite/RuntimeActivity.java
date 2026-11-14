@@ -170,6 +170,10 @@ public final class RuntimeActivity extends LocalizedActivity {
     private GameSettings gameSettings;
     private SparseIntArray physicalKeyMappings;
     private Dialog runtimeSettingsDialog;
+    private TextView runtimeUpdateDescription;
+    private TextView runtimeUpdateAction;
+    private AppUpdateManager.Release runtimeAvailableUpdate;
+    private boolean checkingForUpdate;
     private boolean gamepadVisibleForSession;
     private View leftSoftKeyAnchor;
     private NativeLcdUiView nativeScreen;
@@ -1155,7 +1159,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     private void setEmulationSpeed(int percent) {
         int bounded = Math.max(25, Math.min(1000, percent));
         emulationSpeedPercent = bounded;
-        send(15, bounded);
+        send(BluetoothProtocol.SET_SPEED, bounded);
     }
 
     private int currentViewportWidthPx() {
@@ -1266,9 +1270,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         addRuntimeSettingsRow(storage, "Thư mục làm việc", workingPath, "Chọn", null);
 
         LinearLayout details = runtimeSettingsCard(content, "Thông tin");
-        addRuntimeSettingsRow(details, "Cập nhật",
-                "Kiểm tra phiên bản mới và hướng dẫn tải khi có bản phát hành.",
-                "Kiểm tra", view -> showRuntimeUpdateCheck());
+        addRuntimeUpdateRow(details);
         addRuntimeSettingsRow(details, "Giới thiệu",
                 "Tổng quan ứng dụng và giấy phép thành phần.", "Xem",
                 view -> showRuntimeIntroduction());
@@ -1432,6 +1434,43 @@ public final class RuntimeActivity extends LocalizedActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
+    private void addRuntimeUpdateRow(LinearLayout parent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(2), dp(10), dp(2), dp(10));
+        LinearLayout textColumn = new LinearLayout(this);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        textColumn.addView(runtimeSettingsText("Cập nhật", 15, UI_TEXT));
+        runtimeUpdateDescription = runtimeSettingsText(
+                "Chưa kiểm tra phiên bản mới", 12, UI_MUTED);
+        runtimeUpdateDescription.setPadding(0, dp(3), dp(4), 0);
+        textColumn.addView(runtimeUpdateDescription);
+        row.addView(textColumn, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        runtimeUpdateAction = runtimeSettingsText(
+                runtimeAvailableUpdate == null ? "Kiểm tra" : "Tải về", 13, UI_ACCENT);
+        runtimeUpdateAction.setGravity(Gravity.CENTER);
+        row.addView(runtimeUpdateAction, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setBackground(roundDrawable(Color.TRANSPARENT, dp(10), 0));
+        row.setOnClickListener(view -> showRuntimeUpdateCheck());
+        parent.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        refreshRuntimeUpdateRow();
+    }
+
+    private void refreshRuntimeUpdateRow() {
+        if (runtimeUpdateDescription == null || runtimeUpdateAction == null) return;
+        String state = checkingForUpdate ? "Đang kiểm tra cập nhật…"
+                : runtimeAvailableUpdate == null ? "Chưa kiểm tra phiên bản mới"
+                : "Đã có bản cập nhật mới";
+        runtimeUpdateDescription.setText(AppLocalization.text(this, state));
+        runtimeUpdateAction.setText(AppLocalization.text(this,
+                runtimeAvailableUpdate == null ? "Kiểm tra" : "Tải về"));
+    }
+
     private TextView runtimeSettingsText(String value, int size, int color) {
         TextView text = new TextView(this);
         text.setText(AppLocalization.text(this, value));
@@ -1445,9 +1484,33 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
 
     private void showRuntimeUpdateCheck() {
-        showRuntimeSettingsInfo("Cập nhật",
-                "Chưa có nguồn cập nhật được cấu hình. Thông tin phát hành sẽ xuất hiện sau khi dự án có kho công khai.",
-                false);
+        if (runtimeAvailableUpdate != null) {
+            AppUpdateUi.download(this, runtimeAvailableUpdate);
+            return;
+        }
+        if (checkingForUpdate) return;
+        checkingForUpdate = true;
+        refreshRuntimeUpdateRow();
+        AppUpdateUi.check(this, (release, error) -> {
+            checkingForUpdate = false;
+            runtimeAvailableUpdate = release;
+            if (error != null && runtimeUpdateDescription != null) {
+                runtimeUpdateDescription.setText(AppLocalization.text(this,
+                        "Không kiểm tra được cập nhật"));
+            } else if (release == null && runtimeUpdateDescription != null) {
+                runtimeUpdateDescription.setText(AppLocalization.text(this,
+                        "Hiện chưa có bản cập nhật"));
+            } else if (runtimeUpdateDescription != null) {
+                runtimeUpdateDescription.setText(AppLocalization.text(this,
+                        "Đã có bản cập nhật mới"));
+            }
+            refreshRuntimeUpdateAction();
+        });
+    }
+
+    private void refreshRuntimeUpdateAction() {
+        if (runtimeUpdateAction != null) runtimeUpdateAction.setText(AppLocalization.text(this,
+                runtimeAvailableUpdate == null ? "Kiểm tra" : "Tải về"));
     }
 
     private void showRuntimeIntroduction() {
@@ -2025,7 +2088,8 @@ public final class RuntimeActivity extends LocalizedActivity {
                             Integer.toString(displayRefreshHz), deviceLocale,
                             Integer.toString(fontServer.getLocalPort()),
                             "--j2mex-touch-input=" + gameSettings.touchEnabled,
-                            "--j2mex-ui-language=" + AppLocalization.languageTag(this)});
+                            "--j2mex-ui-language=" + AppLocalization.languageTag(this),
+                            "--j2mex-frame-trace=" + debugLogsEnabled});
             appendSessionLog("[runtime-exit] native host result=" + result);
             update(result == -21
                     ? "Heap native không tương thích với Java 8. Hãy xuất log để xem chi tiết."
@@ -2314,6 +2378,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                 long readTotal = 0, readMax = 0, decodeTotal = 0, decodeMax = 0;
                 long bitmapTotal = 0, bitmapMax = 0;
                 int sampleFrames = 0, longIntervals = 0;
+                int lastFrameWidth = 0, lastFrameHeight = 0;
                 while (!stopping) {
                     int type = incoming.readInt();
                     if (type == 1) {
@@ -2324,6 +2389,8 @@ public final class RuntimeActivity extends LocalizedActivity {
                             throw new IOException("Kích thước framebuffer không hợp lệ: "
                                     + width + "x" + height + " (tối đa "
                                     + FramebufferProtocol.MAX_EDGE + " px mỗi cạnh)");
+                        lastFrameWidth = width;
+                        lastFrameHeight = height;
                         if (pixels == null || pixels.length != width * height) {
                             pixels = new int[width * height]; bytes = new byte[width * height * 4];
                             pixelBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asIntBuffer();
@@ -2439,8 +2506,14 @@ public final class RuntimeActivity extends LocalizedActivity {
                         long value = incoming.readLong();
                         int number = incoming.readInt();
                         int flags = incoming.readInt();
+                        if (debugLogsEnabled) {
+                            try {
+                                SessionLog.append(getFilesDir(), "[audio-host] command action=" + action
+                                        + " player=" + playerId + " number=" + number + " flags=" + flags);
+                            } catch (IOException error) { appendError(error); }
+                        }
                         if (audio != null) audio.handle(action, playerId, text, extra, value, number, flags);
-                    } else if (type == 9) {
+                    } else if (type == BluetoothProtocol.MEMORY_EDITOR_REPLY) {
                         int requestId = incoming.readInt();
                         int operation = incoming.readInt();
                         boolean success = incoming.readBoolean();
@@ -2471,10 +2544,22 @@ public final class RuntimeActivity extends LocalizedActivity {
                         if (length < 0 || length > 1048576) throw new IOException("Bluetooth request too large");
                         byte[] data = new byte[length];
                         incoming.readFully(data);
+                        appendBluetoothLog("host request received id=" + requestId
+                                + " operation=" + operation + " flags=" + flags);
                         enqueueBluetoothRequest(new BluetoothRequest(requestId, operation, flags, number,
                                 value, extra, data));
                     }
-                    else throw new IOException("Sai giao thức framebuffer: " + type);
+                    else {
+                        if (debugLogsEnabled) {
+                            try {
+                                SessionLog.append(getFilesDir(), "[frame-rx] invalid-type=" + type
+                                        + " after-frames=" + frameCount + " last-size="
+                                        + lastFrameWidth + "x" + lastFrameHeight
+                                        + " native-ui=" + nativeVisible);
+                            } catch (IOException logError) { appendError(logError); }
+                        }
+                        throw new IOException("Sai giao thức framebuffer: " + type);
+                    }
                 }
                 break;
             }
@@ -2685,7 +2770,7 @@ public final class RuntimeActivity extends LocalizedActivity {
             try {
                 DataOutputStream stream = commands;
                 if (stream == null) throw new IOException("Engine is not connected");
-                stream.writeByte(16);
+                stream.writeByte(BluetoothProtocol.MEMORY_EDITOR_COMMAND);
                 stream.writeInt(operation);
                 stream.writeInt(requestId);
                 stream.writeUTF(query == null ? "" : query);
@@ -2732,7 +2817,11 @@ public final class RuntimeActivity extends LocalizedActivity {
             for (String permission : required)
                 if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) missing.add(permission);
         }
+        appendBluetoothLog("permission check operation=" + activeBluetoothRequest.operation
+                + " required=" + java.util.Arrays.toString(required)
+                + " missing=" + missing);
         if (!missing.isEmpty()) {
+            appendBluetoothLog("requesting runtime permissions " + missing);
             requestPermissions(missing.toArray(new String[missing.size()]), REQUEST_BT_PERMISSIONS);
             return;
         }
@@ -3181,9 +3270,17 @@ public final class RuntimeActivity extends LocalizedActivity {
         });
     }
     private void sendAudioEvent(int event, int playerId, long value, String detail) {
-        if (debugLogsEnabled
-                && (event == AudioProtocol.PREPARED || event == AudioProtocol.ERROR)) {
-            String state = event == AudioProtocol.PREPARED ? "prepared" : "decoder error";
+        if (debugLogsEnabled) {
+            String state;
+            switch (event) {
+                case AudioProtocol.PREPARED: state = "prepared"; break;
+                case AudioProtocol.STARTED: state = "started"; break;
+                case AudioProtocol.STOPPED: state = "stopped"; break;
+                case AudioProtocol.COMPLETED: state = "completed"; break;
+                case AudioProtocol.ERROR: state = "decoder error"; break;
+                case AudioProtocol.SEEK_COMPLETE: state = "seek-complete"; break;
+                default: state = "event-" + event;
+            }
             try {
                 SessionLog.append(getFilesDir(), "[audio] player=" + playerId + " " + state
                         + (value >= 0 ? " duration-us=" + value : "") + (detail == null || detail.isEmpty() ? "" : " " + detail));
@@ -3331,6 +3428,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
     @Override protected void onResume() {
         super.onResume();
+        AppUpdateManager.resumePendingInstall(this);
         if (textInputPanel == null) hideGameKeyboard();
         if (screen instanceof ShaderFrameView) ((ShaderFrameView)screen).onResume();
         if (displayManager != null && !displayListenerRegistered) {
@@ -3438,6 +3536,10 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (AppUpdateManager.isInstallPermissionRequest(request)) {
+            AppUpdateManager.resumePendingInstall(this);
+            return;
+        }
         if (request == REQUEST_BT_ENABLE) {
             BluetoothAdapter adapter = bluetoothAdapter();
             if (result == RESULT_OK && adapter != null && adapter.isEnabled())
@@ -3473,6 +3575,8 @@ public final class RuntimeActivity extends LocalizedActivity {
         if (requestCode != REQUEST_BT_PERMISSIONS) return;
         boolean granted = grantResults.length > 0;
         for (int result : grantResults) granted &= result == PackageManager.PERMISSION_GRANTED;
+        appendBluetoothLog("runtime permission result granted=" + granted
+                + " permissions=" + java.util.Arrays.toString(permissions));
         if (granted) continueBluetoothRequest();
         else finishBluetoothRequest(false, "Bluetooth permission was declined");
     }

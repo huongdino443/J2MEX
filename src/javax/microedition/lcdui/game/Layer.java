@@ -25,14 +25,14 @@ public abstract class Layer
 	protected int x;
 
 	protected int y;
-	
+
 	protected int height;
-	
+
 	protected int width;
 
 	protected Image image;
 
-	protected boolean visible;
+	protected boolean visible = true;
 
 
 	public int getHeight() { return height; }
@@ -53,7 +53,7 @@ public abstract class Layer
 
 	public void setVisible(boolean state) { visible = state; }
 
-	
+
 	public Image getLayerImage() { return image; }
 
 	public void render() { this.paint(image.platformImage.getGraphics()); }

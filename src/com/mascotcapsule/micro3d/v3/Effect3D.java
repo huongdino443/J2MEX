@@ -30,14 +30,21 @@ public class Effect3D
 	private int toonthresholdhigh = 0;
 	private int thresholdlow = 0;
 	private int toonthresholdlow = 0;
-	private boolean trans = false;
+// J2ME Loader's default constructor enables semi-transparent Micro3D passes.
+private boolean trans = true;
 	private boolean strans = false;
 	private Texture sphereTex;
 	private Texture sphereMap;
 
 	public Effect3D() {  }
 
-	public Effect3D(Light light, int shading, boolean isEnableTrans, Texture tex) {  }
+	public Effect3D(Light light, int shading, boolean isEnableTrans, Texture tex)
+{
+this.light=light;
+this.shading=shading;
+this.trans=isEnableTrans;
+this.sphereTex=tex;
+}
 
 
 	public final Light getLight() { return light; }
@@ -80,7 +87,7 @@ public class Effect3D
 
 	public final boolean isSemiTransparentEnabled() { return strans; }
 
-	public final boolean isTransparency() { return false; }
+	public final boolean isTransparency() { return trans; }
 
 	public final void setSemiTransparentEnabled(boolean value) { strans = value; }
 

@@ -32,6 +32,7 @@ final class NativeChoiceAdapter extends BaseAdapter {
     private final int type;
     private final int viewResource;
     private int contextMenuRowId = NO_CONTEXT_MENU_ROW;
+    private int focusedRowId = NO_CONTEXT_MENU_ROW;
 
     NativeChoiceAdapter(Context context, int type, List<NativeScreen.Entry> items) {
         this.type = type; this.items = items;
@@ -51,6 +52,11 @@ final class NativeChoiceAdapter extends BaseAdapter {
     void setContextMenuRow(int rowId) {
         if (contextMenuRowId == rowId) return;
         contextMenuRowId = rowId;
+        notifyDataSetChanged();
+    }
+    void setFocusedRow(int rowId) {
+        if (focusedRowId == rowId) return;
+        focusedRowId = rowId;
         notifyDataSetChanged();
     }
     @Override public int getCount() { return items.size(); }
@@ -108,7 +114,7 @@ final class NativeChoiceAdapter extends BaseAdapter {
         text.setCompoundDrawables(icon(parent.getContext(), item.image, 32), null, null, null);
         text.setTextColor(NativeUiStyle.primaryText(parent.getContext()));
         text.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
-        if (type == NativeScreen.IMPLICIT && item.id == contextMenuRowId) {
+        if (item.id == focusedRowId || item.id == contextMenuRowId) {
             text.setBackground(NativeUiStyle.activeListRow(parent.getContext()));
         } else {
             text.setBackgroundColor(Color.TRANSPARENT);

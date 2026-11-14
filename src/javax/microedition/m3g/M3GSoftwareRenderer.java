@@ -10,6 +10,7 @@ package javax.microedition.m3g;
 
 import java.util.Arrays;
 import java.util.IdentityHashMap;
+import java.util.List;
 import javax.microedition.lcdui.Graphics;
 
 /** Small framebuffer renderer for the M3G feature set used by the Android MVP. */
@@ -29,10 +30,13 @@ private final Vertex[] clipBufferB = createVertexBuffer(12);
 	private final Transform spriteViewTransform = new Transform();
 	private final Transform spriteProjectionTransform = new Transform();
 	private boolean depthBufferEnabled;
+	private boolean depthWriteSuppressed;
 private boolean contentsInitialized;
 private int targetOriginX,targetOriginY;
 	private Camera camera;
 	private Transform cameraWorld = new Transform();
+	private List<LightSource> lightSources = java.util.Collections.emptyList();
+	private PreparedLight[] preparedLights = new PreparedLight[0];
 	private final IdentityHashMap<SkinnedMesh, Long> theFightSkinnedTraceTimes =
 			new IdentityHashMap<SkinnedMesh, Long>();
 	private boolean theFightSkinnedTraceChecked;
@@ -72,6 +76,24 @@ contentsInitialized=false;
 		this.camera = camera;
 		if (transform != null) cameraWorld.set(transform);
 		else if (camera != null) camera.getCompositeTransform(cameraWorld);
+	}
+
+	void setLights(List<LightSource> sources)
+	{
+		lightSources=sources==null||sources.isEmpty()
+				?java.util.Collections.<LightSource>emptyList()
+				:new java.util.ArrayList<LightSource>(sources);
+		float[] viewMatrix=new float[16];
+		Transform view=new Transform(cameraWorld);
+		try { view.invert(); }
+		catch (ArithmeticException singular) { view.setIdentity(); }
+		view.getColumnMajor(viewMatrix);
+		preparedLights=prepareLights(viewMatrix);
+	}
+
+	void setDepthWriteSuppressed(boolean suppressed)
+	{
+		depthWriteSuppressed=suppressed;
 	}
 
 	Camera camera(Transform transform)
@@ -182,11 +204,14 @@ float[] projection=projectionTransform.values();
 		float[] scaleBias = new float[4];
 		VertexArray positions = vertices.getPositions(scaleBias);
 		if (positions == null) return;
+		VertexArray normals = vertices.getNormals();
 		VertexArray colors = vertices.getColors();
 		VertexArray textureCoords = vertices.getTexCoords(0, scaleBias);
 		Texture2D texture = appearance == null ? null : appearance.getTexture(0);
 		int defaultColor = vertices.getDefaultColor();
 Material material=appearance==null?null:appearance.getMaterial();
+		float[] normalMatrix=normals!=null&&normals.getComponentCount()>=3&&material!=null
+				&&preparedLights.length>0?normalMatrix(viewMatrix,modelMatrix):null;
 if(colors==null || colors.getComponentCount()<3) {
 	if(material!=null) defaultColor=material.getColor(Material.DIFFUSE);
 	else if(texture!=null) {
@@ -221,6 +246,20 @@ float z=morph!=null?morph.positionForRendering(i,2):skinnedPositions!=null?skinn
 			float u=textureCoords == null ? 0 : vertices.texCoord(0,i,0);
 			float v=textureCoords == null || textureCoords.getComponentCount()<2 ? 0 : vertices.texCoord(0,i,1);
 			setVertexColor(transformed[i], vertices, i, colors, defaultColor);
+			if(normalMatrix!=null) {
+				float normalScale=normals.getComponentType()==VertexArray.BYTE?127f:32767f;
+				float nx=normals.component(i,0)/normalScale;
+				float ny=normals.component(i,1)/normalScale;
+				float nz=normals.component(i,2)/normalScale;
+				float tx=normalMatrix[0]*nx+normalMatrix[1]*ny+normalMatrix[2]*nz;
+				float ty=normalMatrix[3]*nx+normalMatrix[4]*ny+normalMatrix[5]*nz;
+				float tz=normalMatrix[6]*nx+normalMatrix[7]*ny+normalMatrix[8]*nz;
+				float normalLength=(float)Math.sqrt(tx*tx+ty*ty+tz*tz);
+				if(normalLength>0.000001f) {
+					applyLighting(transformed[i],tx/normalLength,ty/normalLength,tz/normalLength,
+							cx,cy,cz,vertices,colors,i,material,preparedLights);
+				}
+			}
 if (!project(transformed[i],cx,cy,cz,u,v,projection))
 				transformed[i].valid=false;
 			if (traceSkinned && transformed[i].valid) {
@@ -243,7 +282,7 @@ if (!project(transformed[i],cx,cy,cz,u,v,projection))
 		PolygonMode polygon = appearance == null ? null : appearance.getPolygonMode();
 		CompositingMode compositing = appearance == null ? null : appearance.getCompositingMode();
 		Fog fog = appearance == null ? null : appearance.getFog();
-		TextureData tex = texture == null ? null : new TextureData(texture);
+TextureData tex = texture == null ? null : new TextureData(texture, vertices);
 
 		int offset=0;
 		for (int stripLength : strips) {
@@ -387,9 +426,11 @@ rasterizeClipped(a,b,c,polygon,compositing,fog,tex,defaultColor,near,far);
 				float u=(visibleX+((px+0.5f-(visibleCenterX-halfWidth))/(2f*halfWidth))*visibleWidth)/imageWidth;
 				int pos=(py-viewportY)*width+(px-viewportX);
 				if(depthTest&&spriteCenter.depth<depth[pos]) continue;
-				int src=shade(u,v,1f,1f,1f,1f,texture,fog,spriteCenter.distance,near,far);
-				if(((src>>>24)&255)/255f<threshold) continue;
-				if(depthWrite) depth[pos]=spriteCenter.depth;
+int src=shade(u,v,1f,1f,1f,1f,texture,0f,fog,
+		spriteCenter.distance,near,far);
+				int sourceAlpha=(src>>>24)&255;
+				if(!passesAlphaThreshold(sourceAlpha,threshold)) continue;
+				if(depthWrite&&shouldWriteDepth(compositing,sourceAlpha)) depth[pos]=spriteCenter.depth;
 				if(colorWrite) color[pos]=blend(src,color[pos],compositing);
 			}
 		}
@@ -487,6 +528,154 @@ default: return vertex.clipW-vertex.clipZ;
 }
 }
 
+	private PreparedLight[] prepareLights(float[] viewMatrix)
+	{
+		if(lightSources.isEmpty()) return new PreparedLight[0];
+		PreparedLight[] prepared=new PreparedLight[lightSources.size()];
+		int count=0;
+		for(LightSource source:lightSources) {
+			if(source==null||source.light==null) continue;
+			Light light=source.light;
+			PreparedLight entry=new PreparedLight();
+			entry.mode=light.getMode();
+			entry.intensity=light.getIntensity();
+			entry.red=((light.getColor()>>>16)&255)/255f;
+			entry.green=((light.getColor()>>>8)&255)/255f;
+			entry.blue=(light.getColor()&255)/255f;
+			entry.constant=light.getConstantAttenuation();
+			entry.linear=light.getLinearAttenuation();
+			entry.quadratic=light.getQuadraticAttenuation();
+			entry.spotAngle=light.getSpotAngle();
+			entry.spotExponent=light.getSpotExponent();
+			float[] matrix=source.transform;
+			float wx=matrix[12],wy=matrix[13],wz=matrix[14];
+			entry.x=viewMatrix[0]*wx+viewMatrix[4]*wy+viewMatrix[8]*wz+viewMatrix[12];
+			entry.y=viewMatrix[1]*wx+viewMatrix[5]*wy+viewMatrix[9]*wz+viewMatrix[13];
+			entry.z=viewMatrix[2]*wx+viewMatrix[6]*wy+viewMatrix[10]*wz+viewMatrix[14];
+			// M3G lights emit along their local -Z axis.
+			float dx=-matrix[8],dy=-matrix[9],dz=-matrix[10];
+			entry.directionX=viewMatrix[0]*dx+viewMatrix[4]*dy+viewMatrix[8]*dz;
+			entry.directionY=viewMatrix[1]*dx+viewMatrix[5]*dy+viewMatrix[9]*dz;
+			entry.directionZ=viewMatrix[2]*dx+viewMatrix[6]*dy+viewMatrix[10]*dz;
+			float directionLength=(float)Math.sqrt(entry.directionX*entry.directionX
+					+entry.directionY*entry.directionY+entry.directionZ*entry.directionZ);
+			if(directionLength>0.000001f) {
+				entry.directionX/=directionLength;
+				entry.directionY/=directionLength;
+				entry.directionZ/=directionLength;
+			}
+			prepared[count++]=entry;
+		}
+		return count==prepared.length?prepared:Arrays.copyOf(prepared,count);
+	}
+
+	private static float[] normalMatrix(float[] view,float[] model)
+	{
+		float a00=view[0]*model[0]+view[4]*model[1]+view[8]*model[2];
+		float a01=view[0]*model[4]+view[4]*model[5]+view[8]*model[6];
+		float a02=view[0]*model[8]+view[4]*model[9]+view[8]*model[10];
+		float a10=view[1]*model[0]+view[5]*model[1]+view[9]*model[2];
+		float a11=view[1]*model[4]+view[5]*model[5]+view[9]*model[6];
+		float a12=view[1]*model[8]+view[5]*model[9]+view[9]*model[10];
+		float a20=view[2]*model[0]+view[6]*model[1]+view[10]*model[2];
+		float a21=view[2]*model[4]+view[6]*model[5]+view[10]*model[6];
+		float a22=view[2]*model[8]+view[6]*model[9]+view[10]*model[10];
+		float[] result={
+				a11*a22-a12*a21, a12*a20-a10*a22, a10*a21-a11*a20,
+				a02*a21-a01*a22, a00*a22-a02*a20, a01*a20-a00*a21,
+				a01*a12-a02*a11, a02*a10-a00*a12, a00*a11-a01*a10
+		};
+		float determinant=a00*result[0]+a01*result[1]+a02*result[2];
+		if(Math.abs(determinant)<0.000001f) {
+			return new float[]{a00,a01,a02,a10,a11,a12,a20,a21,a22};
+		}
+		if(determinant<0) for(int i=0;i<result.length;i++) result[i]=-result[i];
+		return result;
+	}
+
+	private static void applyLighting(Vertex vertex,float nx,float ny,float nz,
+			float x,float y,float z,VertexBuffer vertices,VertexArray colors,int vertexIndex,
+			Material material,PreparedLight[] lights)
+	{
+		int diffuseColor=material.getColor(Material.DIFFUSE);
+		float diffuseR=((diffuseColor>>>16)&255)/255f;
+		float diffuseG=((diffuseColor>>>8)&255)/255f;
+		float diffuseB=(diffuseColor&255)/255f;
+		boolean hasVertexColors=colors!=null&&colors.getComponentCount()>=3;
+		float vertexR=hasVertexColors?vertices.color(vertexIndex,0)/255f:1f;
+		float vertexG=hasVertexColors?vertices.color(vertexIndex,1)/255f:1f;
+		float vertexB=hasVertexColors?vertices.color(vertexIndex,2)/255f:1f;
+		if(material.isVertexColorTrackingEnabled()&&hasVertexColors) {
+			diffuseR=vertexR; diffuseG=vertexG; diffuseB=vertexB;
+		} else if(hasVertexColors) {
+			diffuseR*=vertexR; diffuseG*=vertexG; diffuseB*=vertexB;
+		}
+		int ambientColor=material.getColor(Material.AMBIENT);
+		float ambientR=((ambientColor>>>16)&255)/255f;
+		float ambientG=((ambientColor>>>8)&255)/255f;
+		float ambientB=(ambientColor&255)/255f;
+		int emissiveColor=material.getColor(Material.EMISSIVE);
+		float outR=((emissiveColor>>>16)&255)/255f;
+		float outG=((emissiveColor>>>8)&255)/255f;
+		float outB=(emissiveColor&255)/255f;
+		int specularColor=material.getColor(Material.SPECULAR);
+		float specularR=((specularColor>>>16)&255)/255f;
+		float specularG=((specularColor>>>8)&255)/255f;
+		float specularB=(specularColor&255)/255f;
+		float viewLength=(float)Math.sqrt(x*x+y*y+z*z);
+		float viewX=viewLength>0.000001f?-x/viewLength:0f;
+		float viewY=viewLength>0.000001f?-y/viewLength:0f;
+		float viewZ=viewLength>0.000001f?-z/viewLength:1f;
+
+		for(PreparedLight light:lights) {
+			if(light.intensity<=0) continue;
+			float strength=light.intensity;
+			if(light.mode==Light.AMBIENT) {
+				outR+=ambientR*light.red*strength;
+				outG+=ambientG*light.green*strength;
+				outB+=ambientB*light.blue*strength;
+				continue;
+			}
+			float lx,ly,lz,attenuation=1f,distance=1f;
+			if(light.mode==Light.DIRECTIONAL) {
+				lx=-light.directionX; ly=-light.directionY; lz=-light.directionZ;
+			} else {
+				float dx=light.x-x,dy=light.y-y,dz=light.z-z;
+				distance=(float)Math.sqrt(dx*dx+dy*dy+dz*dz);
+				if(distance<=0.000001f) continue;
+				lx=dx/distance; ly=dy/distance; lz=dz/distance;
+				float denominator=light.constant+light.linear*distance
+						+light.quadratic*distance*distance;
+				if(denominator>0.000001f) attenuation=1f/denominator;
+				if(light.mode==Light.SPOT) {
+					float cone=-(lx*light.directionX+ly*light.directionY+lz*light.directionZ);
+					float cutoff=(float)Math.cos(Math.toRadians(light.spotAngle));
+					if(cone<cutoff) continue;
+					strength*=light.spotExponent==0?1f:(float)Math.pow(Math.max(0,cone),light.spotExponent);
+				}
+			}
+			float lambert=Math.max(0,nx*lx+ny*ly+nz*lz)*strength*attenuation;
+			outR+=diffuseR*light.red*lambert;
+			outG+=diffuseG*light.green*lambert;
+			outB+=diffuseB*light.blue*lambert;
+			if((specularR>0||specularG>0||specularB>0)&&lambert>0) {
+				float hx=lx+viewX,hy=ly+viewY,hz=lz+viewZ;
+				float halfLength=(float)Math.sqrt(hx*hx+hy*hy+hz*hz);
+				if(halfLength>0.000001f) {
+					float ndoth=Math.max(0,(nx*hx+ny*hy+nz*hz)/halfLength);
+					float highlight=(float)Math.pow(ndoth,material.getShininess())
+							*strength*attenuation;
+					outR+=specularR*light.red*highlight;
+					outG+=specularG*light.green*highlight;
+					outB+=specularB*light.blue*highlight;
+				}
+			}
+		}
+		vertex.r=clamp(outR);
+		vertex.g=clamp(outG);
+		vertex.b=clamp(outB);
+	}
+
 private static Vertex[] createVertexBuffer(int count)
 {
 Vertex[] vertices=new Vertex[count];
@@ -498,21 +687,30 @@ return vertices;
 			Fog fog,TextureData texture,int defaultColor,float near,float far)
 	{
 		float area=edge(a.x,a.y,b.x,b.y,c.x,c.y);
-		if (Math.abs(area)<0.0001f) return;
+if (Math.abs(area)<0.0001f) return;
 		boolean front=(polygon==null||polygon.getWinding()==PolygonMode.WINDING_CCW)?area>0:area<0;
 		if (polygon!=null && ((polygon.getCulling()==PolygonMode.CULL_BACK&&!front)
-				||(polygon.getCulling()==PolygonMode.CULL_FRONT&&front))) return;
+||(polygon.getCulling()==PolygonMode.CULL_FRONT&&front))) return;
 		int minX=Math.max(viewportX,(int)Math.floor(Math.min(a.x,Math.min(b.x,c.x))));
 		int maxX=Math.min(viewportX+width-1,(int)Math.ceil(Math.max(a.x,Math.max(b.x,c.x))));
 		int minY=Math.max(viewportY,(int)Math.floor(Math.min(a.y,Math.min(b.y,c.y))));
 		int maxY=Math.min(viewportY+height-1,(int)Math.ceil(Math.max(a.y,Math.max(b.y,c.y))));
 		if (minX>maxX||minY>maxY) return;
 		float invArea=1f/area;
-		boolean perspective=polygon==null||polygon.isPerspectiveCorrectionEnabled();
+		// In J2ME Loader this flag selects GL_PERSPECTIVE_CORRECTION_HINT
+		// (GL_FASTEST/GL_NICEST); it does not switch texture coordinates to
+		// affine interpolation. Hardware GL still perspective-corrects these
+		// textured terrain triangles, so keep the software path perspective-correct.
+		boolean perspective=true;
 		boolean depthTest=depthBufferEnabled&&(mode==null||mode.isDepthTestEnabled());
 		boolean depthWrite=depthBufferEnabled&&(mode==null||mode.isDepthWriteEnabled());
 		boolean colorWrite=mode==null||mode.isColorWriteEnabled();
 		float threshold=mode==null?0:mode.getAlphaThreshold();
+		float dwaDx=(c.y-b.y)*invArea, dwaDy=(b.x-c.x)*invArea;
+		float dwbDx=(a.y-c.y)*invArea, dwbDy=(c.x-a.x)*invArea;
+		float dwcDx=(b.y-a.y)*invArea, dwcDy=(a.x-b.x)*invArea;
+		float invZDx=dwaDx*a.invZ+dwbDx*b.invZ+dwcDx*c.invZ;
+		float invZDy=dwaDy*a.invZ+dwbDy*b.invZ+dwcDy*c.invZ;
 		for (int py=minY;py<=maxY;py++) {
 			float y=py+0.5f;
 			for (int px=minX;px<=maxX;px++) {
@@ -524,37 +722,56 @@ return vertices;
 				float invZ=wa*a.invZ+wb*b.invZ+wc*c.invZ;
 				if (invZ<=0) continue;
 				int pos=(py-viewportY)*width+(px-viewportX);
-float fragmentDepth=wa*a.depth+wb*b.depth+wc*c.depth;
+			float fragmentDepth=wa*a.depth+wb*b.depth+wc*c.depth;
 if (depthTest&&fragmentDepth<depth[pos]) continue;
-				float u,v,red,green,blue,alpha;
+				// J2ME Loader configures the native M3G fog from eye-space Z.
+				// GL interpolates that coordinate linearly in screen space before
+				// evaluating the fog equation; it is not a perspective-correct
+				// varying like texture coordinates.
+				float fogDistance=wa*a.distance+wb*b.distance+wc*c.distance;
+				float u,v,red,green,blue,alpha,duDx,dvDx,duDy,dvDy;
 				if (perspective) {
-					u=(wa*a.u*a.invZ+wb*b.u*b.invZ+wc*c.u*c.invZ)/invZ;
-					v=(wa*a.v*a.invZ+wb*b.v*b.invZ+wc*c.v*c.invZ)/invZ;
+					float uNumerator=wa*a.u*a.invZ+wb*b.u*b.invZ+wc*c.u*c.invZ;
+					float vNumerator=wa*a.v*a.invZ+wb*b.v*b.invZ+wc*c.v*c.invZ;
+					u=uNumerator/invZ;
+					v=vNumerator/invZ;
+					float uNumeratorDx=dwaDx*a.u*a.invZ+dwbDx*b.u*b.invZ+dwcDx*c.u*c.invZ;
+					float vNumeratorDx=dwaDx*a.v*a.invZ+dwbDx*b.v*b.invZ+dwcDx*c.v*c.invZ;
+					float uNumeratorDy=dwaDy*a.u*a.invZ+dwbDy*b.u*b.invZ+dwcDy*c.u*c.invZ;
+					float vNumeratorDy=dwaDy*a.v*a.invZ+dwbDy*b.v*b.invZ+dwcDy*c.v*c.invZ;
+					duDx=(uNumeratorDx-u*invZDx)/invZ;
+					dvDx=(vNumeratorDx-v*invZDx)/invZ;
+					duDy=(uNumeratorDy-u*invZDy)/invZ;
+					dvDy=(vNumeratorDy-v*invZDy)/invZ;
 					red=(wa*a.r*a.invZ+wb*b.r*b.invZ+wc*c.r*c.invZ)/invZ;
 					green=(wa*a.g*a.invZ+wb*b.g*b.invZ+wc*c.g*c.invZ)/invZ;
 					blue=(wa*a.b*a.invZ+wb*b.b*b.invZ+wc*c.b*c.invZ)/invZ;
 					alpha=(wa*a.a*a.invZ+wb*b.a*b.invZ+wc*c.a*c.invZ)/invZ;
 				} else {
 					u=wa*a.u+wb*b.u+wc*c.u; v=wa*a.v+wb*b.v+wc*c.v;
+					duDx=dwaDx*a.u+dwbDx*b.u+dwcDx*c.u;
+					dvDx=dwaDx*a.v+dwbDx*b.v+dwcDx*c.v;
+					duDy=dwaDy*a.u+dwbDy*b.u+dwcDy*c.u;
+					dvDy=dwaDy*a.v+dwbDy*b.v+dwcDy*c.v;
 					red=wa*a.r+wb*b.r+wc*c.r; green=wa*a.g+wb*b.g+wc*c.g;
 					blue=wa*a.b+wb*b.b+wc*c.b; alpha=wa*a.a+wb*b.a+wc*c.a;
 				}
-float distance=(wa*a.distance*a.invZ+wb*b.distance*b.invZ+wc*c.distance*c.invZ)/invZ;
-				int src=shade(u,v,red,green,blue,alpha,texture,fog,distance,near,far);
+float textureLod=texture==null?0f:texture.estimateLod(u,v,duDx,dvDx,duDy,dvDy);
+int src=shade(u,v,red,green,blue,alpha,texture,textureLod,fog,fogDistance,near,far);
 				int sourceAlpha=(src>>>24)&255;
-				if (sourceAlpha/255f<threshold) continue;
-if (depthWrite) depth[pos]=fragmentDepth;
+if (!passesAlphaThreshold(sourceAlpha,threshold)) continue;
+				if (depthWrite&&shouldWriteDepth(mode,sourceAlpha)) depth[pos]=fragmentDepth;
 				if (colorWrite) color[pos]=blend(src,color[pos],mode);
 			}
 		}
 	}
 
 	private int shade(float u,float v,float r,float g,float b,float a,TextureData tex,
-			Fog fog,float distance,float near,float far)
+	float textureLod,Fog fog,float distance,float near,float far)
 	{
 		int rr=channel(r), gg=channel(g), bb=channel(b), aa=channel(a);
 		if (tex!=null && tex.pixels!=null && tex.width>0 && tex.height>0) {
-			int sample=tex.sample(u,v);
+int sample=tex.sample(u,v,textureLod);
 			int tr=(sample>>>16)&255,tg=(sample>>>8)&255,tb=sample&255,ta=(sample>>>24)&255;
 			switch(tex.blending) {
 			case Texture2D.FUNC_REPLACE: rr=tr; gg=tg; bb=tb; aa=ta; break;
@@ -596,6 +813,22 @@ if (depthWrite) depth[pos]=fragmentDepth;
 			return (sa*da/255<<24)|(Math.min(255,sr*dr/128)<<16)
 					|(Math.min(255,sg*dg/128)<<8)|Math.min(255,sb*db/128);
 		return src;
+	}
+
+	private boolean shouldWriteDepth(CompositingMode mode,int sourceAlpha)
+	{
+		return (!depthWriteSuppressed||sourceAlpha==255)
+				&&(mode==null||mode.getBlending()!=CompositingMode.ALPHA_ADD);
+	}
+
+	private static boolean passesAlphaThreshold(int sourceAlpha,float threshold)
+	{
+		// Match J2ME Loader's inclusive alpha test. Its GLES renderer relaxes a
+		// threshold of 1.0 slightly because fixed-point texture modulation can
+		// turn opaque texels into 254/255 and otherwise discard the whole model.
+		if(sourceAlpha==0) return false;
+		if(threshold>=1f) threshold=0.99f;
+		return sourceAlpha/255f>=threshold;
 	}
 
 	private void drawBackground(Background background)
@@ -701,45 +934,164 @@ valid=false;
 }
 	}
 
+	static final class LightSource
+	{
+		final Light light;
+		final float[] transform=new float[16];
+		LightSource(Light light,Transform transform)
+		{
+			this.light=light;
+			if(transform==null) identity(this.transform);
+			else transform.getColumnMajor(this.transform);
+		}
+	}
+
+	private static final class PreparedLight
+	{
+		int mode;
+		float intensity,red,green,blue;
+		float constant,linear,quadratic,spotAngle,spotExponent;
+		float x,y,z,directionX,directionY,directionZ;
+	}
+
 	private static final class TextureData
 	{
 		final int[] pixels;
-		final int width,height,blending,wrapS,wrapT,filter;
+final int width,height,blending,wrapS,wrapT,filter,levelFilter;
 		final int blendR,blendG,blendB;
-		TextureData(Texture2D texture)
+final Image2D image;
+final Image2D.Mipmaps mipmaps;
+final float[] transform=new float[16];
+final boolean inferredRepeatS,inferredRepeatT;
+		TextureData(Texture2D texture, VertexBuffer vertices)
 		{
 			Image2D image=texture.getImage();
-			pixels=image==null?null:image.pixels();
-			width=image==null?0:image.getWidth(); height=image==null?0:image.getHeight();
+this.image=image;
+pixels=image==null?null:image.pixels();
+width=image==null?0:image.getWidth(); height=image==null?0:image.getHeight();
 			blending=texture.getBlending(); wrapS=texture.getWrappingS(); wrapT=texture.getWrappingT();
-			filter=texture.getImageFilter();
+filter=texture.getImageFilter(); levelFilter=texture.getLevelFilter();
+mipmaps=image!=null&&levelFilter!=Texture2D.FILTER_BASE_LEVEL?image.mipmaps():null;
+if (image!=null) {
+Transform textureTransform=new Transform();
+texture.getCompositeTransform(textureTransform);
+textureTransform.getColumnMajor(transform);
+}
+			// Match a fixed-function sampler: once tiled UVs and continuous image edges
+			// establish repeat intent, use repeat for the whole draw, including the seam.
+			// Switching between clamp and repeat per fragment creates visible triangle seams.
+			inferredRepeatS=wrapS==Texture2D.WRAP_CLAMP&&image!=null
+					&&image.hasSeamlessHorizontalEdges()&&extendsPastUnitRange(vertices,0);
+			inferredRepeatT=wrapT==Texture2D.WRAP_CLAMP&&image!=null
+					&&image.hasSeamlessVerticalEdges()&&extendsPastUnitRange(vertices,1);
 			int c=texture.getBlendColor(); blendR=(c>>>16)&255; blendG=(c>>>8)&255; blendB=c&255;
+		}
+		private boolean extendsPastUnitRange(VertexBuffer vertices,int axis)
+		{
+			if(vertices==null||vertices.textureComponentCount(0)<2) return false;
+			for(int i=0;i<vertices.getVertexCount();i++) {
+				float u=vertices.texCoord(0,i,0),v=vertices.texCoord(0,i,1);
+				float value=axis==0
+						?transform[0]*u+transform[4]*v+transform[12]
+						:transform[1]*u+transform[5]*v+transform[13];
+				float w=transform[3]*u+transform[7]*v+transform[15];
+				if(Math.abs(w)>0.000001f&&Math.abs(w-1f)>0.000001f) value/=w;
+				if(value < -0.00001f||value > 1.00001f) return true;
+			}
+			return false;
 		}
 		TextureData(Image2D image)
 		{
+this.image=image;
 			pixels=image==null?null:image.pixels();
 			width=image==null?0:image.getWidth(); height=image==null?0:image.getHeight();
 			blending=Texture2D.FUNC_REPLACE;
 			wrapS=Texture2D.WRAP_CLAMP; wrapT=Texture2D.WRAP_CLAMP;
+			inferredRepeatS=inferredRepeatT=false;
 			filter=Texture2D.FILTER_NEAREST;
+levelFilter=Texture2D.FILTER_BASE_LEVEL;
+mipmaps=null;
+identity(transform);
 			blendR=blendG=blendB=0;
 		}
-		int sample(float u,float v)
+boolean usesMipmaps() { return mipmaps!=null&&mipmaps.pixels.length>1; }
+		float estimateLod(float u,float v,float duDx,float dvDx,float duDy,float dvDy)
 		{
-			float tx=wrapS==Texture2D.WRAP_REPEAT?u-(float)Math.floor(u):clamp(u);
-			float ty=wrapT==Texture2D.WRAP_REPEAT?v-(float)Math.floor(v):clamp(v);
+			if (!usesMipmaps()) return 0f;
+float transformedU=transform[0]*u+transform[4]*v+transform[12];
+float transformedV=transform[1]*u+transform[5]*v+transform[13];
+float transformedW=transform[3]*u+transform[7]*v+transform[15];
+float wDx=transform[3]*duDx+transform[7]*dvDx;
+float wDy=transform[3]*duDy+transform[7]*dvDy;
+			float uDx,vDx,uDy,vDy;
+if (Math.abs(transformedW)>0.000001f&&
+(Math.abs(transformedW-1f)>0.000001f||Math.abs(wDx)>0.000001f||Math.abs(wDy)>0.000001f)) {
+				uDx=transform[0]*duDx+transform[4]*dvDx;
+				vDx=transform[1]*duDx+transform[5]*dvDx;
+				uDy=transform[0]*duDy+transform[4]*dvDy;
+				vDy=transform[1]*duDy+transform[5]*dvDy;
+duDx=(uDx*transformedW-transformedU*wDx)/(transformedW*transformedW);
+dvDx=(vDx*transformedW-transformedV*wDx)/(transformedW*transformedW);
+duDy=(uDy*transformedW-transformedU*wDy)/(transformedW*transformedW);
+dvDy=(vDy*transformedW-transformedV*wDy)/(transformedW*transformedW);
+				transformedU/=transformedW;
+				transformedV/=transformedW;
+} else {
+float originalDuDx=duDx,originalDvDx=dvDx,originalDuDy=duDy,originalDvDy=dvDy;
+duDx=transform[0]*originalDuDx+transform[4]*originalDvDx;
+dvDx=transform[1]*originalDuDx+transform[5]*originalDvDx;
+duDy=transform[0]*originalDuDy+transform[4]*originalDvDy;
+dvDy=transform[1]*originalDuDy+transform[5]*originalDvDy;
+}
+float rhoX=(float)Math.sqrt(duDx*duDx*width*width+dvDx*dvDx*height*height);
+float rhoY=(float)Math.sqrt(duDy*duDy*width*width+dvDy*dvDy*height*height);
+			float rho=Math.max(rhoX,rhoY);
+			return rho<=1f?0f:(float)(Math.log(rho)/Math.log(2));
+		}
+		int sample(float u,float v,float lod)
+		{
+			float transformedU=transform[0]*u+transform[4]*v+transform[12];
+			float transformedV=transform[1]*u+transform[5]*v+transform[13];
+			float transformedW=transform[3]*u+transform[7]*v+transform[15];
+			if (Math.abs(transformedW)>0.000001f&&Math.abs(transformedW-1f)>0.000001f) {
+				transformedU/=transformedW;
+				transformedV/=transformedW;
+			}
+			return sampleTransformed(transformedU,transformedV,lod);
+		}
+		private int sampleTransformed(float u,float v,float lod)
+		{
+int levels=usesMipmaps()?mipmaps.pixels.length:1;
+if (!usesMipmaps()||lod<=0f) return sampleLevel(0,u,v);
+float selectedLevel=Math.min(levels-1,lod);
+if (levelFilter==Texture2D.FILTER_NEAREST)
+return sampleLevel(Math.min(levels-1,Math.max(0,Math.round(selectedLevel))),u,v);
+int lower=(int)Math.floor(selectedLevel),upper=Math.min(levels-1,lower+1);
+if (lower==upper) return sampleLevel(lower,u,v);
+return bilerp(sampleLevel(lower,u,v),sampleLevel(lower,u,v),
+sampleLevel(upper,u,v),sampleLevel(upper,u,v),0f,selectedLevel-lower);
+}
+private int sampleLevel(int level,float u,float v)
+{
+int[] source=mipmaps==null?pixels:mipmaps.pixels[level];
+int levelWidth=mipmaps==null?width:mipmaps.widths[level];
+int levelHeight=mipmaps==null?height:mipmaps.heights[level];
+ boolean repeatS=wrapS==Texture2D.WRAP_REPEAT||inferredRepeatS;
+ boolean repeatT=wrapT==Texture2D.WRAP_REPEAT||inferredRepeatT;
+float tx=repeatS?u-(float)Math.floor(u):clamp(u);
+float ty=repeatT?v-(float)Math.floor(v):clamp(v);
 // Image2D scanlines and M3G texture coordinates both start at the top.
 // Normalized coordinates address texel centers, not stretched image endpoints.
-boolean repeatS=wrapS==Texture2D.WRAP_REPEAT, repeatT=wrapT==Texture2D.WRAP_REPEAT;
 			if (filter==Texture2D.FILTER_NEAREST)
-return pixels[wrap((int)Math.floor(ty*height),height,repeatT)*width
-+wrap((int)Math.floor(tx*width),width,repeatS)];
-float fx=tx*width-0.5f, fy=ty*height-0.5f;
+return source[wrap((int)Math.floor(ty*levelHeight),levelHeight,repeatT)*levelWidth
++wrap((int)Math.floor(tx*levelWidth),levelWidth,repeatS)];
+float fx=tx*levelWidth-0.5f, fy=ty*levelHeight-0.5f;
 int x0=(int)Math.floor(fx),y0=(int)Math.floor(fy);
 			float dx=fx-x0,dy=fy-y0;
-int x1=wrap(x0+1,width,repeatS),y1=wrap(y0+1,height,repeatT);
-x0=wrap(x0,width,repeatS); y0=wrap(y0,height,repeatT);
-			int c00=pixels[y0*width+x0],c10=pixels[y0*width+x1],c01=pixels[y1*width+x0],c11=pixels[y1*width+x1];
+int x1=wrap(x0+1,levelWidth,repeatS),y1=wrap(y0+1,levelHeight,repeatT);
+x0=wrap(x0,levelWidth,repeatS); y0=wrap(y0,levelHeight,repeatT);
+int c00=source[y0*levelWidth+x0],c10=source[y0*levelWidth+x1];
+int c01=source[y1*levelWidth+x0],c11=source[y1*levelWidth+x1];
 			return bilerp(c00,c10,c01,c11,dx,dy);
 		}
 		private static int bilerp(int a,int b,int c,int d,float x,float y)

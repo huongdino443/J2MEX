@@ -35,8 +35,9 @@ public class Texture2D extends Transformable
 	private int blendcolor = 0;
 	private int filter = FILTER_LINEAR;
 	private int filterlevel = FILTER_BASE_LEVEL;
-	private int wraps = WRAP_CLAMP;
-	private int wrapt = WRAP_CLAMP;
+	// JSR-184/J2ME Loader default: textures repeat unless wrapping is changed.
+	private int wraps = WRAP_REPEAT;
+	private int wrapt = WRAP_REPEAT;
 
 	private Image2D texImage;
 

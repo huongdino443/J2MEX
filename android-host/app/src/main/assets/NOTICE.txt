@@ -30,6 +30,11 @@ bounded icons, in-place updates, and native/Canvas switching for this host.
 Upstream copyright headers are retained in ported source files.
 See licenses/J2ME-LOADER-APACHE-2.0.txt and android-host/NATIVE_UI_PROVENANCE.md.
 
+Micro3D MTRA animation and primitive behavior were cross-checked against
+J2ME Loader's Apache-2.0 implementation; this project uses an independent
+software-renderer implementation. Upstream: https://github.com/nikita36078/J2ME-Loader.
+See licenses/J2ME-LOADER-APACHE-2.0.txt.
+
 The per-game physical-key mapping workflow is adapted from J2ME Loader's
 KeyMapper and KeyMapperActivity under Apache License 2.0. The editor and
 per-game storage are adapted for this host's MIDP key codes.

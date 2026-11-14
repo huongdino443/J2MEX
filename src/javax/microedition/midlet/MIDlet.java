@@ -48,7 +48,7 @@ public abstract class MIDlet
 	protected abstract void destroyApp(boolean unconditional) throws MIDletStateChangeException;
 
 	public String getAppProperty(String key)
-	{ 
+	{
 		return properties.get(key);
 	}
 
@@ -58,8 +58,14 @@ public abstract class MIDlet
 	}
 
 	public final void notifyDestroyed()
-	{ 
+	{
 		System.out.println("MIDlet sent Destroyed Notification");
+		if (Boolean.getBoolean("freej2me.startup.diagnostics"))
+		{
+			StackTraceElement[] trace = new Throwable().getStackTrace();
+			for (int i = 1; i < trace.length && i < 7; i++)
+				System.out.println("[midlet-exit] " + trace[i]);
+		}
 		org.recompile.mobile.MobilePlatform platform = Mobile.getPlatform();
 		if (platform != null && platform.requestMidletExit()) return;
 		System.exit(0);

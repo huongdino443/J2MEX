@@ -485,13 +485,6 @@ public final class GameFileManagerActivity extends LocalizedActivity {
         visibleFileCount = 0;
         selectedVisibleFileCount = 0;
 
-        if (searchVisible && query.isEmpty()) {
-            loadingDirectory = false;
-            showEmpty("Nhập tên tệp để tìm kiếm.");
-            updateSelection();
-            return;
-        }
-
         loadingDirectory = true;
         showEmpty("Đang đọc thư mục...");
         updateSelection();
@@ -551,7 +544,7 @@ public final class GameFileManagerActivity extends LocalizedActivity {
             final String emptyMessage = error != null ? error
                     : query.isEmpty()
                     ? foldersOnly ? "Thư mục này chưa có thư mục con."
-                    : "Thư mục này chưa có thư mục con hoặc tệp JAR, JAD, ZIP."
+                    : "Thư mục này chưa có thư mục con hoặc tệp JAR, ZIP."
                     : "Không tìm thấy tệp khớp với nội dung tìm kiếm.";
             mainHandler.post(() -> {
                 if (generation != directoryGeneration || isFinishing() || isDestroyed()) return;
@@ -804,7 +797,7 @@ public final class GameFileManagerActivity extends LocalizedActivity {
 
     private boolean isSupported(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".jar") || lower.endsWith(".jad") || lower.endsWith(".zip");
+        return lower.endsWith(".jar") || lower.endsWith(".zip");
     }
 
     private boolean isInsideRoot(File candidate) {
@@ -869,11 +862,9 @@ public final class GameFileManagerActivity extends LocalizedActivity {
             super(activity);
             this.directory = directory;
             String lower = fileName.toLowerCase(Locale.ROOT);
-            this.extension = lower.endsWith(".jad") ? "JAD"
-                    : lower.endsWith(".zip") ? "ZIP" : "JAR";
+            this.extension = lower.endsWith(".zip") ? "ZIP" : "JAR";
             this.iconColor = COLOR_ACCENT;
-            this.labelColor = lower.endsWith(".jad") ? 0xFF6ED6E8
-                    : lower.endsWith(".zip") ? 0xFFFFC66E : COLOR_ACCENT;
+            this.labelColor = lower.endsWith(".zip") ? 0xFFFFC66E : 0xFF6ED6E8;
         }
 
         @Override protected void onDraw(Canvas canvas) {

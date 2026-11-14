@@ -41,9 +41,16 @@ public class Group extends Node
 
 	public int getChildCount() { return nodes.size(); }
 
-	public boolean pick(int scope, float x, float y, Camera camera, RayIntersection ri) { return false; }
+	public boolean pick(int scope, float x, float y, Camera camera, RayIntersection ri)
+	{
+		return M3GPicking.pick(this, scope, x, y, camera, ri);
+	}
 
-	public boolean pick(int scope, float ox, float oy, float oz, float dx, float dy, float dz, RayIntersection ri) { return false; }
+	public boolean pick(int scope, float ox, float oy, float oz, float dx, float dy, float dz,
+			RayIntersection ri)
+	{
+		return M3GPicking.pick(this, scope, ox, oy, oz, dx, dy, dz, ri);
+	}
 
 	public void removeChild(Node child)
 	{

@@ -34,8 +34,10 @@ public final class HeadlessMain {
     private static final AtomicBoolean exitRequested = new AtomicBoolean();
     private static final AtomicLong revision = new AtomicLong();
     private static volatile Thread frameWriterThread;
+    private static volatile boolean frameTraceEnabled;
     private static final String TOUCH_INPUT_ARGUMENT = "--j2mex-touch-input=";
     private static final String UI_LANGUAGE_ARGUMENT = "--j2mex-ui-language=";
+    private static final String FRAME_TRACE_ARGUMENT = "--j2mex-frame-trace=";
 
     private static boolean parseTouchInputEnabled(String value) {
         if ("true".equalsIgnoreCase(value)) return true;
@@ -69,7 +71,7 @@ public final class HeadlessMain {
         synchronized (HeadlessMain.class) {
             if (output == null || !running) return;
             try {
-                output.writeInt(9);
+                output.writeInt(BluetoothProtocol.MEMORY_EDITOR_REPLY);
                 output.writeInt(requestId);
                 output.writeInt(operation);
                 output.writeBoolean(result.success);
@@ -112,6 +114,15 @@ public final class HeadlessMain {
         int launchArgumentCount = args.length;
         boolean touchInputEnabled = true;
         String uiLanguage = "en";
+        if (launchArgumentCount > 10
+                && args[launchArgumentCount - 1].startsWith(FRAME_TRACE_ARGUMENT)) {
+            String value = args[launchArgumentCount - 1]
+                    .substring(FRAME_TRACE_ARGUMENT.length());
+            if ("true".equalsIgnoreCase(value)) frameTraceEnabled = true;
+            else if ("false".equalsIgnoreCase(value)) frameTraceEnabled = false;
+            else throw new IllegalArgumentException("Invalid framebuffer trace setting: " + value);
+            launchArgumentCount--;
+        }
         if (launchArgumentCount > 10
                 && args[launchArgumentCount - 1].startsWith(UI_LANGUAGE_ARGUMENT)) {
             uiLanguage = args[launchArgumentCount - 1]
@@ -213,6 +224,8 @@ public final class HeadlessMain {
                         long value, int number, int flags) throws IOException {
                     synchronized (HeadlessMain.class) {
                         if (output == null || !running) throw new IOException("Audio host disconnected");
+                        System.out.println("[audio-host] request action=" + action + " player=" + playerId
+                                + " number=" + number + " flags=" + flags);
                         output.writeInt(8);
                         output.writeInt(action);
                         output.writeInt(playerId);
@@ -282,7 +295,7 @@ public final class HeadlessMain {
             });
 
             Thread frames = new Thread(() -> {
-                long sent = 0;
+                long sent = 0, sentFrames = 0;
                 int[] pixels = null;
                 byte[] bytes = null;
                 IntBuffer frameBuffer = null;
@@ -324,6 +337,9 @@ public final class HeadlessMain {
                             synchronized (HeadlessMain.class) {
                                 output.writeInt(1); output.writeInt(w); output.writeInt(h);
                                 output.write(bytes); output.flush();
+                                if (frameTraceEnabled)
+                                    System.out.println("[frame-tx] index=" + (++sentFrames)
+                                            + " size=" + w + "x" + h + " bytes=" + bytes.length);
                             }
                             sent = current;
                             long sendFinishedAt = System.nanoTime();
@@ -367,8 +383,26 @@ public final class HeadlessMain {
             frames.setDaemon(true);
             frames.start();
 
+            System.setProperty("freej2me.startup.diagnostics", "true");
             if (!platform.loadJar(args[0])) throw new IOException("FreeJ2ME could not load MIDlet JAR");
+            boolean traceBounceTales = platform.loader != null
+                    && platform.loader.name != null
+                    && platform.loader.name.startsWith("Bounce Tales");
+            System.setProperty("freej2me.traceCaughtMidletExceptions",
+                    Boolean.toString(traceBounceTales));
+            if (traceBounceTales) {
+                System.out.println("[BounceTalesDiag] caught-exception tracing enabled for "
+                        + platform.loader.name);
+                Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+                    System.out.println("[BounceTalesDiag] uncaught thread=" + thread.getName());
+                    error.printStackTrace(System.out);
+                });
+                Runtime.getRuntime().addShutdownHook(new Thread(() ->
+                        System.out.println("[BounceTalesDiag] JVM shutdown hook reached"),
+                        "BounceTalesDiagnosticShutdown"));
+            }
             ManagedMemoryEditor memoryEditor = new ManagedMemoryEditor(platform.loader);
+            platform.loader.logNinjaSchoolStartupDiagnostics();
             status(2, "JAR loaded; invoking MIDlet.startApp()");
             new Thread(platform::runJar, "MIDletStarter").start();
             DataInputStream input = new DataInputStream(socket.getInputStream());
@@ -379,15 +413,27 @@ public final class HeadlessMain {
                 if (command == 1 || command == 2) {
                     int key = input.readInt();
                     if (Mobile.getDisplay() != null && Mobile.getDisplay().getCurrent() != null) {
+                        long dispatchStartedAt = System.nanoTime();
+                        System.out.println("[midlet-input] dispatch "
+                                + (command == 1 ? "key-down" : "key-up") + " key=" + key);
                         if (command == 1) platform.keyPressed(key); else platform.keyReleased(key);
+                        System.out.println("[midlet-input] complete "
+                                + (command == 1 ? "key-down" : "key-up") + " key=" + key
+                                + " duration-us=" + ((System.nanoTime() - dispatchStartedAt) / 1000L));
                     }
                 } else if (command >= 3 && command <= 5) {
                     int x = input.readInt(), y = input.readInt();
                     if (Mobile.getDisplay() != null && Mobile.getDisplay().getCurrent() != null) {
+                        long dispatchStartedAt = System.nanoTime();
+                        String action = command == 3 ? "pointer-down"
+                                : command == 4 ? "pointer-drag" : "pointer-up";
+                        System.out.println("[midlet-input] dispatch " + action + " x=" + x + " y=" + y);
                         try {
                             if (command == 3) platform.pointerPressed(x, y);
                             else if (command == 4) platform.pointerDragged(x, y);
                             else platform.pointerReleased(x, y);
+                            System.out.println("[midlet-input] complete " + action + " x=" + x + " y=" + y
+                                    + " duration-us=" + ((System.nanoTime() - dispatchStartedAt) / 1000L));
                         } catch (RuntimeException inputFailure) {
                             // A broken MIDlet pointer callback must not kill the engine event pump.
                             if (!pointerFailureReported) {
@@ -414,9 +460,9 @@ public final class HeadlessMain {
                     AudioBridge.dispatchEvent(input.readInt(), input.readInt(), input.readLong(), input.readUTF());
                 } else if (command == 14) {
                     Canvas.setFrameRateLimit(input.readInt());
-                } else if (command == 15) {
+                } else if (command == BluetoothProtocol.SET_SPEED) {
                     RuntimeTiming.setSpeedPercent(input.readInt());
-                } else if (command == 16) {
+                } else if (command == BluetoothProtocol.MEMORY_EDITOR_COMMAND) {
                     int operation = input.readInt();
                     int requestId = input.readInt();
                     String query = input.readUTF();

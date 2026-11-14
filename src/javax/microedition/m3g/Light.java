@@ -25,13 +25,13 @@ public class Light extends Node
 	public static final int SPOT = 131;
 
 
-	private int mode;
-	private int color;
-	private float intensity;
+	private int mode=DIRECTIONAL;
+	private int color=0xffffff;
+	private float intensity=1f;
 	private float linear;
 	private float quadratic;
-	private float constant;
-	private float angle;
+	private float constant=1f;
+	private float angle=45f;
 	private float exponent;
 
 

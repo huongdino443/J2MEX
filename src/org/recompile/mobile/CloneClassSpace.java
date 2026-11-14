@@ -119,6 +119,7 @@ final class CloneClassSpace {
                 int length;
                 while ((length = input.read(buffer)) != -1) output.write(buffer, 0, length);
                 byte[] original = ClassFileCompatibility.adaptMissingStackMapTable(output.toByteArray(), name);
+                original = space.parent.adaptPackageQualifiedFactoryConstruction(original, name);
                 code = space.parent.adaptResourceCalls(original, name);
             } catch (Exception error) {
                 throw new ClassNotFoundException("Unable to preserve clone resource access: " + name, error);

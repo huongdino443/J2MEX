@@ -23,6 +23,7 @@ class HttpConnectionImpl implements HttpConnection
 {
 private static final int CONNECT_TIMEOUT_MS = 15000;
 private static final int READ_TIMEOUT_MS = 30000;
+private static final String MIDP_USER_AGENT = "Profile/MIDP-2.0 Configuration/CLDC-1.1";
 
 protected final URL url;
 protected final int mode;
@@ -40,6 +41,8 @@ this.mode = mode;
 connection = (HttpURLConnection)url.openConnection();
 connection.setUseCaches(false);
 connection.setInstanceFollowRedirects(true);
+connection.setRequestProperty("User-Agent", MIDP_USER_AGENT);
+requestProperties.put("User-Agent", MIDP_USER_AGENT);
 if(timeouts)
 {
 connection.setConnectTimeout(CONNECT_TIMEOUT_MS);

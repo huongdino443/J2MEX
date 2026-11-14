@@ -29,7 +29,21 @@ public final class NativeLcdUiView extends LinearLayout {
     private long sequence;
     private boolean dirty;
     private boolean contextMenuOpen;
+    private boolean restoringViewport;
     private int focusedRow, focusedItem;
+    private int viewportRestoreGeneration;
+    private final LinkedHashMap<String, ListViewportState> savedListViewports =
+            new LinkedHashMap<>();
+
+    private static final class ListViewportState {
+        final int firstVisiblePosition;
+        final int firstChildTop;
+
+        ListViewportState(int firstVisiblePosition, int firstChildTop) {
+            this.firstVisiblePosition = firstVisiblePosition;
+            this.firstChildTop = firstChildTop;
+        }
+    }
 
     public NativeLcdUiView(Context context, Events events) {
         super(new ContextThemeWrapper(context, R.style.NativeLcdUiTheme));
@@ -97,7 +111,12 @@ public final class NativeLcdUiView extends LinearLayout {
                 || screen.epoch == shown.epoch && screen.revision <= shown.revision)) return;
         boolean same = shown != null && shown.epoch == screen.epoch && shown.kind == screen.kind;
         boolean preserve = same && (dirty || screen.acknowledgedSequence < sequence);
+        ListViewportState restoreViewport = null;
         if (!same) {
+            saveListViewport();
+            if (screen.kind == NativeScreen.LIST) {
+                restoreViewport = savedListViewports.remove(listSignature(screen));
+            }
             handler.removeCallbacks(flush); dirty = false; sequence = 0;
             contextMenuOpen = false;
             content.removeAllViews(); list = null; adapter = null; form = null; alert = null;
@@ -125,6 +144,7 @@ public final class NativeLcdUiView extends LinearLayout {
                 list.setAdapter(adapter);
                 list.setOnItemClickListener((parent, view, position, id) -> {
                     adapter.choose(position); focusedRow = adapter.getItem(position).id;
+                    adapter.setFocusedRow(focusedRow);
                     if (shown.choiceType == NativeScreen.IMPLICIT) {
                         list.clearChoices();
                         dispatch(NativeScreen.Event.SELECT, focusedRow);
@@ -139,9 +159,9 @@ public final class NativeLcdUiView extends LinearLayout {
                     contextMenuOpen = true;
                     focusedRow = row.id;
                     adapter.choose(position);
+                    adapter.setFocusedRow(row.id);
                     adapter.setContextMenuRow(row.id);
                     list.setItemChecked(position, true);
-                    list.setSelection(position);
                     boolean opened = commandBar.showLongPressMenu(() -> finishLongPress(row.id));
                     if (!opened) finishLongPress(row.id);
                     return true;
@@ -149,10 +169,12 @@ public final class NativeLcdUiView extends LinearLayout {
                 list.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                     public void onNothingSelected(AdapterView<?> parent) { }
                     public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                        if (shown == null || position < 0 || position >= adapter.getCount()) return;
+                        if (restoringViewport || shown == null
+                                || position < 0 || position >= adapter.getCount()) return;
                         int rowId = adapter.getItem(position).id;
                         if (focusedRow != rowId) {
                             focusedRow = rowId;
+                            adapter.setFocusedRow(rowId);
                             if (contextMenuOpen) return;
                             if (shown.choiceType == NativeScreen.IMPLICIT) {
                                 adapter.choose(position); changed();
@@ -164,8 +186,17 @@ public final class NativeLcdUiView extends LinearLayout {
             } else adapter.replace(screen.items);
             if (!same || !preserve && screen.choiceType != NativeScreen.MULTIPLE && focusedRow != screen.focusId) {
                 focusedRow = screen.focusId;
-                for (int i = 0; i < screen.items.size(); i++) if (screen.items.get(i).id == screen.focusId) list.setSelection(i);
+                for (int i = 0; i < screen.items.size(); i++) {
+                    if (screen.items.get(i).id != screen.focusId) continue;
+                    if (restoreViewport == null && NativeListViewportPolicy.shouldScrollTo(i,
+                            list.getFirstVisiblePosition(), list.getLastVisiblePosition(), !same)) {
+                        list.setSelection(i);
+                    }
+                    break;
+                }
             }
+            adapter.setFocusedRow(focusedRow);
+            if (restoreViewport != null) restoreListViewport(screen, restoreViewport);
         } else if (screen.kind == NativeScreen.ALERT) {
             if (alert == null) {
                 alert = new NativeAlertContent(getContext());
@@ -209,9 +240,73 @@ public final class NativeLcdUiView extends LinearLayout {
     }
     public void back() { dispatch(NativeScreen.Event.BACK, 0); }
     public void clear() {
+        saveListViewport();
+        viewportRestoreGeneration++;
+        restoringViewport = false;
         handler.removeCallbacks(flush); dirty = false; shown = null;
         content.removeAllViews(); list = null; adapter = null; form = null; alert = null;
         InputMethodManager keyboard = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
         if (keyboard != null) keyboard.hideSoftInputFromWindow(getWindowToken(), 0);
+    }
+
+    private void saveListViewport() {
+        if (shown == null || shown.kind != NativeScreen.LIST || list == null
+                || list.getChildCount() == 0) return;
+        int first = list.getFirstVisiblePosition();
+        View firstChild = list.getChildAt(0);
+        if (first < 0 || firstChild == null) return;
+        savedListViewports.put(listSignature(shown),
+                new ListViewportState(first, firstChild.getTop()));
+        while (savedListViewports.size() > 8) {
+            String oldest = savedListViewports.keySet().iterator().next();
+            savedListViewports.remove(oldest);
+        }
+    }
+
+    private String listSignature(NativeScreen screen) {
+        StringBuilder key = new StringBuilder();
+        appendSignaturePart(key, screen.title);
+        key.append('#').append(screen.choiceType).append('#').append(screen.items.size());
+        for (NativeScreen.Entry row : screen.items) {
+            appendSignaturePart(key, row.text);
+            key.append('#').append(Arrays.hashCode(row.image));
+        }
+        return key.toString();
+    }
+
+    private void appendSignaturePart(StringBuilder key, String value) {
+        String text = value == null ? "" : value;
+        key.append(text.length()).append(':').append(text).append('|');
+    }
+
+    private void restoreListViewport(NativeScreen screen, ListViewportState state) {
+        final ListView target = list;
+        if (target == null || target.getCount() == 0) return;
+        final String signature = listSignature(screen);
+        final int position = Math.max(0,
+                Math.min(state.firstVisiblePosition, target.getCount() - 1));
+        final int generation = ++viewportRestoreGeneration;
+        restoringViewport = true;
+        target.post(() -> {
+            if (generation != viewportRestoreGeneration || !isCurrentList(target, signature)) {
+                if (generation == viewportRestoreGeneration) restoringViewport = false;
+                return;
+            }
+            target.setSelectionFromTop(position, state.firstChildTop);
+            target.post(() -> {
+                if (generation != viewportRestoreGeneration || !isCurrentList(target, signature)) {
+                    if (generation == viewportRestoreGeneration) restoringViewport = false;
+                    return;
+                }
+                target.post(() -> {
+                    if (generation == viewportRestoreGeneration) restoringViewport = false;
+                });
+            });
+        });
+    }
+
+    private boolean isCurrentList(ListView target, String signature) {
+        return list == target && shown != null && shown.kind == NativeScreen.LIST
+                && signature.equals(listSignature(shown));
     }
 }

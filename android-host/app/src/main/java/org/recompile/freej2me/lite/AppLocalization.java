@@ -77,7 +77,6 @@ public final class AppLocalization {
         add("Đóng tìm kiếm", "Close search");
         add("Tìm tệp...", "Search files...");
         add("Trở về", "Back");
-        add("Nhập tên tệp để tìm kiếm.", "Enter a file name to search.");
         add("Đang đọc thư mục...", "Loading folder...");
         add("Không thể đọc thư mục này. Hãy cấp quyền truy cập bộ nhớ trong Cài đặt.",
                 "Can't read this folder. Allow storage access in Settings.");
@@ -85,8 +84,8 @@ public final class AppLocalization {
         add("Không thể đọc thư mục này. Hãy kiểm tra quyền truy cập bộ nhớ.",
                 "Can't read this folder. Check storage permissions.");
         add("Thư mục này chưa có thư mục con.", "This folder has no subfolders.");
-        add("Thư mục này chưa có thư mục con hoặc tệp JAR, JAD, ZIP.",
-                "This folder has no subfolders or JAR, JAD, or ZIP files.");
+        add("Thư mục này chưa có thư mục con hoặc tệp JAR, ZIP.",
+                "This folder has no subfolders or JAR/ZIP files.");
         add("Không tìm thấy tệp khớp với nội dung tìm kiếm.",
                 "No files match your search.");
         add("Chọn thư mục để quét", "Select a folder to scan");
@@ -265,11 +264,28 @@ public final class AppLocalization {
         add("Thông tin", "Details");
         add("Phiên bản, nền tảng và thông tin dự án.", "Version, platform, and project details.");
         add("Cập nhật", "Updates");
-        add("Kiểm tra phiên bản mới và hướng dẫn tải khi có bản phát hành.",
-                "Check for a newer version and download details when a release is available.");
+        add("Kiểm tra phiên bản mới và tải bản phát hành từ GitHub.",
+                "Check for a newer version and download the GitHub release.");
         add("Kiểm tra", "Check");
-        add("Chưa có nguồn cập nhật được cấu hình. Thông tin phát hành sẽ xuất hiện sau khi dự án có kho công khai.",
-                "No update source is configured yet. Release information will be available when the project has a public repository.");
+        add("Hiện chưa có bản cập nhật", "There are no updates right now");
+        add("Đã có bản cập nhật mới", "A new update is available");
+        add("Chưa kiểm tra phiên bản mới", "Update status has not been checked");
+        add("Tải về", "Download");
+        add("Trang phát hành", "Release page");
+        add("Kiểm tra lại", "Check again");
+        add("Đang kiểm tra cập nhật…", "Checking for updates…");
+        add("Đang tải APK…", "Downloading APK…");
+        add("Không kiểm tra được cập nhật", "Couldn't check for updates");
+        add("Không tải được bản cập nhật.", "Couldn't download the update.");
+        add("Đã tải APK. Hãy xác nhận trong trình cài đặt Android.",
+                "APK downloaded. Confirm installation in Android's installer.");
+        add("Không mở được trang phát hành.", "Couldn't open the release page.");
+        add("Không mở được quyền cài ứng dụng không rõ nguồn gốc.",
+                "Couldn't open the install unknown apps permission.");
+        add("Chưa được cấp quyền cài ứng dụng không rõ nguồn gốc.",
+                "Permission to install apps from unknown sources was not granted.");
+        add("Không tìm thấy APK đã tải.", "The downloaded APK could not be found.");
+        add("Không mở được trình cài đặt Android: ", "Couldn't open Android's installer: ");
         add("Giới thiệu", "About");
         add("Tổng quan ứng dụng và giấy phép thành phần.",
                 "App overview and component licenses.");
@@ -458,7 +474,7 @@ public final class AppLocalization {
                 .replace("không có MIDlet-1 hợp lệ trong manifest.",
                         "manifest has no valid MIDlet-1 entry.")
                 .replace("không tìm thấy lớp MIDlet trong JAR.", "MIDlet class not found in the JAR.")
-                .replace("Tệp vượt giới hạn 128 MiB.", "File exceeds the 128 MiB limit.");
+                .replace("Tệp vượt giới hạn 512 MiB.", "File exceeds the 512 MiB limit.");
         if (value.startsWith("Đã chọn ")) return "Selected " + value.substring("Đã chọn ".length());
         return value;
     }

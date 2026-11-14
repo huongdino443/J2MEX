@@ -24,13 +24,13 @@ public class Fog extends Object3D
 
 
 	private float near;
-	private float far;
+	private float far = 1f;
 	private int mode;
 	private int color;
-	private float density;
+	private float density = 1f;
 
 
-	public Fog() {  }
+	public Fog() { mode = LINEAR; }
 
 
 	public int getColor() { return color; }

@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 export PATH="$JAVA_HOME/bin:$PATH"
 NDK="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.2.13676358}"
 rm -rf build/engine build/bridge
-mkdir -p build/{engine,bridge,sample,network-test,fileconnection-test,lcdui-test,lcdui-sample,lcdui-matrix,native-input-test,clone-owner-test,clone-jar-test,canvas-visibility-test,audio-test,framebuffer-test,font-mask-test,frame-compat-test,m3g-test,game-key-test} app/src/main/{assets,jniLibs/arm64-v8a}
+mkdir -p build/{engine,bridge,sample,network-test,fileconnection-test,lcdui-test,lcdui-sample,lcdui-matrix,native-input-test,clone-owner-test,clone-jar-test,canvas-visibility-test,audio-test,framebuffer-test,font-mask-test,frame-compat-test,m3g-test,micro3d-test,game-key-test} app/src/main/{assets,jniLibs/arm64-v8a}
 python3 tools/test_prepare_runtime.py
 if [ ! -f build/runtime/lib/aarch64/server/libjvm.so ]; then
     : "${RUNTIME_TAR:?Set RUNTIME_TAR to the Android ARM64 Java 8 archive}"
@@ -20,6 +20,31 @@ fi
 find ../src -name '*.java' | sort > build/engine-sources.txt
 javac --release 8 -encoding UTF-8 -d build/engine @build/engine-sources.txt
 jar cf app/src/main/assets/engine.jar -C build/engine . -C ../resources .
+mkdir -p build/manifest-test
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/manifest-test tools/MIDletManifestPropertySmoke.java
+java -cp app/src/main/assets/engine.jar:build/manifest-test MIDletManifestPropertySmoke
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/manifest-test tools/MIDletPlatformPropertySmoke.java
+java -cp app/src/main/assets/engine.jar:build/manifest-test MIDletPlatformPropertySmoke
+mkdir -p build/update-version-test
+javac --release 8 -encoding UTF-8 -d build/update-version-test \
+    app/src/main/java/org/recompile/freej2me/lite/ReleaseVersionPolicy.java \
+    tools/ReleaseVersionPolicySmoke.java
+java -cp build/update-version-test \
+    org.recompile.freej2me.lite.ReleaseVersionPolicySmoke
+mkdir -p build/storage-policy-test
+javac --release 8 -encoding UTF-8 -d build/storage-policy-test \
+    app/src/main/java/org/recompile/freej2me/lite/StorageAccessPolicy.java \
+    tools/StorageAccessPolicySmoke.java
+java -cp build/storage-policy-test org.recompile.freej2me.lite.StorageAccessPolicySmoke
+python3 tools/test_storage_manifest.py
+mkdir -p build/native-list-viewport-test
+javac --release 8 -encoding UTF-8 -d build/native-list-viewport-test \
+    app/src/main/java/org/recompile/freej2me/lite/nativeui/NativeListViewportPolicy.java \
+    tools/NativeListViewportPolicySmoke.java
+java -cp build/native-list-viewport-test \
+    org.recompile.freej2me.lite.nativeui.NativeListViewportPolicySmoke
 mkdir -p build/runtime-timing-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/runtime-timing-test tools/RuntimeTimingSmoke.java
@@ -89,7 +114,28 @@ javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/m3g-test tools/M3GRendererSmoke.java tools/M3GCompositingSmoke.java \
     tools/M3GSprite3DSmoke.java tools/M3GTransformableSemanticsSmoke.java \
     tools/M3GSkinnedMeshSmoke.java tools/M3GSplineInterpolationSmoke.java \
-    tools/M3GVertexBufferNullPositionsSmoke.java
+    tools/FigureLayoutSmoke.java \
+    tools/M3GVertexBufferNullPositionsSmoke.java tools/M3GLightingSmoke.java
+java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test \
+    com.mascotcapsule.micro3d.v3.FigureLayoutSmoke
+mkdir -p build/micro3d-test
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/micro3d-test tools/Micro3DModelSmoke.java tools/Micro3DTextureSmoke.java \
+    tools/Micro3DRendererSmoke.java tools/Micro3DActionTableSmoke.java
+java -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/micro3d-test \
+    com.mascotcapsule.micro3d.v3.Micro3DRendererSmoke
+java -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/micro3d-test \
+    com.mascotcapsule.micro3d.v3.Micro3DActionTableSmoke
+if [ -n "${MICRO3D_TEST_JAR:-}" ]; then
+    java -Djava.awt.headless=true \
+        -cp app/src/main/assets/engine.jar:build/micro3d-test \
+        com.mascotcapsule.micro3d.v3.Micro3DModelSmoke "$MICRO3D_TEST_JAR"
+    java -Djava.awt.headless=true \
+        -cp app/src/main/assets/engine.jar:build/micro3d-test \
+        com.mascotcapsule.micro3d.v3.Micro3DTextureSmoke "$MICRO3D_TEST_JAR"
+fi
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GRendererSmoke "${M3G_TEST_JAR:-}"
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GVertexBufferNullPositionsSmoke
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GSprite3DSmoke
@@ -105,6 +151,7 @@ javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/m3g-test tools/RgbBlitSmoke.java
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test RgbBlitSmoke
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GCompositingSmoke
+java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GLightingSmoke
 if [ -n "${SKINNED3D_TEST_JAR:-}" ]; then
     java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test \
         javax.microedition.m3g.M3GSkinnedMeshSmoke "$SKINNED3D_TEST_JAR"
@@ -157,6 +204,12 @@ if [ -n "${MIDLET_CLASSLOAD_TEST_JAR:-}" ]; then
         org.recompile.mobile.LegacyCodeAttributeVersionSmoke \
         "$MIDLET_CLASSLOAD_TEST_JAR" "${classload_test_classes[@]}"
 fi
+mkdir -p build/package-factory-compat-test
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/package-factory-compat-test tools/PackageQualifiedFactoryCompatibilitySmoke.java
+java -Xverify:all -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/package-factory-compat-test \
+    org.recompile.mobile.PackageQualifiedFactoryCompatibilitySmoke
 if [ -n "${MISSING_STACKMAP_TEST_JAR:-}" ]; then
     javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
         -d build/frame-compat-test tools/MissingStackMapSmoke.java
@@ -222,7 +275,7 @@ javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
 exit_smoke_output=$(java -Djava.awt.headless=true \
     -cp app/src/main/assets/engine.jar:build/midlet-exit-test MidletExitSmoke)
 printf '%s\n' "$exit_smoke_output"
-grep -q 'MidletExitSmoke: 4 checks passed' <<<"$exit_smoke_output"
+grep -q 'MidletExitSmoke: 5 checks passed' <<<"$exit_smoke_output"
 mkdir -p build/sms-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/sms-test tools/SmsConnectionSmoke.java

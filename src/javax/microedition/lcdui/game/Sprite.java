@@ -69,7 +69,7 @@ public class Sprite	extends	Layer
 		//System.out.println("Sprite B"); // Found in use, Pacman Championship Edition
 		imgWidth = img.getWidth();
 		imgHeight = img.getHeight();
-		frameWidth = imgWidth; 
+		frameWidth = imgWidth;
 		frameHeight = imgHeight;
 		colCount = 1;
 		rowCount = 1;
@@ -95,7 +95,7 @@ public class Sprite	extends	Layer
 		System.out.println("Sprite D");
 		imgWidth = s.sprite.getWidth();
 		imgHeight = s.sprite.getHeight();
-		frameWidth = imgWidth; 
+		frameWidth = imgWidth;
 		frameHeight = imgHeight;
 		colCount = 1;
 		rowCount = 1;
@@ -130,6 +130,40 @@ public class Sprite	extends	Layer
 
 	public boolean collidesWith(TiledLayer t, boolean pixelLevel)
 	{
+		if(t == null) throw new NullPointerException();
+		if(!visible || !t.isVisible()) return false;
+
+		int tileLeft = t.getX();
+		int tileTop = t.getY();
+		int tileRight = tileLeft + t.getWidth();
+		int tileBottom = tileTop + t.getHeight();
+		int spriteLeft = x + hitX;
+		int spriteTop = y + hitY;
+		int spriteRight = spriteLeft + hitWidth;
+		int spriteBottom = spriteTop + hitHeight;
+
+		if(spriteLeft >= tileRight || spriteRight <= tileLeft
+				|| spriteTop >= tileBottom || spriteBottom <= tileTop)
+		{
+			return false;
+		}
+
+		int cellWidth = t.getCellWidth();
+		int cellHeight = t.getCellHeight();
+		int startCol = Math.max(0, (spriteLeft - tileLeft) / cellWidth);
+		int startRow = Math.max(0, (spriteTop - tileTop) / cellHeight);
+		int endCol = Math.min(t.getColumns() - 1,
+				(spriteRight - 1 - tileLeft) / cellWidth);
+		int endRow = Math.min(t.getRows() - 1,
+				(spriteBottom - 1 - tileTop) / cellHeight);
+
+		for(int row = startRow; row <= endRow; row++)
+		{
+			for(int col = startCol; col <= endCol; col++)
+			{
+				if(t.getCell(col, row) != 0) return true;
+			}
+		}
 		return false;
 	}
 

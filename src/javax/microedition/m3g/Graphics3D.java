@@ -18,6 +18,7 @@ package javax.microedition.m3g;
 
 import java.util.Hashtable;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 
 import org.recompile.mobile.Mobile;
@@ -53,6 +54,10 @@ private float far=1;
 	private final Transform cameraTransform = new Transform();
 	private final M3GSoftwareRenderer renderer = new M3GSoftwareRenderer();
 	private final List<Light> lights = new ArrayList<Light>();
+	private final List<Transform> lightTransforms = new ArrayList<Transform>();
+	private final IdentityHashMap<Image2D,Boolean> partialAlphaImageCache =
+			new IdentityHashMap<Image2D,Boolean>();
+	private final List<DeferredDirectDraw> deferredDirectDraws = new ArrayList<DeferredDirectDraw>();
 private final float[] cameraTraceCurrent = new float[16];
 private final float[] cameraTracePrevious = new float[16];
 private boolean hasCameraTrace;
@@ -72,6 +77,7 @@ private long theFightCameraTraceLastMs;
 	{
 		if (light == null) throw new NullPointerException("light");
 		lights.add(light);
+		lightTransforms.add(transform==null?new Transform():new Transform(transform));
 		return lights.size()-1;
 	}
 
@@ -81,6 +87,7 @@ public void bindTarget(java.lang.Object target) { bindTarget(target, true, 0); }
 	{
 		if (this.target != null) throw new IllegalStateException("An M3G target is already bound");
 renderer.bind(target,depthBuffer);
+		deferredDirectDraws.clear();
 this.target=target;
 		this.depthBuffer=depthBuffer;
 		this.hints=hints;
@@ -106,7 +113,7 @@ if (target instanceof javax.microedition.lcdui.Graphics) {
 	public Light getLight(int index, Transform transform)
 	{
 		Light light=lights.get(index);
-		if (transform!=null) light.getTransform(transform);
+		if (transform!=null) transform.set(lightTransforms.get(index));
 		return light;
 	}
 
@@ -128,6 +135,7 @@ if (target instanceof javax.microedition.lcdui.Graphics) {
 
 	public void releaseTarget()
 	{
+		renderDeferredDirectDraws();
 		renderer.release();
 		target=null;
 	}
@@ -137,8 +145,15 @@ if (target instanceof javax.microedition.lcdui.Graphics) {
 		if (target==null) throw new IllegalStateException("No M3G target is bound");
 		if (node==null) throw new NullPointerException("node");
 		Transform parent=transform==null?new Transform():new Transform(transform);
+		List<M3GSoftwareRenderer.LightSource> activeLights=contextLightSources();
+		collectLights(node,parent,false,activeLights);
+		renderer.setLights(activeLights);
 traceCityBloxxNode(node,parent,false);
-		renderNode(node,parent,false);
+		List<DeferredDraw> translucent=new ArrayList<DeferredDraw>();
+		List<DeferredDraw> additive=new ArrayList<DeferredDraw>();
+		renderNode(node,parent,false,translucent,additive);
+		renderTranslucent(translucent);
+		renderAdditive(additive);
 	}
 
 	public void render(VertexBuffer vertices, IndexBuffer triangles, Appearance appearance, Transform transform)
@@ -149,7 +164,30 @@ traceCityBloxxNode(node,parent,false);
 	public void render(VertexBuffer vertices, IndexBuffer triangles, Appearance appearance, Transform transform, int scope)
 	{
 		if (target==null) throw new IllegalStateException("No M3G target is bound");
+		renderer.setLights(contextLightSources());
+		CompositingMode mode=appearance==null?null:appearance.getCompositingMode();
+		if (mode!=null&&!mode.isDepthWriteEnabled()
+				&&requiresDeferredAlphaPass(appearance,vertices,null)) {
+			deferredDirectDraws.add(new DeferredDirectDraw(vertices,triangles,appearance,transform,
+					camera,cameraTransform,viewx,viewy,vieww,viewh,contextLightSources()));
+			return;
+		}
 		renderer.render(vertices,triangles,appearance,transform);
+	}
+
+	private void renderDeferredDirectDraws()
+	{
+		if (deferredDirectDraws.isEmpty()) return;
+		for (DeferredDirectDraw call:deferredDirectDraws) {
+			renderer.setViewport(call.viewportX,call.viewportY,call.viewportWidth,call.viewportHeight);
+			renderer.setCamera(call.camera,call.cameraTransform);
+			renderer.setLights(call.lights);
+			renderer.render(call.vertices,call.triangles,call.appearance,call.transform);
+		}
+		deferredDirectDraws.clear();
+		renderer.setViewport(viewx,viewy,vieww,viewh);
+		renderer.setCamera(camera,cameraTransform);
+		renderer.setLights(contextLightSources());
 	}
 
 	public void render(World world)
@@ -163,7 +201,14 @@ traceCityBloxxNode(node,parent,false);
 traceCameraTransform(transform);
 			setCamera(active,transform);
 		}
-		renderNode(world,new Transform(),false);
+		List<M3GSoftwareRenderer.LightSource> activeLights=contextLightSources();
+		collectLights(world,new Transform(),false,activeLights);
+		renderer.setLights(activeLights);
+		List<DeferredDraw> translucent=new ArrayList<DeferredDraw>();
+		List<DeferredDraw> additive=new ArrayList<DeferredDraw>();
+		renderNode(world,new Transform(),false,translucent,additive);
+		renderTranslucent(translucent);
+		renderAdditive(additive);
 	}
 
 private void traceCameraTransform(Transform transform)
@@ -249,7 +294,7 @@ System.out.println("[CityBloxx-M3G] trace failed: "+traceFailure);
 }
 }
 
-	public void resetLights() { lights.clear(); }
+	public void resetLights() { lights.clear(); lightTransforms.clear(); }
 
 	public void setCamera(Camera camera, Transform transform)
 	{
@@ -308,7 +353,9 @@ System.out.println("[CityBloxx-M3G] trace failed: "+traceFailure);
 	{
 		if (light==null) throw new NullPointerException("light");
 		while (lights.size()<=index) lights.add(null);
+		while (lightTransforms.size()<=index) lightTransforms.add(new Transform());
 		lights.set(index,light);
+		lightTransforms.set(index,transform==null?new Transform():new Transform(transform));
 	}
 
 	public void setViewport(int x, int y, int width, int height)
@@ -318,7 +365,8 @@ viewx=x; viewy=y; vieww=width; viewh=height;
 		renderer.setViewport(x,y,width,height);
 	}
 
-	private void renderNode(Node node,Transform parent,boolean applyLocalTransform)
+	private void renderNode(Node node,Transform parent,boolean applyLocalTransform,
+			List<DeferredDraw> translucent,List<DeferredDraw> additive)
 	{
 		if (!node.isRenderingEnabled()) return;
 		Transform world=new Transform(parent);
@@ -329,25 +377,200 @@ viewx=x; viewy=y; vieww=width; viewh=height;
 		}
 		if (node instanceof SkinnedMesh) {
 			Group skeleton=((SkinnedMesh)node).getSkeleton();
-			if (skeleton!=null) renderNode(skeleton,world,true);
+			if (skeleton!=null) renderNode(skeleton,world,true,translucent,additive);
 		}
-if (node instanceof Sprite3D) {
-renderer.render((Sprite3D)node,world);
-} else if (node instanceof Mesh) {
+		if (node instanceof Sprite3D) {
+			Sprite3D sprite=(Sprite3D)node;
+			if (isAdditive(sprite.getAppearance()))
+				additive.add(new DeferredDraw(node,world,-1));
+		else if (requiresDeferredAlphaPass(sprite.getAppearance(),null,sprite.getImage()))
+				translucent.add(new DeferredDraw(node,world,-1));
+			else
+				renderer.render((Sprite3D)node,world);
+		} else if (node instanceof Mesh) {
 			Mesh mesh=(Mesh)node;
-			for (int i=0;i<mesh.getSubmeshCount();i++)
-{
-if (mesh instanceof SkinnedMesh)
-renderer.render((SkinnedMesh)mesh,mesh.getIndexBuffer(i),mesh.getAppearance(i),world);
-else if (mesh instanceof MorphingMesh)
-renderer.render((MorphingMesh)mesh,mesh.getIndexBuffer(i),mesh.getAppearance(i),world);
-else
-renderer.render(mesh.getVertexBuffer(),mesh.getIndexBuffer(i),mesh.getAppearance(i),world);
-}
+			for (int i=0;i<mesh.getSubmeshCount();i++) {
+				if (isAdditive(mesh.getAppearance(i))) {
+					additive.add(new DeferredDraw(node,world,i));
+			} else if (requiresDeferredAlphaPass(mesh.getAppearance(i),mesh.getVertexBuffer(),null)) {
+					translucent.add(new DeferredDraw(node,world,i));
+				} else {
+					renderSubmesh(mesh,i,world);
+				}
+			}
 		}
 		if (node instanceof Group) {
 			Group group=(Group)node;
-			for (Node child:group.children()) renderNode(child,world,true);
+			for (Node child:group.children()) renderNode(child,world,true,translucent,additive);
+		}
+	}
+
+	private boolean isAdditive(Appearance appearance)
+	{
+		CompositingMode mode=appearance==null?null:appearance.getCompositingMode();
+		return mode!=null&&mode.getBlending()==CompositingMode.ALPHA_ADD;
+	}
+
+	private boolean requiresDeferredAlphaPass(Appearance appearance,VertexBuffer vertices,Image2D spriteImage)
+	{
+		CompositingMode mode=appearance==null?null:appearance.getCompositingMode();
+		if (mode!=null&&mode.getBlending()!=CompositingMode.ALPHA) return false;
+
+		Material material=appearance==null?null:appearance.getMaterial();
+		VertexArray colors=vertices==null?null:vertices.getColors();
+		if (colors==null||colors.getComponentCount()<3) {
+			int defaultColor=vertices==null?0xffffffff:vertices.getDefaultColor();
+			if (material!=null) defaultColor=material.getColor(Material.DIFFUSE);
+			else if (hasTexture(appearance)) defaultColor=0xffffffff;
+			if (isNonOpaqueAlpha((defaultColor>>>24)&255)) return true;
+		} else if (colors.getComponentCount()>3) {
+			for (int vertex=0;vertex<colors.getVertexCount();vertex++)
+				if (isNonOpaqueAlpha((int)colors.unsignedComponent(vertex,3))) return true;
+		}
+
+		if (spriteImage!=null&&hasPartialAlpha(spriteImage)) return true;
+		if (appearance!=null) {
+			for (int unit=0;unit<8;unit++) {
+				Texture2D texture=appearance.getTexture(unit);
+				if (texture!=null&&hasPartialAlpha(texture.getImage())) return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean hasTexture(Appearance appearance)
+	{
+		if (appearance==null) return false;
+		for (int unit=0;unit<8;unit++) if (appearance.getTexture(unit)!=null) return true;
+		return false;
+	}
+
+	private boolean hasPartialAlpha(Image2D image)
+	{
+		if (image==null) return false;
+		int format=image.getFormat();
+		if (format==Image2D.RGB||format==Image2D.LUMINANCE) return false;
+		if (!image.isMutable()) {
+			Boolean cached=partialAlphaImageCache.get(image);
+			if (cached!=null) return cached.booleanValue();
+		}
+		int[] pixels=image.pixels();
+		boolean partial=pixels==null;
+		if (pixels!=null) {
+			for (int pixel:pixels) {
+				if (isNonOpaqueAlpha((pixel>>>24)&255)) { partial=true; break; }
+			}
+		}
+		if (!image.isMutable()) partialAlphaImageCache.put(image,Boolean.valueOf(partial));
+		return partial;
+	}
+
+	private static boolean isNonOpaqueAlpha(int alpha)
+	{
+		// Keep cutout textures in the deferred alpha pass, as in the game
+		// renderer's established ordering. The rasterizer still writes depth
+		// for fully opaque texels, but not for cutouts or blended fragments.
+		return alpha<255;
+	}
+
+	private void renderTranslucent(List<DeferredDraw> translucent)
+	{
+		if (translucent.isEmpty()) return;
+		renderer.setDepthWriteSuppressed(true);
+		try {
+			for (DeferredDraw call:translucent) renderDeferred(call);
+		} finally {
+			renderer.setDepthWriteSuppressed(false);
+		}
+	}
+
+	private void renderAdditive(List<DeferredDraw> additive)
+	{
+		for (DeferredDraw call:additive) renderDeferred(call);
+	}
+
+	private void renderDeferred(DeferredDraw call)
+	{
+		if (call.submesh<0) renderer.render((Sprite3D)call.node,call.transform);
+		else renderSubmesh((Mesh)call.node,call.submesh,call.transform);
+	}
+
+	private void renderSubmesh(Mesh mesh,int submesh,Transform transform)
+	{
+		if (mesh instanceof SkinnedMesh)
+			renderer.render((SkinnedMesh)mesh,mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
+		else if (mesh instanceof MorphingMesh)
+			renderer.render((MorphingMesh)mesh,mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
+		else
+			renderer.render(mesh.getVertexBuffer(),mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
+	}
+
+	private static final class DeferredDraw
+	{
+		final Node node;
+		final Transform transform;
+		final int submesh;
+
+		DeferredDraw(Node node,Transform transform,int submesh)
+		{
+			this.node=node;
+			this.transform=new Transform(transform);
+			this.submesh=submesh;
+		}
+	}
+
+	private static final class DeferredDirectDraw
+	{
+		final VertexBuffer vertices;
+		final IndexBuffer triangles;
+		final Appearance appearance;
+		final Transform transform;
+		final Camera camera;
+		final Transform cameraTransform;
+		final int viewportX,viewportY,viewportWidth,viewportHeight;
+		final List<M3GSoftwareRenderer.LightSource> lights;
+
+		DeferredDirectDraw(VertexBuffer vertices,IndexBuffer triangles,Appearance appearance,Transform transform,
+				Camera camera,Transform cameraTransform,int viewportX,int viewportY,int viewportWidth,int viewportHeight,
+				List<M3GSoftwareRenderer.LightSource> lights)
+		{
+			this.vertices=vertices;
+			this.triangles=triangles;
+			this.appearance=appearance;
+			this.transform=transform==null?new Transform():new Transform(transform);
+			this.camera=camera;
+			this.cameraTransform=new Transform(cameraTransform);
+			this.viewportX=viewportX;
+			this.viewportY=viewportY;
+			this.viewportWidth=viewportWidth;
+			this.viewportHeight=viewportHeight;
+			this.lights=new ArrayList<M3GSoftwareRenderer.LightSource>(lights);
+		}
+	}
+
+	private List<M3GSoftwareRenderer.LightSource> contextLightSources()
+	{
+		List<M3GSoftwareRenderer.LightSource> result=new ArrayList<M3GSoftwareRenderer.LightSource>();
+		for(int i=0;i<lights.size();i++) {
+			Light light=lights.get(i);
+			if(light!=null) result.add(new M3GSoftwareRenderer.LightSource(light,lightTransforms.get(i)));
+		}
+		return result;
+	}
+
+	private void collectLights(Node node,Transform parent,boolean applyLocalTransform,
+			List<M3GSoftwareRenderer.LightSource> result)
+	{
+		if(node==null||!node.isRenderingEnabled()) return;
+		Transform world=new Transform(parent);
+		if(applyLocalTransform) {
+			Transform local=new Transform();
+			node.getLocalCompositeTransform(local);
+			world.postMultiply(local);
+		}
+		if(node instanceof Light) result.add(new M3GSoftwareRenderer.LightSource((Light)node,world));
+		if(node instanceof Group) {
+			for(Node child:((Group)node).children()) collectLights(child,world,true,result);
 		}
 	}
 

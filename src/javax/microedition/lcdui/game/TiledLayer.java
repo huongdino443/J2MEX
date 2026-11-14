@@ -26,13 +26,10 @@ import org.recompile.mobile.PlatformGraphics;
 public class TiledLayer extends Layer
 {
 
-	private Image image;
 	private Image canvas;
 	private PlatformGraphics gc;
 	private int rows;
 	private int cols;
-	private int width;
-	private int height;
 	private int tileWidth;
 	private int tileHeight;
 	private int tilesWidth;
@@ -69,8 +66,13 @@ public class TiledLayer extends Layer
 		tiles = new int[colsw][rowsh];
 	}
 
-	int createAnimatedTile(int staticTileIndex)
+	public int createAnimatedTile(int staticTileIndex)
 	{
+		validateStaticTileIndex(staticTileIndex);
+		if(animatedTileCount >= animatedTiles.length - 1)
+		{
+			throw new IndexOutOfBoundsException();
+		}
 		animatedTileCount++;
 		animatedTiles[animatedTileCount] = staticTileIndex;
 		return 0-animatedTileCount;
@@ -78,6 +80,13 @@ public class TiledLayer extends Layer
 
 	public void fillCells(int col, int row, int numCols, int numRows, int tileIndex)
 	{
+		if(numCols < 0 || numRows < 0) throw new IllegalArgumentException();
+		if(col < 0 || col >= cols || row < 0 || row >= rows
+				|| col + numCols > cols || row + numRows > rows)
+		{
+			throw new IndexOutOfBoundsException();
+		}
+		validateTileIndex(tileIndex);
 		for (int c=0; c<numCols; c++)
 		{
 			for (int r=0; r<numRows; r++)
@@ -90,7 +99,11 @@ public class TiledLayer extends Layer
 
 	public int getAnimatedTile(int animatedTileIndex)
 	{
-		return animatedTiles[0-animatedTileIndex];	
+		if(animatedTileIndex >= 0 || -animatedTileIndex > animatedTileCount)
+		{
+			throw new IndexOutOfBoundsException();
+		}
+		return animatedTiles[0-animatedTileIndex];
 	}
 
 	public int getCell(int col, int row) { return tiles[col][row]; }
@@ -105,7 +118,8 @@ public class TiledLayer extends Layer
 
 	public void paint(Graphics g)
 	{
-		g.drawImage(canvas, x, y, 0);
+		if(g == null) throw new NullPointerException();
+		if(visible) g.drawImage(canvas, x, y, 0);
 	}
 
 	private void drawTiles()
@@ -124,14 +138,26 @@ public class TiledLayer extends Layer
 
 	private void drawTile(int tile, int xdest, int ydest)
 	{
-		//tile--;
-		int r = tileHeight * (tile / tilesWidth);
-		int c = tileWidth * (tile % tilesWidth);
+		if(tile < 0) tile = getAnimatedTile(tile);
+		if(tile == 0)
+		{
+			gc.clearRect(xdest, ydest, tileWidth, tileHeight);
+			return;
+		}
+		validateStaticTileIndex(tile);
+		int sourceTile = tile - 1;
+		int r = tileHeight * (sourceTile / tilesWidth);
+		int c = tileWidth * (sourceTile % tilesWidth);
 		gc.drawRegion(image, c, r, tileWidth, tileHeight, 0, xdest, ydest, 0);
 	}
 
 	public void setAnimatedTile(int animatedTileIndex, int staticTileIndex)
 	{
+		if(animatedTileIndex >= 0 || -animatedTileIndex > animatedTileCount)
+		{
+			throw new IndexOutOfBoundsException();
+		}
+		validateStaticTileIndex(staticTileIndex);
 		int tile;
 		animatedTiles[0-animatedTileIndex] = staticTileIndex;
 		for (int c=0; c<cols; c++)
@@ -149,16 +175,53 @@ public class TiledLayer extends Layer
 
 	public void setCell(int col, int row, int tileIndex)
 	{
+		if(col < 0 || col >= cols || row < 0 || row >= rows)
+		{
+			throw new IndexOutOfBoundsException();
+		}
+		validateTileIndex(tileIndex);
 		tiles[col][row] = tileIndex;
 		drawTile(tileIndex, col*tileWidth, row*tileHeight);
 	}
 
 	public void setStaticTileSet(Image baseimage, int tilewidth, int tileheight)
 	{
+		if(baseimage == null) throw new NullPointerException();
+		if(tilewidth < 1 || tileheight < 1
+				|| baseimage.getWidth() % tilewidth != 0
+				|| baseimage.getHeight() % tileheight != 0)
+		{
+			throw new IllegalArgumentException();
+		}
 		image = baseimage;
 		tileWidth = tilewidth;
 		tileHeight = tileheight;
-		tilesWidth = (int)Math.floor(image.getWidth()/tilewidth);
-		tilesHeight = (int)Math.floor(image.getHeight()/tileheight);
+		tilesWidth = image.getWidth()/tilewidth;
+		tilesHeight = image.getHeight()/tileheight;
+		if(cols > 0 && rows > 0)
+		{
+			width = tileWidth * cols;
+			height = tileHeight * rows;
+		}
+	}
+
+	private void validateTileIndex(int tileIndex)
+	{
+		if(tileIndex > 0)
+		{
+			validateStaticTileIndex(tileIndex);
+		}
+		else if(tileIndex < 0 && -tileIndex > animatedTileCount)
+		{
+			throw new IndexOutOfBoundsException();
+		}
+	}
+
+	private void validateStaticTileIndex(int tileIndex)
+	{
+		if(tileIndex < 0 || tileIndex > tilesWidth * tilesHeight)
+		{
+			throw new IndexOutOfBoundsException();
+		}
 	}
 }

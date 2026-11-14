@@ -4,11 +4,16 @@ package org.recompile.freej2me.protocol;
 public final class BluetoothProtocol {
     private BluetoothProtocol() { }
 
-    /** Frame type written by the engine to the Android activity. */
-    public static final int HOST_REQUEST = 9;
-    /** Commands written by Android to the engine. */
-    public static final int ENGINE_RESPONSE = 15;
-    public static final int ENGINE_EVENT = 16;
+    /** Host-to-Android packet id reserved for managed-memory replies. */
+    public static final int MEMORY_EDITOR_REPLY = 9;
+    /** Host-to-Android packet id for Bluetooth requests; must stay distinct from memory replies. */
+    public static final int HOST_REQUEST = 10;
+    /** Android-to-engine command ids already used by the runtime. */
+    public static final int SET_SPEED = 15;
+    public static final int MEMORY_EDITOR_COMMAND = 16;
+    /** Bluetooth packets use ids above the runtime command range. */
+    public static final int ENGINE_RESPONSE = 17;
+    public static final int ENGINE_EVENT = 18;
 
     public static final int ACCESS = 1;
     public static final int START_INQUIRY = 2;

@@ -244,7 +244,16 @@ public void keyPressed(int keycode)
 
 		int volumeDelta = midplayVolumeDelta(current, keycode);
 		MidplayVolumeKeys volume = volumeDelta == 0 ? null : MidplayVolumeKeys.capture(current);
-		current.keyPressed(keycode);
+		try
+		{
+			current.keyPressed(keycode);
+		}
+		catch (RuntimeException error)
+		{
+			System.err.println("[midlet-input] callback failed event=key-down display="
+					+ current.getClass().getName() + " type=" + error.getClass().getName());
+			error.printStackTrace(System.err);
+		}
 		if (volume != null && Mobile.getDisplay().getCurrent() == current) volume.finish(volumeDelta > 0);
 	}
 

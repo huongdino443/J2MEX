@@ -23,42 +23,41 @@ import org.recompile.mobile.Mobile;
 public class ActionTable
 {
 
-	protected int numFrames;
-	protected int numActions;
-	private byte[] rawdata;
+	private Micro3DActionTable parsed;
 
-	public ActionTable(byte[] b) 
+	public ActionTable(byte[] b)
 	{
-		/*
-		System.out.println("Action Table");
-		for(int i=0; i<b.length; i++)
-		{
-			System.out.printf("%02X ", b[i]);
-		}
-		*/
-		rawdata = b;
-		numFrames = 1;
-		numActions = 1;
+		if(b == null) throw new NullPointerException("action table");
+		try { parsed = Micro3DActionTable.parse(b); }
+		catch(IOException e) { throw new IllegalArgumentException("Invalid Mascot Capsule action table", e); }
 	}
 
 	public ActionTable(String name) throws IOException
 	{
-		System.out.println("Action Table "+name);
-		rawdata = Mobile.getPlatform().loader.getMIDletResourceAsByteArray(name);
-
-		numFrames = 1;
-		numActions = 1;
+		byte[] bytes = Mobile.getPlatform().loader.getMIDletResourceAsByteArray(name);
+		if(bytes == null) throw new IOException("Action table resource not found: " + name);
+		parsed = Micro3DActionTable.parse(bytes);
 	}
 
-
-	public final void dispose() {  }
+	public final void dispose() { parsed = null; }
 
 	public final int getNumAction() { return getNumActions(); }
 
-	public final int getNumActions() { return numActions; }
+	public final int getNumActions() { return checked().actions.length; }
 
 	public final int getNumFrame(int idx) { return getNumFrames(idx); }
 
-	public final int getNumFrames(int idx) { return numFrames; }
+	public final int getNumFrames(int idx)
+	{
+		Micro3DActionTable table = checked();
+		if(idx < 0 || idx >= table.actions.length) throw new IllegalArgumentException("action index");
+		return table.actions[idx].keyframes << 16;
+	}
+
+	final Micro3DActionTable checked()
+	{
+		if(parsed == null) throw new IllegalStateException("ActionTable disposed");
+		return parsed;
+	}
 
 }

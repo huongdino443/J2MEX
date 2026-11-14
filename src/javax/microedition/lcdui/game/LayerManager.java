@@ -53,28 +53,68 @@ public class LayerManager
 		gc = canvas.platformImage.getGraphics();
 	}
 
-	public void append(Layer l) { layers.add(l); }
+	public void append(Layer l)
+	{
+		if (l==null) throw new NullPointerException();
+		removeLayerIdentity(l);
+		layers.add(l);
+	}
 
 	public Layer getLayerAt(int index) { return layers.get(index); }
 
 	public int getSize() { return layers.size(); }
 
-	public void insert(Layer l, int index) { layers.add(index, l); }
+	public void insert(Layer l, int index)
+	{
+		if (l==null) throw new NullPointerException();
+		int size=layers.size();
+		boolean alreadyPresent=containsLayerIdentity(l);
+		if (index<0||index>size||(alreadyPresent&&index>=size))
+			throw new IndexOutOfBoundsException();
+		removeLayerIdentity(l);
+		layers.add(index,l);
+	}
+
+	private boolean containsLayerIdentity(Layer target)
+	{
+		for (Layer layer:layers) if (layer==target) return true;
+		return false;
+	}
+
+	private void removeLayerIdentity(Layer target)
+	{
+		for (int i=layers.size()-1;i>=0;i--)
+			if (layers.get(i)==target) layers.remove(i);
+	}
 
 	public void paint(Graphics g, int xdest, int ydest)
 	{
-		for(int i=0; i<layers.size(); i++)
-		{
-			drawLayer(g, xdest, ydest, layers.get(i));
-		}
-	}
+		if(g == null) throw new NullPointerException();
 
-	private void drawLayer(Graphics g, int dx, int dy, Layer l)
-	{
-		if(l.isVisible())
+		int originalClipX = g.getClipX();
+		int originalClipY = g.getClipY();
+		int originalClipWidth = g.getClipWidth();
+		int originalClipHeight = g.getClipHeight();
+		int originalTranslateX = g.getTranslateX();
+		int originalTranslateY = g.getTranslateY();
+
+		g.translate(xdest - x, ydest - y);
+		try
 		{
-			l.render();
-			g.drawRegion(l.getLayerImage(), 0, 0, l.getLayerImage().getWidth(), l.getLayerImage().getHeight(), 0, dx+x+l.getX(), dy+y+l.getY(), Graphics.TOP|Graphics.LEFT);
+			g.clipRect(x, y, width, height);
+
+			// LayerManager order is front-to-back: paint back-to-front.
+			for(int i=layers.size()-1; i>=0; i--)
+			{
+				Layer layer = layers.get(i);
+				if(layer.isVisible()) layer.paint(g);
+			}
+		}
+		finally
+		{
+			g.translate(originalTranslateX - g.getTranslateX(),
+					originalTranslateY - g.getTranslateY());
+			g.setClip(originalClipX, originalClipY, originalClipWidth, originalClipHeight);
 		}
 	}
 
@@ -82,6 +122,7 @@ public class LayerManager
 
 	public void setViewWindow(int wx, int wy, int wwidth, int wheight)
 	{
+		if(wwidth < 0 || wheight < 0) throw new IllegalArgumentException();
 		x = wx;
 		y = wy;
 		width = wwidth;

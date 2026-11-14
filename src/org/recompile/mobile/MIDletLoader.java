@@ -40,6 +40,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -111,12 +113,16 @@ if (cloneDisplayIsolation) MobilePlatform.resetDisplayOwners();
 if (cloneDisplayIsolation)
 cloneClassSpace = new CloneClassSpace(this, urls, properties, className);
 
-			properties.put("microedition.platform", "j2me");
+			String runtimePlatform = resolveMicroeditionPlatform(properties.get("Nokia-Platform"));
+			System.setProperty("microedition.platform", runtimePlatform);
+			properties.put("microedition.platform", runtimePlatform);
 			properties.put("microedition.profiles", "MIDP-2.0");
 			properties.put("microedition.configuration", "CLDC-1.0");
 			properties.put("microedition.locale", deviceLocale);
 			properties.put("microedition.encoding", textEncoding);
 			properties.put("supports.mixing", "true");
+			if (!"j2me".equals(runtimePlatform))
+				System.out.println("[platform-compat] Nokia MIDlet profile=" + runtimePlatform);
 		}
 		catch (Exception e)
 		{
@@ -124,6 +130,53 @@ cloneClassSpace = new CloneClassSpace(this, urls, properties, className);
 			return;
 		}
 
+	}
+
+	private static final String NOKIA_REFERENCE_PLATFORM = "Nokia6233/05.10";
+
+	private static String resolveMicroeditionPlatform(String nokiaPlatforms)
+	{
+		if (nokiaPlatforms == null) return "j2me";
+		String[] patterns = nokiaPlatforms.split("[,;\\s]+");
+		for (String pattern : patterns)
+		{
+			if (matchesPlatformPattern(pattern.trim(), NOKIA_REFERENCE_PLATFORM))
+				return NOKIA_REFERENCE_PLATFORM;
+		}
+		return "j2me";
+	}
+
+	private static boolean matchesPlatformPattern(String pattern, String platform)
+	{
+		int patternIndex = 0;
+		int platformIndex = 0;
+		int lastStar = -1;
+		int starMatch = -1;
+		while (platformIndex < platform.length())
+		{
+			if (patternIndex < pattern.length()
+					&& (pattern.charAt(patternIndex) == '?'
+					|| Character.toLowerCase(pattern.charAt(patternIndex))
+							== Character.toLowerCase(platform.charAt(platformIndex))))
+			{
+				patternIndex++;
+				platformIndex++;
+			}
+			else if (patternIndex < pattern.length() && pattern.charAt(patternIndex) == '*')
+			{
+				lastStar = patternIndex++;
+				starMatch = platformIndex;
+			}
+			else if (lastStar >= 0)
+			{
+				patternIndex = lastStar + 1;
+				platformIndex = ++starMatch;
+			}
+			else return false;
+		}
+		while (patternIndex < pattern.length() && pattern.charAt(patternIndex) == '*')
+			patternIndex++;
+		return patternIndex == pattern.length();
 	}
 
 	public String getMIDletClassName() { return className; }
@@ -311,8 +364,8 @@ private static String throwableTypes(Throwable error)
 					if(url==null)
 					{
 						return;
-					}	
-				}	
+					}
+				}
 			}
 		}
 
@@ -325,9 +378,9 @@ private static String throwableTypes(Throwable error)
 		{
 			InputStream is = url.openStream();
 			BufferedReader br = new BufferedReader(new InputStreamReader(is));
-			
+
 			ArrayList<String> lines = new ArrayList<String>();
-			while ((line = br.readLine()) != null) 
+			while ((line = br.readLine()) != null)
 			{
 				if(line.startsWith(" "))
 				{
@@ -343,8 +396,7 @@ private static String throwableTypes(Throwable error)
 				if(line.startsWith("MIDlet-1:"))
 				{
 					System.out.println(line);
-					line = line.substring(9);
-					parts = line.split(",");
+					parts = line.substring(9).split(",");
 					if(parts.length == 3)
 					{
 						name = parts[0].trim();
@@ -465,6 +517,113 @@ private byte[] adaptResource(String resource, byte[] original)
 return resourceCompatibility == null ? original : resourceCompatibility.adapt(resource, original);
 }
 
+public void logNinjaSchoolStartupDiagnostics()
+{
+	if (!Boolean.getBoolean("freej2me.startup.diagnostics")
+			|| !"NinjaSchoolOffline".equals(properties.get("MIDlet-Name"))) return;
+
+	try
+	{
+		String[] propertyNames = {"sun.java.command", "java.class.path", "java.vm.info", "java.vm.name"};
+		String[] debuggerMarkers = {"jdwp", "com.sun.jdi", "jdi.jar", "jdi/", "-agentlib",
+				"-xrunjdwp", "-javaagent", "com.sun.management.jmxremote",
+				"org.eclipse.jdt.internal.debug", "org.netbeans.modules.debugger", "intellij"};
+		StringBuilder matchedProperties = new StringBuilder();
+		for (String propertyName : propertyNames)
+		{
+			String value = System.getProperty(propertyName, "").toLowerCase(Locale.ROOT);
+			for (String marker : debuggerMarkers)
+			{
+				if (value.contains(marker))
+				{
+					if (matchedProperties.length() > 0) matchedProperties.append(',');
+					matchedProperties.append(propertyName).append(':').append(marker);
+					break;
+				}
+			}
+		}
+		if (System.getProperty("com.sun.management.jmxremote") != null)
+		{
+			if (matchedProperties.length() > 0) matchedProperties.append(',');
+			matchedProperties.append("com.sun.management.jmxremote");
+		}
+		System.out.println("[nso-diag] debuggerMarkers="
+				+ (matchedProperties.length() == 0 ? "none" : matchedProperties));
+
+		URL manifestUrl = findResource("META-INF/MANIFEST.MF");
+		Manifest originalManifest;
+		try (InputStream stream = manifestUrl == null ? null : manifestUrl.openStream())
+		{
+			originalManifest = stream == null ? null : new Manifest(stream);
+		}
+		Attributes originalAttributes = originalManifest == null
+				? null : originalManifest.getMainAttributes();
+		String[] sealKeys = {"MIDlet-1", "MIDlet-Name", "MIDlet-Vendor", "MIDlet-Description",
+				"MIDlet-Version", "Implementation-Author", "Offline-Watermark",
+				"Offline-Integrity-Notice"};
+		boolean manifestPropertiesMatch = originalAttributes != null;
+		for (String key : sealKeys)
+		{
+			String originalValue = originalAttributes == null ? null : originalAttributes.getValue(key);
+			String loadedValue = properties.get(key);
+			if (originalValue == null || !originalValue.equals(loadedValue))
+				manifestPropertiesMatch = false;
+		}
+		boolean expectedIdentity = "NinjaSchoolOffline".equals(properties.get("MIDlet-Name"))
+				&& "KhanhNguyen9872".equals(properties.get("MIDlet-Vendor"))
+				&& "KhanhNguyen9872".equals(properties.get("Implementation-Author"))
+				&& "NSO|KhanhNguyen9872|NinjaSchoolOffline|2026".equals(properties.get("Offline-Watermark"));
+		System.out.println("[nso-diag] manifestPropertiesMatch=" + manifestPropertiesMatch
+				+ " expectedIdentity=" + expectedIdentity
+				+ " noticeLength=" + (properties.get("Offline-Integrity-Notice") == null
+						? -1 : properties.get("Offline-Integrity-Notice").length()));
+
+		int length = 0, hash = 0x811c9dc5, secondary = 0x13579bdf;
+		boolean resourceReadable = false;
+		try (InputStream stream = getMIDletResourceAsStream("/icon.png"))
+		{
+			if (stream != null)
+			{
+				resourceReadable = true;
+				byte[] buffer = new byte[512];
+				int count;
+				while ((count = stream.read(buffer)) != -1)
+				{
+					for (int i = 0; i < count; i++)
+					{
+						int value = buffer[i] & 255;
+						hash = (hash ^ value) * 16777619;
+						secondary = secondary * 33 ^ value;
+						length++;
+					}
+				}
+			}
+		}
+		System.out.println("[nso-diag] iconReadable=" + resourceReadable
+				+ " iconFingerprintMatch=" + (length == 3308
+						&& hash == 0xdfc1323f && secondary == 0x2859c4f5)
+				+ " iconBytes=" + length);
+		for (String resource : new String[] {"nso/0", "nso/1", "nso/2"})
+		{
+			int resourceLength = 0;
+			try (InputStream stream = getMIDletResourceAsStream("/" + resource))
+			{
+				if (stream != null)
+				{
+					byte[] buffer = new byte[1024];
+					int count;
+					while ((count = stream.read(buffer)) != -1) resourceLength += count;
+				}
+			}
+			System.out.println("[nso-diag] " + resource + "Bytes=" + resourceLength);
+		}
+	}
+	catch (Throwable error)
+	{
+		System.out.println("[nso-diag] probeError=" + error.getClass().getName());
+	}
+}
+
 private static byte[] readResource(URL url) throws IOException
 {
 try (InputStream stream = url.openStream())
@@ -510,6 +669,7 @@ return output.toByteArray();
 				original = output.toByteArray();
 			}
 			original = ClassFileCompatibility.adaptMissingStackMapTable(original, name);
+			original = adaptPackageQualifiedFactoryConstruction(original, name);
 			code = adaptDynamicallyLoadedClass(original, name);
 			return ClassFileCompatibility.defineWithLegacy45CodeAttributeFallback(
 					name, code, classBytes -> defineClass(name, classBytes, 0, classBytes.length));
@@ -521,6 +681,30 @@ return output.toByteArray();
 		catch (Exception e)
 		{
 			throw new ClassNotFoundException("Unable to adapt MIDlet class " + name, e);
+		}
+	}
+
+	byte[] adaptPackageQualifiedFactoryConstruction(byte[] bytecode, String className)
+	{
+		if (className == null || !className.endsWith(".dl")) return bytecode;
+		String internalName = className.replace('.', '/');
+		int separator = internalName.lastIndexOf('/');
+		if (separator <= 0) return bytecode;
+		String siblingResource = internalName.substring(0, separator + 1) + "Z.class";
+		URL siblingUrl = findResource(siblingResource);
+		if (siblingUrl == null) return bytecode;
+		try (InputStream stream = siblingUrl.openStream())
+		{
+			ByteArrayOutputStream output = new ByteArrayOutputStream();
+			byte[] buffer = new byte[4096];
+			int length;
+			while ((length = stream.read(buffer)) != -1) output.write(buffer, 0, length);
+			return ClassFileCompatibility.adaptPackageQualifiedFactoryConstruction(
+					bytecode, className, output.toByteArray());
+		}
+		catch (Exception unavailableSibling)
+		{
+			return bytecode;
 		}
 	}
 
@@ -644,8 +828,9 @@ ByteArrayOutputStream output = new ByteArrayOutputStream();
 byte[] buffer = new byte[4096];
 int length;
 while ((length = stream.read(buffer)) != -1) output.write(buffer, 0, length);
-byte[] original = ClassFileCompatibility.adaptMissingStackMapTable(output.toByteArray(), name);
-code = adaptDynamicallyLoadedClass(original, name);
+				byte[] original = ClassFileCompatibility.adaptMissingStackMapTable(output.toByteArray(), name);
+				original = adaptPackageQualifiedFactoryConstruction(original, name);
+				code = adaptDynamicallyLoadedClass(original, name);
 			}
 			return ClassFileCompatibility.defineWithLegacy45CodeAttributeFallback(
 					name, code, classBytes -> defineClass(name, classBytes, 0, classBytes.length));
@@ -745,7 +930,7 @@ public static Class<?> resolveCloneClass(String name, Object caller)
 	}
 
 
-/* ************************************************************** 
+/* **************************************************************
  * Instrumentation
  * ************************************************************** */
 

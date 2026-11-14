@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.awt.image.BufferedImage;
 
 import org.recompile.mobile.Mobile;
 
@@ -27,6 +28,7 @@ public class Texture
 {
 	private byte[] texture;
 	private boolean isForModel;
+private BufferedImage decodedImage;
 
 	public Texture(byte[] Texture, boolean IsForModel)
 	{
@@ -55,4 +57,12 @@ public class Texture
 	}
 
 	public final void dispose() {  }
+
+final boolean isForModel() { return isForModel; }
+
+final synchronized BufferedImage getImage()
+{
+if(decodedImage == null) decodedImage = Micro3DTextureData.decode(texture);
+return decodedImage;
+}
 }

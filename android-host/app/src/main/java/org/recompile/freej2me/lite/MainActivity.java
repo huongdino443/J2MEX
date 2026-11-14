@@ -109,6 +109,10 @@ import java.util.concurrent.Executors;
     private TextView homeTitle;
     private View sortButton;
     private View latestLogExportRow;
+    private TextView updateDescription;
+    private TextView updateAction;
+    private AppUpdateManager.Release availableUpdate;
+    private boolean checkingForUpdate;
     private View addNavigationItem;
     private View navigationGlow;
     private ImageView navigationBackdrop;
@@ -876,11 +880,7 @@ import java.util.concurrent.Executors;
 
         LinearLayout infoCard = moreCard();
         addMoreSection(infoCard, vietnamese ? "Thông tin" : "About");
-        addMoreRow(infoCard,
-                vietnamese ? "Cập nhật" : "Updates",
-                vietnamese ? "Kiểm tra phiên bản mới và hướng dẫn tải khi có bản phát hành."
-                        : "Check for a newer version and download details when a release is available.",
-                vietnamese ? "Kiểm tra" : "Check", view -> showUpdateCheck());
+        addUpdateRow(infoCard);
         addMoreRow(infoCard,
                 vietnamese ? "Giới thiệu" : "About",
                 vietnamese ? "Tổng quan ứng dụng và giấy phép thành phần."
@@ -1027,6 +1027,43 @@ import java.util.concurrent.Executors;
         parent.addView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return row;
+    }
+
+    private void addUpdateRow(LinearLayout parent) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(this, 2), dp(this, 10), dp(this, 2), dp(this, 10));
+        LinearLayout textColumn = new LinearLayout(this);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        textColumn.addView(moreBodyText("Cập nhật", 15));
+        updateDescription = moreBodyText("Chưa kiểm tra phiên bản mới", 12);
+        updateDescription.setTextColor(COLOR_MUTED);
+        updateDescription.setPadding(0, dp(this, 3), dp(this, 4), 0);
+        textColumn.addView(updateDescription);
+        row.addView(textColumn, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        updateAction = moreBodyText(availableUpdate == null ? "Kiểm tra" : "Tải về", 13);
+        updateAction.setTextColor(COLOR_ACCENT);
+        updateAction.setGravity(Gravity.CENTER);
+        row.addView(updateAction, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setBackground(rounded(Color.TRANSPARENT, 10, 0));
+        row.setOnClickListener(view -> showUpdateCheck());
+        parent.addView(row, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        refreshUpdateRow();
+    }
+
+    private void refreshUpdateRow() {
+        if (updateDescription == null || updateAction == null) return;
+        String state = checkingForUpdate ? "Đang kiểm tra cập nhật…"
+                : availableUpdate != null ? "Đã có bản cập nhật mới"
+                : "Chưa kiểm tra phiên bản mới";
+        updateDescription.setText(AppLocalization.text(this, state));
+        updateAction.setText(AppLocalization.text(this,
+                availableUpdate == null ? "Kiểm tra" : "Tải về"));
     }
 
     private TextView moreBodyText(String value, int size) {
@@ -2112,11 +2149,35 @@ import java.util.concurrent.Executors;
     }
 
     private void showUpdateCheck() {
-        boolean english = AppLocalization.isEnglish(this);
-        showInfoPopup(english ? "Updates" : "Cập nhật",
-                AppLocalization.text(this,
-                        "Chưa có nguồn cập nhật được cấu hình. Thông tin phát hành sẽ xuất hiện sau khi dự án có kho công khai."),
-                false);
+        if (availableUpdate != null) {
+            AppUpdateUi.download(this, availableUpdate);
+            return;
+        }
+        if (checkingForUpdate) return;
+        checkingForUpdate = true;
+        refreshUpdateRow();
+        AppUpdateUi.check(this, (release, error) -> {
+            checkingForUpdate = false;
+            availableUpdate = release;
+            if (error != null) {
+                if (updateDescription != null) {
+                    updateDescription.setText(AppLocalization.text(this,
+                            "Không kiểm tra được cập nhật"));
+                }
+            } else if (release == null && updateDescription != null) {
+                updateDescription.setText(AppLocalization.text(this,
+                        "Hiện chưa có bản cập nhật"));
+            } else if (updateDescription != null) {
+                updateDescription.setText(AppLocalization.text(this,
+                        "Đã có bản cập nhật mới"));
+            }
+            refreshUpdateAction();
+        });
+    }
+
+    private void refreshUpdateAction() {
+        if (updateAction != null) updateAction.setText(AppLocalization.text(this,
+                availableUpdate == null ? "Kiểm tra" : "Tải về"));
     }
 
     private void showIntroduction() {
@@ -2202,7 +2263,7 @@ import java.util.concurrent.Executors;
     }
 
     private void ensureStorageAccess(boolean openManagerAfterGrant, boolean folderPicker) {
-        if (Build.VERSION.SDK_INT >= 30) {
+        if (StorageAccessPolicy.usesAllFilesAccess(Build.VERSION.SDK_INT)) {
             if (Environment.isExternalStorageManager()) {
                 if (!interfaceInitialized) initializeApplicationInterface();
                 if (openManagerAfterGrant) launchGameFileManager(folderPicker);
@@ -2240,7 +2301,7 @@ import java.util.concurrent.Executors;
             folderPickerAfterStorageGrant = openManagerAfterGrant && folderPicker;
             ArrayList<String> permissions = new ArrayList<>();
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-            if (Build.VERSION.SDK_INT <= 28) {
+            if (StorageAccessPolicy.requiresLegacyWritePermission(Build.VERSION.SDK_INT)) {
                 permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
             }
             requestPermissions(permissions.toArray(new String[0]),
@@ -2251,14 +2312,21 @@ import java.util.concurrent.Executors;
     }
 
     private boolean hasLegacyStoragePermission() {
-        return Build.VERSION.SDK_INT < 23
-                || checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+        int sdk = Build.VERSION.SDK_INT;
+        if (!StorageAccessPolicy.usesLegacyRuntimePermissions(sdk)) return sdk < 23;
+        boolean canRead = checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
                 == PackageManager.PERMISSION_GRANTED;
+        boolean canWrite = !StorageAccessPolicy.requiresLegacyWritePermission(sdk)
+                || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+        return StorageAccessPolicy.hasLegacyAccess(sdk, canRead, canWrite);
     }
 
     private boolean hasStorageAccess() {
-        return Build.VERSION.SDK_INT >= 30
-                ? Environment.isExternalStorageManager() : hasLegacyStoragePermission();
+        int sdk = Build.VERSION.SDK_INT;
+        if (StorageAccessPolicy.usesAllFilesAccess(sdk))
+            return Environment.isExternalStorageManager();
+        return hasLegacyStoragePermission();
     }
 
     private void launchGameFileManager(boolean folderPicker) {
@@ -2611,6 +2679,7 @@ import java.util.concurrent.Executors;
 
     @Override protected void onResume() {
         super.onResume();
+        AppUpdateManager.resumePendingInstall(this);
         completeStorageSettingsReturn();
         if (contentScroll != null) {
             if (currentScreen == TAB_MORE) renderMore(contentScroll.getScrollY());
@@ -2717,6 +2786,10 @@ import java.util.concurrent.Executors;
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (AppUpdateManager.isInstallPermissionRequest(request)) {
+            AppUpdateManager.resumePendingInstall(this);
+            return;
+        }
         if (request == REQUEST_GAME_SETTINGS) {
             if (result == RESULT_OK && data != null && !busy) {
                 String jarPath = data.getStringExtra(GameSettingsActivity.EXTRA_JAR);

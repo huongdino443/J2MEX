@@ -19,7 +19,7 @@ package com.mascotcapsule.micro3d.v3;
 public class AffineTrans
 {
 	public int m00; // m{row}{col}
-	public int m01; 
+	public int m01;
 	public int m02; // m00  m01  m02  m03
 	public int m03; // m10  m11  m12  m13
 	public int m10; // m20  m21  m22  m23
@@ -33,9 +33,9 @@ public class AffineTrans
 
 	public AffineTrans()
 	{
-		m00 = m01 = m02 = m03 = 0; 
-		m10 = m11 = m12 = m13 = 0; 
-		m20 = m21 = m22 = m23 = 0; 
+		m00 = m01 = m02 = m03 = 0;
+		m10 = m11 = m12 = m13 = 0;
+		m20 = m21 = m22 = m23 = 0;
 	}
 
 	public AffineTrans(int m00, int m01, int m02, int m03, int m10, int m11, int m12, int m13, int m20, int m21, int m22, int m23)
@@ -237,14 +237,11 @@ public class AffineTrans
 
 	public final Vector3D transform(Vector3D v)
 	{
-		double x = v.x/4096D;
-		double y = v.y/4096D;
-		double z = v.z/4096D;
+		if(v == null) throw new NullPointerException();
+		int X = (int)(((long)v.x*m00 + (long)v.y*m01 + (long)v.z*m02 + 2048) >> 12) + m03;
+		int Y = (int)(((long)v.x*m10 + (long)v.y*m11 + (long)v.z*m12 + 2048) >> 12) + m13;
+		int Z = (int)(((long)v.x*m20 + (long)v.y*m21 + (long)v.z*m22 + 2048) >> 12) + m23;
 
-		int X = (int)( x*m00 + y*m10 + z*m20 );
-		int Y = (int)( x*m01 + y*m11 + z*m21 );
-		int Z = (int)( x*m02 + y*m12 + z*m22 ); 
-		
 		return new Vector3D(X,Y,Z);
 	}
 
@@ -256,73 +253,66 @@ public class AffineTrans
 
 	public final void mul(AffineTrans a1, AffineTrans a2)
 	{
-		double b00 = a2.m00/4096D; // Fixed point arithmetic where 1.0 = 4096
-		double b01 = a2.m00/4096D; // The multiplier/divisor must not be
-		double b02 = a2.m00/4096D; // adjusted.  e.g. a * b will give the
-		double b03 = a2.m00/4096D; // wrong result and should be a * (b/4096)
-		double b10 = a2.m00/4096D;
-		double b11 = a2.m00/4096D;
-		double b12 = a2.m00/4096D;
-		double b13 = a2.m00/4096D;
-		double b20 = a2.m00/4096D;
-		double b21 = a2.m00/4096D;
-		double b22 = a2.m00/4096D;
-		double b23 = a2.m00/4096D;
+		long t00 = (long)a1.m00*a2.m00 + (long)a1.m01*a2.m10 + (long)a1.m02*a2.m20;
+		long t01 = (long)a1.m00*a2.m01 + (long)a1.m01*a2.m11 + (long)a1.m02*a2.m21;
+		long t02 = (long)a1.m00*a2.m02 + (long)a1.m01*a2.m12 + (long)a1.m02*a2.m22;
+		long t03 = (long)a1.m00*a2.m03 + (long)a1.m01*a2.m13 + (long)a1.m02*a2.m23
+				+ (long)a1.m03*4096;
 
-		int t00  = (int)(a1.m00*a2.m00  + a1.m01*a2.m10  + a1.m02*a2.m20);
-		int t01  = (int)(a1.m00*a2.m01  + a1.m01*a2.m11  + a1.m02*a2.m21);
-		int t02  = (int)(a1.m00*a2.m02  + a1.m01*a2.m12  + a1.m02*a2.m22);
-		int t03  = (int)(a1.m00*a2.m03  + a1.m01*a2.m13  + a1.m02*a2.m23);
+		long t10 = (long)a1.m10*a2.m00 + (long)a1.m11*a2.m10 + (long)a1.m12*a2.m20;
+		long t11 = (long)a1.m10*a2.m01 + (long)a1.m11*a2.m11 + (long)a1.m12*a2.m21;
+		long t12 = (long)a1.m10*a2.m02 + (long)a1.m11*a2.m12 + (long)a1.m12*a2.m22;
+		long t13 = (long)a1.m10*a2.m03 + (long)a1.m11*a2.m13 + (long)a1.m12*a2.m23
+				+ (long)a1.m13*4096;
 
-		int t10  = (int)(a1.m10*a2.m00  + a1.m11*a2.m10  + a1.m12*a2.m20);
-		int t11  = (int)(a1.m10*a2.m01  + a1.m11*a2.m11  + a1.m12*a2.m21);
-		int t12  = (int)(a1.m10*a2.m02  + a1.m11*a2.m12  + a1.m12*a2.m22);
-		int t13  = (int)(a1.m10*a2.m03  + a1.m11*a2.m13  + a1.m12*a2.m23);
+		long t20 = (long)a1.m20*a2.m00 + (long)a1.m21*a2.m10 + (long)a1.m22*a2.m20;
+		long t21 = (long)a1.m20*a2.m01 + (long)a1.m21*a2.m11 + (long)a1.m22*a2.m21;
+		long t22 = (long)a1.m20*a2.m02 + (long)a1.m21*a2.m12 + (long)a1.m22*a2.m22;
+		long t23 = (long)a1.m20*a2.m03 + (long)a1.m21*a2.m13 + (long)a1.m22*a2.m23
+				+ (long)a1.m23*4096;
 
-		int t20  = (int)(a1.m20*a2.m00  + a1.m21*a2.m10  + a1.m22*a2.m20);
-		int t21  = (int)(a1.m20*a2.m01  + a1.m21*a2.m11  + a1.m22*a2.m21);
-		int t22  = (int)(a1.m20*a2.m02  + a1.m21*a2.m12  + a1.m22*a2.m22);
-		int t23  = (int)(a1.m20*a2.m03  + a1.m21*a2.m13  + a1.m22*a2.m23);
-		
-		m00 = t00;  m01 = t01;  m02 = t02;  m03 = t03;
-		m10 = t10;  m11 = t11;  m12 = t12;  m13 = t13;
-		m20 = t20;  m21 = t21;  m22 = t22;  m23 = t23;
+		m00 = (int)((t00 + 2048) >> 12); m01 = (int)((t01 + 2048) >> 12);
+		m02 = (int)((t02 + 2048) >> 12); m03 = (int)((t03 + 2048) >> 12);
+		m10 = (int)((t10 + 2048) >> 12); m11 = (int)((t11 + 2048) >> 12);
+		m12 = (int)((t12 + 2048) >> 12); m13 = (int)((t13 + 2048) >> 12);
+		m20 = (int)((t20 + 2048) >> 12); m21 = (int)((t21 + 2048) >> 12);
+		m22 = (int)((t22 + 2048) >> 12); m23 = (int)((t23 + 2048) >> 12);
 	}
 
 	public final void setIdentity()
 	{
-		m00 = 4096;  m01 = 0;     m02 = 0;     m03 = 0; 
-		m10 = 0;     m11 = 4096;  m12 = 0;     m13 = 0; 
-		m20 = 0;     m21 = 0;     m22 = 4096;  m23 = 0; 
+		m00 = 4096;  m01 = 0;     m02 = 0;     m03 = 0;
+		m10 = 0;     m11 = 4096;  m12 = 0;     m13 = 0;
+		m20 = 0;     m21 = 0;     m22 = 4096;  m23 = 0;
 	}
-	
+
 	public final void setRotationX(int x) { rotationX(x); }
-	
+
 	public final void setRotationY(int y) { rotationY(y); }
-	
+
 	public final void setRotationZ(int z) { rotationZ(z); }
 
 	public final void rotationV(Vector3D v, int r) { setRotation(v, r);  }
 
 	public final void rotationX(int x)
 	{
-		m00 =  1; m01 =  0;              m02 =  0;             m03 =  0;
-		m10 =  0; m11 =  Util3D.cos(x);  m12 =  Util3D.sin(x); m13 =  0;
-		m20 =  0; m21 = -Util3D.sin(x);  m22 =  Util3D.cos(x); m23 =  0;
+		m00 =  4096; m01 =  0;              m02 =  0;             m03 =  0;
+		m10 =  0;    m11 =  Util3D.cos(x);  m12 = -Util3D.sin(x); m13 =  0;
+		m20 =  0;    m21 =  Util3D.sin(x);  m22 =  Util3D.cos(x); m23 =  0;
 	}
 
 	public final void rotationY(int y)
 	{
-		m00 =  Util3D.cos(y); m01 =  0; m02 = -Util3D.sin(y); m03 =  0;
-		m10 =  0;             m11 =  1; m12 =  0;             m13 =  0;
-		m20 =  Util3D.sin(y); m21 =  0; m22 =  Util3D.cos(y); m23 =  0;
+		m00 =  Util3D.cos(y); m01 =  0;    m02 =  Util3D.sin(y); m03 =  0;
+		m10 =  0;             m11 =  4096; m12 =  0;             m13 =  0;
+		m20 = -Util3D.sin(y); m21 =  0;    m22 =  Util3D.cos(y); m23 =  0;
 	}
 
 	public final void rotationZ(int z)
 	{
-		m00 =  Util3D.cos(z); m01 =  Util3D.sin(z); m02 =  0; m03 =  0;
-		m10 = -Util3D.sin(z); m11 =  Util3D.cos(z); m12 =  0; m13 =  0;
-		m20 =  0;             m21 =  0;             m22 =  1; m23 =  0;
+		m00 =  Util3D.cos(z); m01 = -Util3D.sin(z); m02 =  0; m03 =  0;
+		m10 =  Util3D.sin(z); m11 =  Util3D.cos(z); m12 =  0; m13 =  0;
+		m20 =  0;             m21 =  0;             m22 =  4096; m23 =  0;
 	}
 
 	public final void setRotation(Vector3D v, int r)
@@ -344,7 +334,7 @@ public class AffineTrans
 			Uy = Uy / vLen;
 			Uz = Uz / vLen;
 		} else { Ux = Uy = Uz = 0; }
-		
+
 		m00 = (int)(( cost + Ux*Ux*(1-cost)    )*4096);
 		m01 = (int)(( Ux*Uy*(1-cost) - Uz*sint )*4096);
 		m02 = (int)(( Ux*Uz*(1-cost) + Uy*sint )*4096);
@@ -365,49 +355,30 @@ public class AffineTrans
 
 	public final void lookAt(Vector3D pos, Vector3D look, Vector3D up)
 	{
-		double Ux = up.x/4096D;
-		double Uy = up.y/4096D;
-		double Uz = up.z/4096D;
+		if(pos == null || look == null || up == null) throw new NullPointerException();
+		double lx = look.x, ly = look.y, lz = look.z;
+		double ux = up.x, uy = up.y, uz = up.z;
+		double[] right = normalize(
+				ly * uz - lz * uy,
+				lz * ux - lx * uz,
+				lx * uy - ly * ux);
+		double[] vertical = normalize(
+				ly * right[2] - lz * right[1],
+				lz * right[0] - lx * right[2],
+				lx * right[1] - ly * right[0]);
+		double[] forward = normalize(lx, ly, lz);
+		m00 = (int)(right[0] * 4096); m01 = (int)(right[1] * 4096); m02 = (int)(right[2] * 4096);
+		m10 = (int)(vertical[0] * 4096); m11 = (int)(vertical[1] * 4096); m12 = (int)(vertical[2] * 4096);
+		m20 = (int)(forward[0] * 4096); m21 = (int)(forward[1] * 4096); m22 = (int)(forward[2] * 4096);
+		m03 = (int)((-(long)pos.x * m00 -(long)pos.y * m01 -(long)pos.z * m02 + 2048) >> 12);
+		m13 = (int)((-(long)pos.x * m10 -(long)pos.y * m11 -(long)pos.z * m12 + 2048) >> 12);
+		m23 = (int)((-(long)pos.x * m20 -(long)pos.y * m21 -(long)pos.z * m22 + 2048) >> 12);
+	}
 
-		// z-axis 
-		//	- Find difference in position 
-		//    between camera and thing we want to look at
-		double Zx = (pos.x - look.x)/4096D;
-		double Zy = (pos.y - look.y)/4096D;
-		double Zz = (pos.z - look.z)/4096D;
-		//	- Normalize
-		double vLen = Math.sqrt( (Zx*Zx) + (Zy*Zy) + (Zz*Zz) );
-		if(vLen!=0)
-		{
-			Zx = Zx / vLen;
-			Zy = Zy / vLen;
-			Zz = Zz / vLen;
-		} else { Zx = Zy = Zz = 0; }
-
-		// x-axis
-		// - Find cross product of z-axis and up vector
-		double Xx = Zy * Uz - Zz * Uy;  // C.x = A.y * B.z - A.z * B.y
-		double Xy = Zz * Ux - Zx * Uz;  // C.y = A.z * B.x - A.x * B.z
-		double Xz = Zx * Uy - Zy * Ux;  // C.z = A.x * B.y - A.y * B.x
-		//	- Normalize
-		vLen = Math.sqrt( (Xx*Xx) + (Xy*Xy) + (Xz*Xz) );
-		if(vLen!=0)
-		{
-			Xx = Xx / vLen;
-			Xy = Xy / vLen;
-			Xz = Xz / vLen;
-		} else { Xx = Xy = Xz = 0; }
-
-		// y-axis
-		// - Find cross product of z-axis and x-axis
-		double Yx = Zy * Xz - Zz * Xy;  // C.x = A.y * B.z - A.z * B.y
-		double Yy = Zz * Xx - Zx * Xz;  // C.y = A.z * B.x - A.x * B.z
-		double Yz = Zx * Xy - Zy * Xx;  // C.z = A.x * B.y - A.y * B.x
-		//	No need to normalize
-
-		// Create Matrix
-		m00 = (int)(Xx*4096); m01 = (int)(Xy*4096); m02 = (int)(Xz*4096); m03 = 0;
-		m10 = (int)(Yx*4096); m11 = (int)(Yy*4096); m12 = (int)(Yz*4096); m13 = 0;
-		m20 = (int)(Zx*4096); m21 = (int)(Zy*4096); m22 = (int)(Zz*4096); m23 = 0;
+	private static double[] normalize(double x, double y, double z)
+	{
+		double length = Math.sqrt(x * x + y * y + z * z);
+		if(length == 0) return new double[]{0, 0, 0};
+		return new double[]{x / length, y / length, z / length};
 	}
 }

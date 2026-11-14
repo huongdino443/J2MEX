@@ -23,6 +23,18 @@ public final class MidletExitSmoke {
         }
         checks++;
 
+        display.setCurrent(new Canvas() {
+            protected void paint(Graphics graphics) { }
+            public void keyPressed(int keyCode) {
+                throw new NullPointerException("test MIDlet input failure");
+            }
+        });
+        platform.keyPressed(5);
+        if (display.getCurrent() == null) {
+            throw new AssertionError("MIDlet input failure stopped the runtime display");
+        }
+        checks++;
+
         display.setCurrent(null);
         if (display.getCurrent() != null
                 || platform.getLCD().getRGB(0, 0) != 0xFF000000) {

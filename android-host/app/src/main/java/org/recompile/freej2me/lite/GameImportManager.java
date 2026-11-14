@@ -23,7 +23,8 @@ import org.recompile.freej2me.protocol.JarManifestReader;
 
 /** Imports MIDlet archives without launching them. */
 final class GameImportManager {
-    private static final long MAX_INPUT_BYTES = 128L * 1024 * 1024;
+    private static final int MAX_INPUT_MIB = 512;
+    private static final long MAX_INPUT_BYTES = MAX_INPUT_MIB * 1024L * 1024L;
 
     static final class Result {
         int imported;
@@ -391,7 +392,9 @@ final class GameImportManager {
             long total = 0;
             while ((count = source.read(buffer)) != -1) {
                 total += count;
-                if (total > limit) throw new IOException("Tệp vượt giới hạn 128 MiB.");
+                if (total > limit) {
+                    throw new IOException("Tệp vượt giới hạn " + MAX_INPUT_MIB + " MiB.");
+                }
                 target.write(buffer, 0, count);
             }
         }

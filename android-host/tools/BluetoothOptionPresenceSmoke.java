@@ -1,5 +1,15 @@
 public final class BluetoothOptionPresenceSmoke {
     public static void main(String[] args) throws Exception {
+        if (org.recompile.freej2me.protocol.BluetoothProtocol.HOST_REQUEST
+                == org.recompile.freej2me.protocol.BluetoothProtocol.MEMORY_EDITOR_REPLY) {
+            throw new AssertionError("Bluetooth requests must not share the memory-reply message id");
+        }
+        if (org.recompile.freej2me.protocol.BluetoothProtocol.ENGINE_RESPONSE <= 16
+                || org.recompile.freej2me.protocol.BluetoothProtocol.ENGINE_EVENT <= 16
+                || org.recompile.freej2me.protocol.BluetoothProtocol.ENGINE_RESPONSE
+                        == org.recompile.freej2me.protocol.BluetoothProtocol.ENGINE_EVENT) {
+            throw new AssertionError("Bluetooth response/event ids must not overlap runtime commands 1–16");
+        }
         Class<?> discoveryAgent = Class.forName("javax.bluetooth.DiscoveryAgent");
         Class<?> discoveryListener = Class.forName("javax.bluetooth.DiscoveryListener");
         if (discoveryAgent.isInterface()) {

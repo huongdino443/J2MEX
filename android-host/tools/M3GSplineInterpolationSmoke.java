@@ -101,6 +101,36 @@ public final class M3GSplineInterpolationSmoke {
         }
         check(splineSequences > 0, "NFS animation rigs contain no SPLINE keyframe sequence");
         check(sampledSegments > 0, "NFS SPLINE sequences contain no sampleable segments");
+        inspectNfsTrackCutoutTexture();
+    }
+
+    private static void inspectNfsTrackCutoutTexture() throws Exception {
+        Object3D[] roots = Loader.load("/texture_tracktex_city.m3g");
+        Set<Object3D> seen =
+                Collections.newSetFromMap(new IdentityHashMap<Object3D, Boolean>());
+        Deque<Object3D> pending = new ArrayDeque<Object3D>();
+        Collections.addAll(pending, roots);
+        while (!pending.isEmpty()) {
+            Object3D object = pending.removeFirst();
+            if (!seen.add(object)) continue;
+            if (object instanceof Image2D) {
+                Image2D image = (Image2D)object;
+                check(image.getFormat() == Image2D.RGBA,
+                        "NFS city track texture is not RGBA");
+                int transparent = 0, opaque = 0;
+                for (int pixel : image.pixels()) {
+                    int alpha = (pixel >>> 24) & 255;
+                    if (alpha == 0) transparent++;
+                    else if (alpha == 255) opaque++;
+                    else throw new AssertionError("NFS city track texture unexpectedly has partial alpha");
+                }
+                check(transparent > 0 && opaque > 0,
+                        "NFS city track texture lost its binary-alpha cutout");
+                return;
+            }
+            pending.addAll(M3GGraph.references(object));
+        }
+        throw new AssertionError("NFS city track texture contains no Image2D");
     }
 
     private static void assertFinite(float[] values, String resource) {

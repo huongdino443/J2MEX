@@ -20,10 +20,17 @@ public final class NetworkConnectorSmoke {
         InputStream input = socket.getInputStream();
         String request = readLine(input);
         boolean sawHeader = false;
+        boolean sawExpectedUserAgent = false;
         int contentLength = 0;
         String line;
         while (!(line = readLine(input)).isEmpty()) {
             if (line.equalsIgnoreCase("X-FreeJ2ME: local-test")) sawHeader = true;
+            if (requestNumber == 0
+                    && line.equalsIgnoreCase("User-Agent: Profile/MIDP-2.0 Configuration/CLDC-1.1"))
+                sawExpectedUserAgent = true;
+            if (requestNumber == 1
+                    && line.equalsIgnoreCase("User-Agent: custom-test/1.0"))
+                sawExpectedUserAgent = true;
             if (line.toLowerCase().startsWith("content-length:"))
                 contentLength = Integer.parseInt(line.substring(line.indexOf(':') + 1).trim());
         }
@@ -37,6 +44,7 @@ public final class NetworkConnectorSmoke {
         check(requestNumber == 0 ? "GET /health?test=1 HTTP/1.1".equals(request)
                 : "POST /submit HTTP/1.1".equals(request), "Wrong HTTP request line: " + request);
         check(sawHeader, "Request header did not reach server");
+        check(sawExpectedUserAgent, "MIDP default or explicit User-Agent did not reach server");
         if (requestNumber == 1)
             check("ping".equals(new String(requestBody, "UTF-8")), "POST body mismatch");
         byte[] body = (requestNumber == 0 ? "local-ok" : "post-ok").getBytes("UTF-8");
@@ -72,6 +80,7 @@ public final class NetworkConnectorSmoke {
             HttpConnection post = (HttpConnection)Connector.open(base + "/submit");
             post.setRequestMethod(HttpConnection.POST);
             post.setRequestProperty("X-FreeJ2ME", "local-test");
+            post.setRequestProperty("User-Agent", "custom-test/1.0");
             try (OutputStream output = post.openOutputStream()) { output.write("ping".getBytes("UTF-8")); }
             check(post.getResponseCode() == HttpConnection.HTTP_OK, "Unexpected POST response");
             check("post-ok".equals(new String(readAll(post.openInputStream()), "UTF-8")), "POST response body mismatch");
