@@ -11,9 +11,35 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
     public static void main(String[] args) throws Exception {
         byte[] gameClass = makeFactoryClass("p/dl", "p/G", "Z", "Z");
         byte[] sibling = makeChildClass("p/Z", "p/G", "(Lp/dl;Ljava/lang/String;II)V");
+        check(ClassFileCompatibility.mayContainPackageQualifiedFactoryConstruction(
+                        gameClass, "p.dl"),
+                "factory signature prefilter should recognize the class");
         byte[] adapted = ClassFileCompatibility.adaptPackageQualifiedFactoryConstruction(
                 gameClass, "p.dl", sibling);
         check(adapted != gameClass, "matching same-package subclass should repair the factory");
+
+        byte[] cloneFactory = makeFactoryClass("p/dn", "p/G", "Z", "Z", "factory");
+        byte[] cloneSibling = makeChildClass(
+                "p/Z", "p/G", "(Lp/dn;Ljava/lang/String;II)V");
+        byte[] cloneAdapted = ClassFileCompatibility.adaptPackageQualifiedFactoryConstruction(
+                cloneFactory, "p.dn", cloneSibling);
+        check(cloneAdapted != cloneFactory,
+                "renamed factory class and method should repair the package-local return");
+        Map<String, byte[]> cloneClasses = new HashMap<String, byte[]>();
+        cloneClasses.put("p.G", makeBaseClass("p/G"));
+        cloneClasses.put("p.Z", cloneSibling);
+        cloneClasses.put("p.dn", cloneAdapted);
+        ClassLoader cloneLoader = new ByteMapClassLoader(cloneClasses);
+        Class<?> cloneFactoryType = Class.forName("p.dn", true, cloneLoader);
+        cloneFactoryType.getDeclaredMethods();
+        Object cloneFactoryObject = cloneFactoryType.newInstance();
+        Object cloneValue = cloneFactoryType
+                .getMethod("make", String.class, int.class, int.class)
+                .invoke(cloneFactoryObject, "clone", Integer.valueOf(4), Integer.valueOf(9));
+        check("p.Z".equals(cloneValue.getClass().getName()),
+                "clone factory should return its package-local subclass");
+        check(cloneValue.getClass().getSuperclass() == Class.forName("p.G", false, cloneLoader),
+                "clone result hierarchy must match its descriptor");
 
         Map<String, byte[]> classes = new HashMap<String, byte[]>();
         classes.put("p.G", makeBaseClass("p/G"));
@@ -71,12 +97,13 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
                 ACC_PUBLIC, "<init>", constructorDescriptor, null, null);
         constructor.visitCode();
         constructor.visitVarInsn(ALOAD, 0);
-        if (constructorDescriptor.startsWith("(Lp/dl;")) {
+        boolean packageFactory = constructorDescriptor.startsWith("(Lp/");
+        if (packageFactory) {
             constructor.visitVarInsn(ALOAD, 2);
             constructor.visitVarInsn(ILOAD, 3);
         }
         constructor.visitMethodInsn(INVOKESPECIAL, parent, "<init>",
-                constructorDescriptor.startsWith("(Lp/dl;")
+                packageFactory
                         ? "(Ljava/lang/String;I)V" : "()V");
         constructor.visitInsn(RETURN);
         constructor.visitMaxs(3, 5);
@@ -87,6 +114,12 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
 
     private static byte[] makeFactoryClass(
             String name, String resultType, String newType, String constructorOwner) {
+        return makeFactoryClass(name, resultType, newType, constructorOwner, "a");
+    }
+
+    private static byte[] makeFactoryClass(
+            String name, String resultType, String newType,
+            String constructorOwner, String factoryMethodName) {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(52, ACC_PUBLIC | ACC_SUPER, name, null, "java/lang/Object", null);
         MethodVisitor constructor = writer.visitMethod(ACC_PUBLIC, "<init>", "()V", null, null);
@@ -97,7 +130,7 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
         constructor.visitMaxs(1, 1);
         constructor.visitEnd();
 
-        MethodVisitor factory = writer.visitMethod(ACC_PUBLIC, "a",
+        MethodVisitor factory = writer.visitMethod(ACC_PUBLIC, factoryMethodName,
                 "(Ljava/lang/String;II)L" + resultType + ";", null, null);
         factory.visitCode();
         factory.visitTypeInsn(NEW, newType);
@@ -107,7 +140,7 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
         factory.visitVarInsn(ILOAD, 2);
         factory.visitVarInsn(ILOAD, 3);
         factory.visitMethodInsn(INVOKESPECIAL, constructorOwner, "<init>",
-                "(Lp/dl;Ljava/lang/String;II)V");
+                "(L" + name + ";Ljava/lang/String;II)V");
         factory.visitInsn(ARETURN);
         factory.visitMaxs(6, 4);
         factory.visitEnd();
@@ -119,7 +152,7 @@ public final class PackageQualifiedFactoryCompatibilitySmoke implements Opcodes 
         alias.visitVarInsn(ALOAD, 1);
         alias.visitVarInsn(ILOAD, 2);
         alias.visitVarInsn(ILOAD, 3);
-        alias.visitMethodInsn(INVOKEVIRTUAL, name, "a",
+        alias.visitMethodInsn(INVOKEVIRTUAL, name, factoryMethodName,
                 "(Ljava/lang/String;II)L" + resultType + ";");
         alias.visitInsn(ARETURN);
         alias.visitMaxs(4, 4);

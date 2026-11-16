@@ -11,6 +11,7 @@ package org.recompile.mobile;
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.locks.LockSupport;
 import org.recompile.freej2me.protocol.BluetoothProtocol;
 
 /** Session-scoped virtual timing used only by transformed MIDlet bytecode. */
@@ -95,7 +96,13 @@ public final class RuntimeTiming {
     }
 
     public static void sleep(long millis) throws InterruptedException {
-        Thread.sleep(scaleDelayMillis(millis));
+        if (millis <= 0L) {
+            Thread.sleep(millis);
+            return;
+        }
+        long guestNanos = millis > Long.MAX_VALUE / 1_000_000L
+                ? Long.MAX_VALUE : millis * 1_000_000L;
+        sleepScaledNanos(guestNanos);
     }
 
     public static void sleep(long millis, int nanos) throws InterruptedException {
@@ -108,8 +115,31 @@ public final class RuntimeTiming {
             totalNanos = nanos > Long.MAX_VALUE - baseNanos
                     ? Long.MAX_VALUE : baseNanos + nanos;
         }
-        long scaled = scaleDelayNanos(totalNanos);
-        Thread.sleep(scaled / 1_000_000L, (int) (scaled % 1_000_000L));
+        if (totalNanos == 0L) {
+            Thread.sleep(0L, 0);
+            return;
+        }
+        sleepScaledNanos(totalNanos);
+    }
+
+    private static void sleepScaledNanos(long guestNanos) throws InterruptedException {
+        long remainingNanos = scaleDelayNanos(guestNanos);
+        if (remainingNanos <= 0L) return;
+        if (remainingNanos % 1_000_000L == 0L) {
+            Thread.sleep(remainingNanos / 1_000_000L);
+            return;
+        }
+
+        while (remainingNanos > 0L) {
+            long startedAt = System.nanoTime();
+            LockSupport.parkNanos(remainingNanos);
+            if (Thread.interrupted()) throw new InterruptedException();
+            long elapsed = System.nanoTime() - startedAt;
+            if (elapsed > 0L) {
+                remainingNanos = elapsed >= remainingNanos
+                        ? 0L : remainingNanos - elapsed;
+            }
+        }
     }
 
     public static void waitOn(Object monitor, long millis) throws InterruptedException {

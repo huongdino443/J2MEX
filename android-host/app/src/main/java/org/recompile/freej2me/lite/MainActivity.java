@@ -82,6 +82,7 @@ import java.util.concurrent.Executors;
     private static final int REQUEST_ALL_FILES_SETTINGS = 75;
     private static final int REQUEST_GAME_SETTINGS = 76;
     private static final int PICK_STORAGE_FOLDER = 77;
+    private static final int REQUEST_POST_NOTIFICATIONS = 78;
     private static final String STATE_PENDING_EXTERNAL_GAME_URI =
             "main.pendingExternalGameUri";
     private static final String EXTRA_EXTERNAL_GAME_OPEN_HANDLED =
@@ -880,6 +881,23 @@ import java.util.concurrent.Executors;
                         : "Show received frames per second while playing.",
                 AppPreferences.showFps(this), AppPreferences::setShowFps);
         addMoreSwitch(preferencesCard,
+                vietnamese ? "Hoạt động dưới nền" : "Background activity",
+                vietnamese
+                        ? "Duy trì chạy nền, giảm thiểu khả năng khởi động lại hoặc mất kết nối dữ liệu"
+                        : "Keep running in the background, reducing the chance of restarts or data connection loss.",
+                AppPreferences.keepGameInBackground(this), (context, enabled) -> {
+                    AppPreferences.setKeepGameInBackground(context, enabled);
+                    if (enabled && Build.VERSION.SDK_INT >= 33
+                            && checkSelfPermission(
+                                    android.Manifest.permission.POST_NOTIFICATIONS)
+                                    != PackageManager.PERMISSION_GRANTED) {
+                        AppPreferences.markBackgroundNotificationPrompted(context);
+                        requestPermissions(new String[]{
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                        }, REQUEST_POST_NOTIFICATIONS);
+                    }
+                });
+        addMoreSwitch(preferencesCard,
                 vietnamese ? "Thanh trạng thái" : "Status bar",
                 vietnamese ? "Hiện thanh trạng thái trong lúc chơi game."
                         : "Keep the Android status bar visible while playing.",
@@ -1295,13 +1313,20 @@ import java.util.concurrent.Executors;
     }
 
     private FrameLayout collectionIconButton(int iconType, String description) {
-        FrameLayout button = new FrameLayout(this);
-        button.setBackground(rounded(Color.TRANSPARENT, 24, 0));
-        button.setContentDescription(AppLocalization.text(this, description));
+        return iconButton(this, iconType, description);
+    }
+
+    static FrameLayout iconButton(Activity activity, int iconType, String description) {
+        FrameLayout button = new FrameLayout(activity);
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.TRANSPARENT);
+        background.setCornerRadius(dp(activity, 24));
+        button.setBackground(background);
+        button.setContentDescription(AppLocalization.text(activity, description));
         button.setClickable(true);
         button.setFocusable(true);
-        IconView icon = new IconView(this, iconType);
-        button.addView(icon, new FrameLayout.LayoutParams(dp(this, 22), dp(this, 22),
+        IconView icon = new IconView(activity, iconType);
+        button.addView(icon, new FrameLayout.LayoutParams(dp(activity, 22), dp(activity, 22),
                 Gravity.CENTER));
         return button;
     }
@@ -2760,6 +2785,7 @@ import java.util.concurrent.Executors;
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions,
                                                      int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_POST_NOTIFICATIONS) return;
         if (requestCode != REQUEST_STORAGE_PERMISSION) return;
         boolean granted = grantResults.length > 0;
         for (int result : grantResults) {
@@ -3064,7 +3090,7 @@ import java.util.concurrent.Executors;
         }
     }
 
-    private final class IconView extends View {
+    static final class IconView extends View {
         static final int HOME = 1;
         static final int FOLDER = 2;
         static final int ADD = 3;

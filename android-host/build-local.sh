@@ -72,7 +72,7 @@ jar cfm ../generated-artifacts/v2-bluetooth-diagnostic.jar \
 mkdir -p build/graphics-anchor-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar:app/src/main/assets/bridge.jar \
     -d build/graphics-anchor-test tools/PlatformGraphicsBaselineSmoke.java \
-    tools/PlatformGraphicsCopyAreaSmoke.java \
+    tools/PlatformGraphicsCopyAreaSmoke.java tools/PlatformGraphicsDrawRegionSmoke.java \
     tools/DirectGraphicsAlphaSmoke.java tools/CreateRGBImageAlphaModeSmoke.java \
     tools/BluetoothOptionPresenceSmoke.java tools/SystemFontRenderingSmoke.java \
     tools/AndroidFontBridgeSmoke.java \
@@ -83,6 +83,9 @@ java -Djava.awt.headless=true \
 java -Djava.awt.headless=true \
     -cp app/src/main/assets/engine.jar:build/graphics-anchor-test \
     org.recompile.mobile.PlatformGraphicsCopyAreaSmoke
+java -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/graphics-anchor-test \
+    org.recompile.mobile.PlatformGraphicsDrawRegionSmoke
 java -Djava.awt.headless=true \
     -cp app/src/main/assets/engine.jar:build/graphics-anchor-test \
     org.recompile.mobile.SystemFontRenderingSmoke \
@@ -203,6 +206,18 @@ if [ -n "${MIDLET_CLASSLOAD_TEST_JAR:-}" ]; then
         -cp app/src/main/assets/engine.jar:build/class-load-test \
         org.recompile.mobile.LegacyCodeAttributeVersionSmoke \
         "$MIDLET_CLASSLOAD_TEST_JAR" "${classload_test_classes[@]}"
+fi
+if [ -n "${MIDLET_SELECTION_TEST_JAR:-}" ]; then
+    : "${MIDLET_SELECTION_TEST_CLASS:?Set the selected MIDlet class name}"
+    : "${MIDLET_SELECTION_TEST_NAME:?Set the selected MIDlet display name}"
+    mkdir -p build/midlet-selection-test
+    javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+        -d build/midlet-selection-test tools/MidletSelectionSmoke.java
+    java -Djava.awt.headless=true \
+        -cp app/src/main/assets/engine.jar:build/midlet-selection-test \
+        org.recompile.mobile.MidletSelectionSmoke \
+        "$MIDLET_SELECTION_TEST_JAR" "$MIDLET_SELECTION_TEST_CLASS" \
+        "$MIDLET_SELECTION_TEST_NAME"
 fi
 mkdir -p build/package-factory-compat-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \

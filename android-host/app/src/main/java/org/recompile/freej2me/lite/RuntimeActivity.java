@@ -24,6 +24,10 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.hardware.display.DisplayManager;
 import android.media.MediaScannerConnection;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.*;
 import android.provider.MediaStore;
@@ -57,6 +61,9 @@ import org.recompile.freej2me.lite.nativeui.NativeOverlays;
 import org.recompile.freej2me.lite.audio.AndroidAudioController;
 
 public final class RuntimeActivity extends LocalizedActivity {
+    private static final int REQUEST_BACKGROUND_NOTIFICATIONS = 79;
+    private static final int REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS = 80;
+
     private static final int UI_BACKGROUND = Color.rgb(14, 24, 38);
     private static final int UI_SURFACE = Color.rgb(25, 36, 52);
     private static final int UI_TEXT = Color.rgb(232, 239, 247);
@@ -132,17 +139,20 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
     }
     private static final class MemoryEditorReply {
-        final int requestId, operation, total;
+        final int requestId, operation, total, pageIndex, pageCount;
         final boolean success;
         final String message;
         final ArrayList<MemoryEditorEntry> entries;
         MemoryEditorReply(int requestId, int operation, boolean success, String message,
-                int total, ArrayList<MemoryEditorEntry> entries) {
+                int total, int pageIndex, int pageCount,
+                ArrayList<MemoryEditorEntry> entries) {
             this.requestId = requestId;
             this.operation = operation;
             this.success = success;
             this.message = message == null ? "" : message;
             this.total = total;
+            this.pageIndex = pageIndex;
+            this.pageCount = pageCount;
             this.entries = entries;
         }
     }
@@ -199,6 +209,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     private final AtomicInteger nextMemoryEditorRequest = new AtomicInteger();
     private final ArrayList<ResponsiveDialog> responsiveDialogs = new ArrayList<>();
     private final ArrayDeque<BluetoothRequest> bluetoothQueue = new ArrayDeque<>();
+    private final Handler backgroundServiceHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService bluetoothWorkers = Executors.newCachedThreadPool();
     private final ConcurrentMap<Integer, BluetoothServerSocket> bluetoothServers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, BluetoothSocket> bluetoothSockets = new ConcurrentHashMap<>();
@@ -211,7 +222,15 @@ public final class RuntimeActivity extends LocalizedActivity {
     private BroadcastReceiver bluetoothUuidReceiver;
     private volatile boolean stopping;
     private volatile int emulationSpeedPercent = 100;
+    private volatile String selectedMidletClass;
+    private volatile String selectedMidletName;
+    private boolean runtimeLaunchStarted;
     private MemoryEditorDialog memoryEditorDialog;
+    private boolean memoryEditorDisclaimerAccepted;
+    private volatile boolean memoryEditorNetworkLockedForSession;
+    private boolean keepGameInBackground;
+    private boolean backgroundTransitionPending;
+    private Runnable pendingBackgroundServiceStop;
     private int frameCount;
     private int fpsIntervalFrames;
     private long fpsIntervalStart;
@@ -264,6 +283,9 @@ public final class RuntimeActivity extends LocalizedActivity {
                 AppPreferences.EXTRA_STATUS_BAR, AppPreferences.statusBarVisible(this));
         orientationLocked = getIntent().getBooleanExtra(
                 AppPreferences.EXTRA_LOCK_ORIENTATION, AppPreferences.orientationLocked(this));
+        keepGameInBackground = getIntent().getBooleanExtra(
+                AppPreferences.EXTRA_KEEP_GAME_IN_BACKGROUND,
+                AppPreferences.keepGameInBackground(this));
         if (orientationLocked) {
             setRequestedOrientation(isLandscape()
                     ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -346,7 +368,24 @@ public final class RuntimeActivity extends LocalizedActivity {
         });
         updateCanvasLayout();
         root.requestApplyInsets();
-        new Thread(this::launchEngine, "RuntimeLauncher").start();
+        requestBackgroundNotificationPermissionThenLaunch();
+    }
+
+    private void requestBackgroundNotificationPermissionThenLaunch() {
+        boolean alreadyPrompted = getIntent().getBooleanExtra(
+                AppPreferences.EXTRA_BACKGROUND_NOTIFICATION_PROMPTED, false)
+                || AppPreferences.backgroundNotificationPrompted(this);
+        if (keepGameInBackground && Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED
+                && !alreadyPrompted) {
+            AppPreferences.markBackgroundNotificationPrompted(this);
+            requestPermissions(new String[]{
+                    android.Manifest.permission.POST_NOTIFICATIONS
+            }, REQUEST_BACKGROUND_NOTIFICATIONS);
+            return;
+        }
+        chooseMidletThenLaunch();
     }
 
     private void applyStatusBarPreference() {
@@ -649,6 +688,10 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
 
     private void showMemoryEditor() {
+        if (memoryEditorDisclaimerAccepted) {
+            openMemoryEditor();
+            return;
+        }
         Dialog dialog = new Dialog(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -665,9 +708,10 @@ public final class RuntimeActivity extends LocalizedActivity {
         TextView description = new TextView(this);
         description.setText(AppLocalization.text(this,
                 "Chỉ dùng với game offline. Trình sửa chỉ tìm và thay đổi giá trị số "
-                        + "trong bộ nhớ Java của game đang chạy. Sau khi mở, kết nối mạng "
-                        + "sẽ bị chặn đến khi khởi động lại game; nếu game đã dùng mạng, "
-                        + "tính năng không khả dụng."));
+                        + "trong bộ nhớ Java của game đang chạy. Thiết bị phải ngắt Wi-Fi "
+                        + "và dữ liệu di động trước khi mở. Sau khi mở, kết nối đến máy chủ "
+                        + "bên ngoài sẽ bị chặn đến khi khởi động lại game; kết nối local "
+                        + "hoặc mạng nội bộ vẫn được phép."));
         description.setTextColor(UI_MUTED);
         description.setTextSize(14);
         LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(
@@ -692,15 +736,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         cancel.setOnClickListener(view -> dialog.dismiss());
         proceed.setOnClickListener(view -> {
             dialog.dismiss();
-            sendMemoryEditorRequest(0, "", 0, "", reply -> {
-                if (!reply.success) {
-                    Toast.makeText(this, AppLocalization.text(this, reply.message),
-                            Toast.LENGTH_LONG).show();
-                    return;
-                }
-                memoryEditorDialog = new MemoryEditorDialog();
-                memoryEditorDialog.show();
-            });
+            openMemoryEditor();
         });
 
         dialog.setContentView(card);
@@ -716,18 +752,77 @@ public final class RuntimeActivity extends LocalizedActivity {
                 null);
     }
 
+    private void openMemoryEditor() {
+        sendMemoryEditorRequest(0, "", 0, "", reply -> {
+            if (!reply.success) {
+                Toast.makeText(this, AppLocalization.text(this, reply.message),
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            memoryEditorDisclaimerAccepted = true;
+            memoryEditorNetworkLockedForSession = true;
+            memoryEditorDialog = new MemoryEditorDialog();
+            memoryEditorDialog.show();
+        });
+    }
+
+    private boolean isInternetNetworkAvailable() {
+        try {
+            ConnectivityManager manager = (ConnectivityManager)
+                    getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (manager == null) return true;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network network = manager.getActiveNetwork();
+                NetworkCapabilities capabilities = network == null
+                        ? null : manager.getNetworkCapabilities(network);
+                return capabilities != null
+                        && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+            }
+            NetworkInfo active = manager.getActiveNetworkInfo();
+            return active != null && active.isConnected();
+        } catch (RuntimeException error) {
+            // If Android cannot report connectivity, fail closed for memory editing.
+            return true;
+        }
+    }
+
     private final class MemoryEditorDialog {
+        private final String[] filterTypes = {
+                "All", "Int8", "Int16", "UInt16", "Int32", "Int64", "Float32", "Float64"
+        };
         private final Dialog dialog = new Dialog(RuntimeActivity.this);
         private final EditText query = new EditText(RuntimeActivity.this);
         private final TextView status = new TextView(RuntimeActivity.this);
         private final LinearLayout results = new LinearLayout(RuntimeActivity.this);
+        private final TextView pageLabel = new TextView(RuntimeActivity.this);
+        private final LinkedHashSet<Integer> selectedCandidateIds =
+                new LinkedHashSet<Integer>();
         private TextView searchAction;
+        private LinearLayout filterAction;
+        private TextView filterValue;
+        private MainActivity.IconView dropdownArrow;
+        private FrameLayout previousPageAction;
+        private FrameLayout nextPageAction;
+        private FrameLayout batchEditAction;
+        private PopupWindow filterPopup;
+        private LinearLayout card;
+        private LinearLayout titleRow;
+        private LinearLayout searchRow;
+        private LinearLayout resultToolbar;
+        private LinearLayout pageControls;
+        private ScrollView resultsScroll;
+        private FrameLayout landscapeFooter;
+        private boolean landscapeLayout;
+        private String selectedFilter = "All";
+        private int currentPage;
+        private int currentPageCount = 1;
         private boolean closing;
 
         void show() {
             boolean landscape = getResources().getConfiguration().orientation
                     == Configuration.ORIENTATION_LANDSCAPE;
-            LinearLayout card = new LinearLayout(RuntimeActivity.this);
+            landscapeLayout = landscape;
+            card = new LinearLayout(RuntimeActivity.this);
             card.setOrientation(LinearLayout.VERTICAL);
             int horizontalPadding = dp(landscape ? 14 : 18);
             card.setPadding(horizontalPadding, dp(landscape ? 10 : 16),
@@ -735,7 +830,7 @@ public final class RuntimeActivity extends LocalizedActivity {
             card.setBackground(roundDrawable(EDGE_PANEL_COLOR, dp(24),
                     EDGE_PANEL_STROKE_COLOR));
 
-            LinearLayout titleRow = new LinearLayout(RuntimeActivity.this);
+            titleRow = new LinearLayout(RuntimeActivity.this);
             titleRow.setGravity(Gravity.CENTER_VERTICAL);
             TextView title = new TextView(RuntimeActivity.this);
             title.setText(AppLocalization.text(RuntimeActivity.this, "Trình sửa bộ nhớ"));
@@ -743,34 +838,20 @@ public final class RuntimeActivity extends LocalizedActivity {
             title.setTextSize(landscape ? 19 : 21);
             titleRow.addView(title, new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            TextView close = new TextView(RuntimeActivity.this);
-            close.setText("×");
-            close.setTextColor(UI_TEXT);
-            close.setTextSize(30);
-            close.setGravity(Gravity.CENTER);
-            close.setPadding(dp(8), 0, dp(4), 0);
+            TextView close = dialogAction(
+                    AppLocalization.text(RuntimeActivity.this, "Đóng"));
+            close.setTextColor(UI_ACCENT);
+            close.setTextSize(14);
+            close.setSingleLine(true);
             titleRow.addView(close);
-            card.addView(titleRow);
             close.setOnClickListener(view -> close());
 
-            TextView explanation = new TextView(RuntimeActivity.this);
-            explanation.setText(AppLocalization.text(RuntimeActivity.this,
-                    "Tìm giá trị số trong heap Java của MIDlet đang chạy. "
-                            + "Kết quả bị giới hạn để tránh làm chậm game."));
-            explanation.setTextColor(UI_MUTED);
-            explanation.setTextSize(landscape ? 12 : 14);
-            LinearLayout.LayoutParams explanationParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            explanationParams.topMargin = dp(landscape ? 2 : 5);
-            card.addView(explanation, explanationParams);
+            createFilterAction();
+            createBatchEditAction();
 
-            LinearLayout searchRow = new LinearLayout(RuntimeActivity.this);
+            searchRow = new LinearLayout(RuntimeActivity.this);
             searchRow.setOrientation(LinearLayout.HORIZONTAL);
             searchRow.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams searchRowParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            searchRowParams.topMargin = dp(landscape ? 6 : 12);
-            card.addView(searchRow, searchRowParams);
 
             query.setSingleLine(true);
             String queryHintText = AppLocalization.text(RuntimeActivity.this, "Giá trị số");
@@ -781,7 +862,6 @@ public final class RuntimeActivity extends LocalizedActivity {
             query.setHint(queryHint);
             query.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED
                     | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-            styleMemoryInput(query, landscape);
             query.setHintTextColor(0xFF8290A2);
             LinearLayout.LayoutParams queryParams = new LinearLayout.LayoutParams(
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -798,23 +878,49 @@ public final class RuntimeActivity extends LocalizedActivity {
             searchRow.addView(searchAction, searchActionParams);
             searchAction.setOnClickListener(view -> runSearch());
 
-            status.setText(AppLocalization.text(RuntimeActivity.this,
-                    "Nhập giá trị rồi tìm kiếm."));
+            status.setText("");
             status.setTextColor(UI_TEXT);
             status.setTextSize(14);
-            status.setPadding(0, dp(landscape ? 4 : 8), 0, dp(landscape ? 4 : 8));
-            card.addView(status);
+            status.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            status.setSingleLine(true);
+            status.setPadding(dp(8), dp(4), 0, dp(4));
+            updateFilterLabel();
 
-            ScrollView scroll = new ScrollView(RuntimeActivity.this);
+            resultToolbar = new LinearLayout(RuntimeActivity.this);
+            resultToolbar.setOrientation(LinearLayout.HORIZONTAL);
+            resultToolbar.setGravity(Gravity.CENTER_VERTICAL);
+
+            resultsScroll = new ScrollView(RuntimeActivity.this);
             results.setOrientation(LinearLayout.VERTICAL);
-            scroll.addView(results, new ScrollView.LayoutParams(
+            resultsScroll.addView(results, new ScrollView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            card.addView(scroll, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
+            pageControls = new LinearLayout(RuntimeActivity.this);
+            pageControls.setOrientation(LinearLayout.HORIZONTAL);
+            pageControls.setGravity(Gravity.CENTER);
+            previousPageAction = pageArrow("‹", "Trang trước");
+            nextPageAction = pageArrow("›", "Trang sau");
+            pageLabel.setTextColor(UI_MUTED);
+            pageLabel.setTextSize(13);
+            pageLabel.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams pageLabelParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pageLabelParams.leftMargin = dp(12);
+            pageLabelParams.rightMargin = dp(12);
+            pageControls.addView(previousPageAction);
+            pageControls.addView(pageLabel, pageLabelParams);
+            pageControls.addView(nextPageAction);
+            previousPageAction.setOnClickListener(view -> requestPage(currentPage - 1));
+            nextPageAction.setOnClickListener(view -> requestPage(currentPage + 1));
+
+            landscapeFooter = new FrameLayout(RuntimeActivity.this);
+            updatePager(0, 1);
+
+            composeLayout(landscape);
             dialog.setContentView(card);
             dialog.setCancelable(true);
             DialogInterface.OnDismissListener dismissListener = ignored -> {
+                if (filterPopup != null) filterPopup.dismiss();
                 if (!closing) sendMemoryEditorRequest(4, "", 0, "", null);
                 if (memoryEditorDialog == this) memoryEditorDialog = null;
             };
@@ -834,26 +940,284 @@ public final class RuntimeActivity extends LocalizedActivity {
         void resizeToAvailableArea() {
             Window window = dialog.getWindow();
             if (window == null || !dialog.isShowing()) return;
+            boolean landscape = isLandscapeViewport();
+            if (landscape != landscapeLayout) {
+                landscapeLayout = landscape;
+                composeLayout(landscape);
+            }
             setDialogWindowSize(dialog, 28, 520, availableDialogHeight());
+        }
+
+        private void composeLayout(boolean landscape) {
+            if (filterPopup != null) filterPopup.dismiss();
+            card.removeAllViews();
+            searchRow.removeView(filterAction);
+            resultToolbar.removeAllViews();
+            landscapeFooter.removeAllViews();
+
+            int horizontalPadding = dp(landscape ? 14 : 18);
+            card.setPadding(horizontalPadding, dp(landscape ? 10 : 16),
+                    horizontalPadding, dp(landscape ? 9 : 14));
+            card.addView(titleRow);
+
+            if (landscape) {
+                LinearLayout.LayoutParams filterParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                filterParams.rightMargin = dp(8);
+                searchRow.addView(filterAction, 0, filterParams);
+            } else {
+                resultToolbar.setPadding(dp(4), 0, dp(4), 0);
+                resultToolbar.addView(filterAction);
+                LinearLayout.LayoutParams batchParams = new LinearLayout.LayoutParams(
+                        dp(42), dp(22));
+                batchParams.leftMargin = dp(4);
+                resultToolbar.addView(batchEditAction, batchParams);
+                View spacer = new View(RuntimeActivity.this);
+                resultToolbar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
+                status.setPadding(dp(8), 0, 0, 0);
+                resultToolbar.addView(status);
+            }
+
+            styleMemoryInput(query, landscape);
+            LinearLayout.LayoutParams searchRowParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            searchRowParams.topMargin = dp(landscape ? 6 : 12);
+            card.addView(searchRow, searchRowParams);
+            if (!landscape) {
+                LinearLayout.LayoutParams toolbarParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(22));
+                toolbarParams.topMargin = dp(8);
+                card.addView(resultToolbar, toolbarParams);
+            }
+
+            LinearLayout.LayoutParams resultsParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+            resultsParams.topMargin = dp(landscape ? 10 : 12);
+            card.addView(resultsScroll, resultsParams);
+            if (landscape) {
+                int footerHeight = dp(40);
+                landscapeFooter.setMinimumHeight(footerHeight);
+                LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, footerHeight);
+                footerParams.topMargin = dp(2);
+                FrameLayout.LayoutParams editParams = new FrameLayout.LayoutParams(
+                        dp(42), footerHeight, Gravity.LEFT | Gravity.CENTER_VERTICAL);
+                landscapeFooter.addView(batchEditAction, editParams);
+                FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, footerHeight, Gravity.CENTER);
+                landscapeFooter.addView(pageControls, controlsParams);
+                status.setPadding(0, dp(4), 0, dp(4));
+                FrameLayout.LayoutParams statusParams = new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, footerHeight,
+                        Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                landscapeFooter.addView(status, statusParams);
+                card.addView(landscapeFooter, footerParams);
+            } else {
+                LinearLayout.LayoutParams pagerParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(22));
+                pagerParams.topMargin = dp(6);
+                card.addView(pageControls, pagerParams);
+            }
+            card.requestLayout();
+        }
+
+        private void createFilterAction() {
+            filterAction = new LinearLayout(RuntimeActivity.this);
+            filterAction.setOrientation(LinearLayout.HORIZONTAL);
+            filterAction.setGravity(Gravity.CENTER_VERTICAL);
+            filterAction.setMinimumHeight(dp(22));
+            filterValue = new TextView(RuntimeActivity.this);
+            filterValue.setTextColor(UI_ACCENT);
+            filterValue.setTextSize(14);
+            filterValue.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            filterAction.addView(filterValue);
+            dropdownArrow = new MainActivity.IconView(
+                    RuntimeActivity.this, MainActivity.IconView.CHEVRON);
+            dropdownArrow.setActive(true);
+            LinearLayout.LayoutParams arrowParams = new LinearLayout.LayoutParams(
+                    dp(22), dp(22));
+            arrowParams.leftMargin = dp(7);
+            filterAction.addView(dropdownArrow, arrowParams);
+            filterAction.setContentDescription(AppLocalization.text(RuntimeActivity.this,
+                    "Chọn kiểu dữ liệu"));
+            filterAction.setClickable(true);
+            filterAction.setFocusable(true);
+            filterAction.setOnClickListener(view -> showMemoryTypeFilter());
+            updateFilterLabel();
+        }
+
+        private void createBatchEditAction() {
+            batchEditAction = MainActivity.iconButton(RuntimeActivity.this,
+                    MainActivity.IconView.EDIT, "Sửa các giá trị đã chọn");
+            View icon = batchEditAction.getChildAt(0);
+            if (icon instanceof MainActivity.IconView)
+                ((MainActivity.IconView) icon).setActive(true);
+            batchEditAction.setOnClickListener(view -> editSelectedEntries());
+            updateBatchEditAction();
         }
 
         private void runSearch() {
             String value = query.getText().toString().trim().replace(',', '.');
             if (value.isEmpty()) {
                 query.setError(AppLocalization.text(RuntimeActivity.this, "Nhập giá trị số"));
+                results.removeAllViews();
+                status.setText("");
+                selectedCandidateIds.clear();
+                updateBatchEditAction();
+                updatePager(0, 1);
                 return;
             }
             status.setText(AppLocalization.text(RuntimeActivity.this, "Đang tìm kiếm…"));
-            sendMemoryEditorRequest(1, value, 0, "", this::showResults);
+            results.removeAllViews();
+            selectedCandidateIds.clear();
+            updateBatchEditAction();
+            updatePager(0, 1);
+            currentPage = 0;
+            sendMemoryEditorRequest(1, value, 0, "", selectedFilter, 0, this::showResults);
+        }
+
+        private void showMemoryTypeFilter() {
+            if (filterPopup != null && filterPopup.isShowing()) {
+                filterPopup.dismiss();
+                return;
+            }
+            LinearLayout options = new LinearLayout(RuntimeActivity.this);
+            options.setOrientation(LinearLayout.VERTICAL);
+            options.setPadding(dp(6), dp(6), dp(6), dp(6));
+            ScrollView optionScroller = new ScrollView(RuntimeActivity.this);
+            optionScroller.setFillViewport(false);
+            optionScroller.setVerticalScrollBarEnabled(false);
+            optionScroller.setHorizontalScrollBarEnabled(false);
+            optionScroller.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+            optionScroller.setBackground(roundDrawable(EDGE_PANEL_COLOR, dp(16),
+                    EDGE_PANEL_STROKE_COLOR));
+            optionScroller.setClipToOutline(true);
+            optionScroller.addView(options, new ScrollView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            for (String type : filterTypes) {
+                TextView option = new TextView(RuntimeActivity.this);
+                option.setText(filterLabel(type));
+                option.setTextColor(type.equals(selectedFilter) ? UI_ACCENT : UI_TEXT);
+                option.setTextSize(14);
+                option.setGravity(Gravity.CENTER_VERTICAL);
+                option.setPadding(dp(14), dp(10), dp(14), dp(10));
+                if (type.equals(selectedFilter))
+                    option.setBackground(roundDrawable(0x553A4A63, dp(12), Color.TRANSPARENT));
+                options.addView(option, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+
+            android.graphics.Rect visibleFrame = new android.graphics.Rect();
+            getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
+            int[] anchorPosition = new int[2];
+            filterAction.getLocationOnScreen(anchorPosition);
+            int spaceBelow = visibleFrame.bottom
+                    - (anchorPosition[1] + filterAction.getHeight()) - dp(5);
+            int spaceAbove = anchorPosition[1] - visibleFrame.top - dp(8);
+            boolean landscape = isLandscapeViewport();
+            boolean showAbove = !landscape && spaceAbove > spaceBelow;
+            int popupWidth = Math.max(dp(148), filterAction.getWidth());
+            popupWidth = Math.min(popupWidth, Math.max(dp(148), visibleFrame.width() - dp(32)));
+            options.measure(
+                    View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int popupHeight;
+            if (landscape) {
+                popupHeight = Math.max(dp(1), spaceBelow);
+            } else {
+                int availablePopupHeight = Math.max(spaceBelow, spaceAbove);
+                int naturalContentHeight = options.getMeasuredHeight();
+                popupHeight = Math.max(dp(1), Math.min(
+                        Math.min(dp(360), naturalContentHeight), availablePopupHeight));
+            }
+            PopupWindow popup = new PopupWindow(optionScroller, popupWidth, popupHeight, true);
+            popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            popup.setOutsideTouchable(true);
+            popup.setElevation(dp(12));
+            filterPopup = popup;
+            popup.setOnDismissListener(() -> {
+                dropdownArrow.animate().cancel();
+                dropdownArrow.animate().rotation(0f).setDuration(150).start();
+                if (filterPopup == popup) filterPopup = null;
+            });
+            for (int i = 0; i < filterTypes.length; i++) {
+                String type = filterTypes[i];
+                TextView option = (TextView) options.getChildAt(i);
+                option.setOnClickListener(view -> {
+                    popup.dismiss();
+                    if (type.equals(selectedFilter)) return;
+                    selectedFilter = type;
+                    updateFilterLabel();
+                    selectedCandidateIds.clear();
+                    updateBatchEditAction();
+                    if (!query.getText().toString().trim().isEmpty()) runSearch();
+                    else {
+                        results.removeAllViews();
+                        status.setText("");
+                        updatePager(0, 1);
+                    }
+                });
+            }
+            int verticalOffset = showAbove
+                    ? -filterAction.getHeight() - popupHeight : dp(5);
+            popup.showAsDropDown(filterAction, 0, verticalOffset);
+            dropdownArrow.animate().cancel();
+            dropdownArrow.animate().rotation(180f).setDuration(150).start();
+        }
+
+        private String filterLabel(String type) {
+            return "All".equals(type)
+                    ? AppLocalization.text(RuntimeActivity.this, "Tất cả") : type;
+        }
+
+        private void updateFilterLabel() {
+            if (filterValue != null) filterValue.setText(filterLabel(selectedFilter));
+        }
+
+        private void updateBatchEditAction() {
+            if (batchEditAction == null) return;
+            boolean enabled = !selectedCandidateIds.isEmpty();
+            batchEditAction.setEnabled(enabled);
+            batchEditAction.setVisibility(enabled ? View.VISIBLE : View.GONE);
+            batchEditAction.setAlpha(1f);
+            String label = AppLocalization.text(RuntimeActivity.this,
+                    "Sửa các giá trị đã chọn");
+            label += " (" + selectedCandidateIds.size() + ")";
+            batchEditAction.setContentDescription(label);
+        }
+
+        private FrameLayout pageArrow(String symbol, String description) {
+            FrameLayout arrow = MainActivity.iconButton(RuntimeActivity.this,
+                    MainActivity.IconView.CHEVRON, description);
+            arrow.setRotation("‹".equals(symbol) ? 90f : -90f);
+            return arrow;
+        }
+
+        private void updatePager(int pageIndex, int pageCount) {
+            currentPageCount = Math.max(1, pageCount);
+            currentPage = Math.max(0, Math.min(pageIndex, Math.max(0, pageCount - 1)));
+            pageLabel.setText(AppLocalization.text(RuntimeActivity.this, "Trang")
+                    + " " + (currentPage + 1) + "/" + currentPageCount);
+            previousPageAction.setEnabled(currentPage > 0);
+            nextPageAction.setEnabled(currentPage + 1 < currentPageCount);
+            previousPageAction.setAlpha(currentPage > 0 ? 1f : 0.38f);
+            nextPageAction.setAlpha(currentPage + 1 < currentPageCount ? 1f : 0.38f);
+        }
+
+        private void requestPage(int pageIndex) {
+            if (pageIndex < 0 || pageIndex >= currentPageCount) return;
+            sendMemoryEditorRequest(5, "", 0, "", selectedFilter, pageIndex, this::showResults);
         }
 
         private void showResults(MemoryEditorReply reply) {
             if (!reply.success) {
                 results.removeAllViews();
                 status.setText(AppLocalization.text(RuntimeActivity.this, reply.message));
+                updatePager(0, 1);
                 return;
             }
             status.setText(memoryResultCount(reply.total));
+            updatePager(reply.pageIndex, reply.pageCount);
             results.removeAllViews();
             if (reply.entries.isEmpty()) {
                 TextView empty = new TextView(RuntimeActivity.this);
@@ -871,15 +1235,30 @@ public final class RuntimeActivity extends LocalizedActivity {
                     == Configuration.ORIENTATION_LANDSCAPE;
             for (MemoryEditorEntry entry : reply.entries) {
                 LinearLayout row = new LinearLayout(RuntimeActivity.this);
-                row.setOrientation(LinearLayout.VERTICAL);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(landscape ? 12 : 14), dp(landscape ? 7 : 10),
                         dp(landscape ? 12 : 14), dp(landscape ? 7 : 10));
-                row.setBackground(roundDrawable(DIALOG_ROW_COLOR, dp(16),
-                        DIALOG_ROW_STROKE_COLOR));
+                CheckBox checkbox = new CheckBox(RuntimeActivity.this);
+                checkbox.setButtonTintList(new ColorStateList(
+                        new int[][] { new int[] { android.R.attr.state_checked }, new int[0] },
+                        new int[] { UI_ACCENT, UI_MUTED }));
+                checkbox.setContentDescription(AppLocalization.text(RuntimeActivity.this,
+                        "Chọn giá trị"));
+                checkbox.setChecked(selectedCandidateIds.contains(entry.id));
+                LinearLayout.LayoutParams checkboxParams = new LinearLayout.LayoutParams(
+                        dp(40), ViewGroup.LayoutParams.MATCH_PARENT);
+                checkboxParams.rightMargin = dp(6);
+                row.addView(checkbox, checkboxParams);
+                LinearLayout content = new LinearLayout(RuntimeActivity.this);
+                content.setOrientation(LinearLayout.VERTICAL);
+                content.setGravity(Gravity.CENTER_VERTICAL);
+                row.addView(content, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 LinearLayout valueRow = new LinearLayout(RuntimeActivity.this);
                 valueRow.setOrientation(LinearLayout.HORIZONTAL);
                 valueRow.setGravity(Gravity.CENTER_VERTICAL);
-                row.addView(valueRow, new LinearLayout.LayoutParams(
+                content.addView(valueRow, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 TextView value = new TextView(RuntimeActivity.this);
                 value.setText(entry.value);
@@ -906,22 +1285,22 @@ public final class RuntimeActivity extends LocalizedActivity {
                 LinearLayout.LayoutParams metadataParams = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 metadataParams.topMargin = dp(3);
-                row.addView(metadata, metadataParams);
+                content.addView(metadata, metadataParams);
                 LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
                 rowParams.bottomMargin = dp(landscape ? 4 : 7);
                 results.addView(row, rowParams);
-                row.setOnClickListener(view -> editEntry(entry));
-            }
-            if (reply.total > reply.entries.size()) {
-                TextView more = new TextView(RuntimeActivity.this);
-                more.setText(AppLocalization.text(RuntimeActivity.this,
-                        "Hiển thị 100 kết quả đầu tiên"));
-                more.setTextColor(UI_MUTED);
-                more.setTextSize(13);
-                more.setGravity(Gravity.CENTER);
-                more.setPadding(0, dp(8), 0, dp(8));
-                results.addView(more);
+                Runnable updateSelectedAppearance = () -> row.setBackground(roundDrawable(
+                        checkbox.isChecked() ? 0x553A4A63 : DIALOG_ROW_COLOR, dp(16),
+                        DIALOG_ROW_STROKE_COLOR));
+                updateSelectedAppearance.run();
+                checkbox.setOnCheckedChangeListener((button, checked) -> {
+                    if (checked) selectedCandidateIds.add(entry.id);
+                    else selectedCandidateIds.remove(entry.id);
+                    updateSelectedAppearance.run();
+                    updateBatchEditAction();
+                });
+                row.setOnClickListener(view -> checkbox.setChecked(!checkbox.isChecked()));
             }
         }
 
@@ -931,7 +1310,8 @@ public final class RuntimeActivity extends LocalizedActivity {
             return total + " kết quả";
         }
 
-        private void editEntry(MemoryEditorEntry entry) {
+        private void editSelectedEntries() {
+            if (selectedCandidateIds.isEmpty()) return;
             boolean landscape = getResources().getConfiguration().orientation
                     == Configuration.ORIENTATION_LANDSCAPE;
             Dialog editDialog = new Dialog(RuntimeActivity.this);
@@ -944,18 +1324,17 @@ public final class RuntimeActivity extends LocalizedActivity {
                     EDGE_PANEL_STROKE_COLOR));
 
             TextView title = new TextView(RuntimeActivity.this);
-            title.setText(AppLocalization.text(RuntimeActivity.this, "Sửa giá trị"));
+            title.setText(AppLocalization.text(RuntimeActivity.this, "Sửa hàng loạt"));
             title.setTextColor(UI_TEXT);
             title.setTextSize(landscape ? 19 : 21);
             card.addView(title);
 
             TextView metadata = new TextView(RuntimeActivity.this);
-            metadata.setText(entry.location + "  ·  " + entry.type + "  ·  "
-                    + AppLocalization.text(RuntimeActivity.this, entry.referenceKind));
+            int selectedCount = selectedCandidateIds.size();
+            metadata.setText(selectedCount + " "
+                    + AppLocalization.text(RuntimeActivity.this, "giá trị được chọn"));
             metadata.setTextColor(UI_MUTED);
             metadata.setTextSize(12);
-            metadata.setMaxLines(2);
-            metadata.setEllipsize(android.text.TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams metadataParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             metadataParams.topMargin = dp(landscape ? 3 : 5);
@@ -966,11 +1345,20 @@ public final class RuntimeActivity extends LocalizedActivity {
             value.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_SIGNED
                     | InputType.TYPE_NUMBER_FLAG_DECIMAL);
             styleMemoryInput(value, landscape);
-            value.setText(entry.value);
+            value.setHint(AppLocalization.text(RuntimeActivity.this, "Giá trị cần áp dụng"));
             LinearLayout.LayoutParams valueParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             valueParams.topMargin = dp(landscape ? 9 : 14);
             card.addView(value, valueParams);
+
+            TextView error = new TextView(RuntimeActivity.this);
+            error.setTextColor(0xFFFF8B8B);
+            error.setTextSize(13);
+            error.setVisibility(View.GONE);
+            LinearLayout.LayoutParams errorParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            errorParams.topMargin = dp(5);
+            card.addView(error, errorParams);
 
             LinearLayout actions = new LinearLayout(RuntimeActivity.this);
             actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -981,16 +1369,37 @@ public final class RuntimeActivity extends LocalizedActivity {
             card.addView(actions, actionsParams);
             TextView cancel = dialogAction(AppLocalization.text(RuntimeActivity.this, "Hủy"));
             TextView save = dialogAction(AppLocalization.text(RuntimeActivity.this, "Lưu"));
-            cancel.setTextColor(UI_MUTED);
             save.setTextColor(UI_ACCENT);
+            cancel.setTextColor(UI_MUTED);
             actions.addView(cancel);
             actions.addView(save);
             cancel.setOnClickListener(view -> editDialog.dismiss());
-            save.setOnClickListener(view -> sendMemoryEditorRequest(3, "", entry.id,
-                    value.getText().toString(), reply -> {
-                        editDialog.dismiss();
-                        showResults(reply);
-                    }));
+            save.setOnClickListener(view -> {
+                String newValue = value.getText().toString().trim();
+                if (newValue.isEmpty()) {
+                    value.setError(AppLocalization.text(RuntimeActivity.this,
+                            "Nhập giá trị số"));
+                    return;
+                }
+                int[] ids = new int[selectedCandidateIds.size()];
+                int index = 0;
+                for (Integer id : selectedCandidateIds) ids[index++] = id;
+                save.setEnabled(false);
+                sendMemoryEditorRequest(6, "", 0, newValue, selectedFilter,
+                        currentPage, ids, reply -> {
+                            save.setEnabled(true);
+                            if (!reply.success) {
+                                error.setText(AppLocalization.text(RuntimeActivity.this,
+                                        reply.message));
+                                error.setVisibility(View.VISIBLE);
+                                return;
+                            }
+                            selectedCandidateIds.clear();
+                            updateBatchEditAction();
+                            editDialog.dismiss();
+                            showResults(reply);
+                        });
+            });
 
             editDialog.setContentView(card);
             editDialog.setCancelable(true);
@@ -1244,12 +1653,16 @@ public final class RuntimeActivity extends LocalizedActivity {
         boolean[] draftSettings = {
                 fpsEnabled,
                 statusBarVisible,
-                orientationLocked
+                orientationLocked,
+                keepGameInBackground
         };
         LinearLayout options = runtimeSettingsCard(content, "Tùy chọn");
         addRuntimeSettingsSwitch(options, "Hiển thị FPS",
                 "Hiển thị tốc độ khung hình khi đang chơi game.",
                 draftSettings[0], true, enabled -> draftSettings[0] = enabled);
+        addRuntimeSettingsSwitch(options, "Hoạt động dưới nền",
+                "Duy trì chạy nền, giảm thiểu khả năng khởi động lại hoặc mất kết nối dữ liệu",
+                draftSettings[3], true, enabled -> draftSettings[3] = enabled);
         addRuntimeSettingsSwitch(options, "Ghi log để gỡ lỗi",
                 "Chỉ áp dụng đầy đủ sau khi thoát rồi mở lại game.",
                 debugLogsEnabled, false, null);
@@ -1302,14 +1715,24 @@ public final class RuntimeActivity extends LocalizedActivity {
             if (root != null) root.requestApplyInsets();
 
             orientationLocked = draftSettings[2];
+            boolean requestBackgroundPermission = draftSettings[3]
+                    && !keepGameInBackground && Build.VERSION.SDK_INT >= 33
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            != PackageManager.PERMISSION_GRANTED;
+            keepGameInBackground = draftSettings[3];
             AppPreferences.syncRuntimeSettingsToMain(this, fpsEnabled, debugLogsEnabled,
-                    statusBarVisible, orientationLocked);
+                    statusBarVisible, orientationLocked, keepGameInBackground);
             dialog.dismiss();
             setRequestedOrientation(orientationLocked
                     ? (isLandscapeViewport()
                             ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                             : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
                     : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            if (requestBackgroundPermission) {
+                requestPermissions(new String[]{
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                }, REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS);
+            }
         });
         DialogInterface.OnDismissListener dismissListener = ignored -> {
             if (runtimeSettingsDialog == dialog) runtimeSettingsDialog = null;
@@ -2022,6 +2445,96 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
     }
 
+    private void chooseMidletThenLaunch() {
+        String jarPath = getIntent().getStringExtra("jar");
+        if (jarPath == null) {
+            startEngineThread();
+            return;
+        }
+        Thread chooser = new Thread(() -> {
+            List<GameLibrary.MidletDescriptor> entries;
+            try {
+                entries = GameLibrary.readMidlets(new File(jarPath));
+            } catch (IOException error) {
+                entries = Collections.emptyList();
+            }
+            final List<GameLibrary.MidletDescriptor> choices = entries;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (choices.size() <= 1) {
+                    if (choices.size() == 1) {
+                        selectedMidletClass = choices.get(0).className;
+                        selectedMidletName = choices.get(0).name;
+                    }
+                    startEngineThread();
+                    return;
+                }
+                showMidletSelectionDialog(choices);
+            });
+        }, "MIDletChooser");
+        chooser.setDaemon(true);
+        chooser.start();
+    }
+
+    private void showMidletSelectionDialog(List<GameLibrary.MidletDescriptor> choices) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(18), dp(20), dp(12));
+        panel.setBackground(roundDrawable(EDGE_PANEL_COLOR, dp(24),
+                EDGE_PANEL_STROKE_COLOR));
+
+        TextView title = new TextView(this);
+        title.setText(AppLocalization.text(this, "Chọn MIDlet"));
+        title.setTextColor(UI_TEXT);
+        title.setTextSize(21);
+        panel.addView(title);
+
+        for (int index = 0; index < choices.size(); index++) {
+            GameLibrary.MidletDescriptor choice = choices.get(index);
+            TextView option = new TextView(this);
+            option.setText(choice.name);
+            option.setTextColor(UI_TEXT);
+            option.setTextSize(16);
+            option.setGravity(Gravity.CENTER_VERTICAL);
+            option.setMinHeight(dp(44));
+            option.setPadding(0, dp(4), 0, dp(4));
+            LinearLayout.LayoutParams optionParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            optionParams.topMargin = dp(index == 0 ? 6 : 0);
+            panel.addView(option, optionParams);
+            option.setOnClickListener(view -> {
+                selectedMidletClass = choice.className;
+                selectedMidletName = choice.name;
+                dialog.dismiss();
+                startEngineThread();
+            });
+        }
+
+        dialog.setContentView(panel);
+        dialog.setCancelable(true);
+        dialog.setOnCancelListener(ignored -> finish());
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            attributes.dimAmount = 0.58f;
+            window.setAttributes(attributes);
+        }
+        registerResponsiveDialog(dialog,
+                () -> setDialogWindowSize(dialog, 36, 480,
+                        ViewGroup.LayoutParams.WRAP_CONTENT),
+                null);
+    }
+
+    private synchronized void startEngineThread() {
+        if (runtimeLaunchStarted || isFinishing() || isDestroyed()) return;
+        runtimeLaunchStarted = true;
+        new Thread(this::launchEngine, "RuntimeLauncher").start();
+    }
+
     private void launchEngine() {
         try {
             String jarPath = getIntent().getStringExtra("jar");
@@ -2049,6 +2562,8 @@ public final class RuntimeActivity extends LocalizedActivity {
                         + "\nCRT Grid filter=" + gameSettings.crtFilterEnabled
                         + "\nAndroid font raster Y offset=1 px"
                         + "\nFACE_MONOSPACE=Typeface.MONOSPACE (not the default sans face)"
+                        + "\nSelected MIDlet=" + (selectedMidletClass == null
+                                ? "(manifest default)" : selectedMidletName + " [" + selectedMidletClass + "]")
                         + "\nRun stage=preparing runtime\n";
                 try {
                     SessionLog.begin(getFilesDir(), work, header);
@@ -2081,17 +2596,21 @@ public final class RuntimeActivity extends LocalizedActivity {
             String deviceLocale = Locale.getDefault().toLanguageTag();
             String nativeLogPath = debugLogsEnabled && sessionLogStarted
                     ? HostFiles.log(this).getAbsolutePath() : "/dev/null";
+            ArrayList<String> launchArguments = new ArrayList<>(Arrays.asList(
+                    jar.toURI().toASCIIString(),
+                    Integer.toString(gameSettings.canvasWidth),
+                    Integer.toString(gameSettings.canvasHeight),
+                    Integer.toString(server.getLocalPort()),
+                    token, work.getAbsolutePath(), audioCache.getCanonicalPath(),
+                    Integer.toString(displayRefreshHz), deviceLocale,
+                    Integer.toString(fontServer.getLocalPort()),
+                    "--j2mex-touch-input=" + gameSettings.touchEnabled,
+                    "--j2mex-ui-language=" + AppLocalization.languageTag(this)));
+            if (selectedMidletClass != null)
+                launchArguments.add("--j2mex-midlet-class=" + selectedMidletClass);
             int result = NativeHost.launch(runtime.getAbsolutePath(), work.getAbsolutePath(),
                     getCacheDir().getAbsolutePath(), cp, nativeLogPath,
-                    new String[]{jar.toURI().toASCIIString(),
-                            Integer.toString(gameSettings.canvasWidth),
-                            Integer.toString(gameSettings.canvasHeight),
-                            Integer.toString(server.getLocalPort()),
-                            token, work.getAbsolutePath(), audioCache.getCanonicalPath(),
-                            Integer.toString(displayRefreshHz), deviceLocale,
-                            Integer.toString(fontServer.getLocalPort()),
-                            "--j2mex-touch-input=" + gameSettings.touchEnabled,
-                            "--j2mex-ui-language=" + AppLocalization.languageTag(this)});
+                    launchArguments.toArray(new String[0]));
             appendSessionLog("[runtime-exit] native host result=" + result);
             update(result == -21
                     ? "Heap native không tương thích với Java 8. Hãy xuất log để xem chi tiết."
@@ -2531,8 +3050,12 @@ public final class RuntimeActivity extends LocalizedActivity {
                         boolean success = incoming.readBoolean();
                         String message = incoming.readUTF();
                         int total = incoming.readInt();
+                        int pageIndex = incoming.readInt();
+                        int pageCount = incoming.readInt();
                         int count = incoming.readInt();
-                        if (total < 0 || count < 0 || count > 100 || count > total)
+                        if (total < 0 || pageCount < 1 || pageIndex < 0
+                                || pageIndex >= pageCount || count < 0 || count > 100
+                                || count > total)
                             throw new IOException("Invalid memory-editor response");
                         ArrayList<MemoryEditorEntry> entries = new ArrayList<>(count);
                         for (int index = 0; index < count; index++) {
@@ -2541,7 +3064,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                                     incoming.readUTF()));
                         }
                         MemoryEditorReply reply = new MemoryEditorReply(requestId, operation,
-                                success, message, total, entries);
+                                success, message, total, pageIndex, pageCount, entries);
                         MemoryEditorCallback callback =
                                 memoryEditorReplies.remove(requestId);
                         if (callback != null) runOnUiThread(() -> callback.onReply(reply));
@@ -2772,6 +3295,18 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
     private void sendMemoryEditorRequest(int operation, String query, int candidateId,
             String value, MemoryEditorCallback callback) {
+        sendMemoryEditorRequest(operation, query, candidateId, value, "All", 0, callback);
+    }
+
+    private void sendMemoryEditorRequest(int operation, String query, int candidateId,
+            String value, String typeFilter, int pageIndex, MemoryEditorCallback callback) {
+        sendMemoryEditorRequest(operation, query, candidateId, value, typeFilter,
+                pageIndex, new int[0], callback);
+    }
+
+    private void sendMemoryEditorRequest(int operation, String query, int candidateId,
+            String value, String typeFilter, int pageIndex, int[] selectedIds,
+            MemoryEditorCallback callback) {
         int requestId = nextMemoryEditorRequest.incrementAndGet();
         if (callback != null) memoryEditorReplies.put(requestId, callback);
         if (sender.isShutdown()) {
@@ -2784,16 +3319,24 @@ public final class RuntimeActivity extends LocalizedActivity {
                 if (stream == null) throw new IOException("Engine is not connected");
                 stream.writeByte(BluetoothProtocol.MEMORY_EDITOR_COMMAND);
                 stream.writeInt(operation);
+                if (operation == 0) stream.writeBoolean(
+                        !memoryEditorNetworkLockedForSession && isInternetNetworkAvailable());
                 stream.writeInt(requestId);
                 stream.writeUTF(query == null ? "" : query);
                 stream.writeInt(candidateId);
                 stream.writeUTF(value == null ? "" : value);
+                stream.writeUTF(typeFilter == null ? "All" : typeFilter);
+                stream.writeInt(pageIndex);
+                int[] ids = selectedIds == null ? new int[0] : selectedIds;
+                if (ids.length > 20000) throw new IOException("Too many selected values");
+                stream.writeInt(ids.length);
+                for (int id : ids) stream.writeInt(id);
                 stream.flush();
             } catch (IOException error) {
                 MemoryEditorCallback failed = memoryEditorReplies.remove(requestId);
                 if (failed != null) runOnUiThread(() -> failed.onReply(
                         new MemoryEditorReply(requestId, operation, false,
-                                error.getMessage(), 0, new ArrayList<>())));
+                                error.getMessage(), 0, 0, 1, new ArrayList<>())));
             }
         });
     }
@@ -3440,6 +3983,8 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
     @Override protected void onResume() {
         super.onResume();
+        backgroundTransitionPending = false;
+        scheduleBackgroundServiceStop();
         AppUpdateManager.resumePendingInstall(this);
         if (textInputPanel == null) hideGameKeyboard();
         if (screen instanceof ShaderFrameView) ((ShaderFrameView)screen).onResume();
@@ -3448,6 +3993,14 @@ public final class RuntimeActivity extends LocalizedActivity {
             displayListenerRegistered = true;
         }
         updateDisplayRefreshRate();
+    }
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (shouldKeepRuntimeInBackground()) {
+            backgroundTransitionPending = true;
+            cancelPendingBackgroundServiceStop();
+            BackgroundGameService.start(this);
+        }
     }
     @Override public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
@@ -3462,6 +4015,10 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
     }
     @Override protected void onPause() {
+        // Retry after the activity begins pausing: the first foreground-service request can
+        // race the launcher/Recents transition on some Android builds.
+        if (backgroundTransitionPending && shouldKeepRuntimeInBackground())
+            BackgroundGameService.start(this);
         if (textInputPanel == null) hideGameKeyboard();
         if (screen instanceof ShaderFrameView) ((ShaderFrameView)screen).onPause();
         if (gamepadControls != null) gamepadControls.cancelActiveTouches();
@@ -3472,6 +4029,27 @@ public final class RuntimeActivity extends LocalizedActivity {
         for (int code : new HashSet<>(heldKeys)) key(code, false);
         physicalKeyEvents.clear();
         super.onPause();
+    }
+
+    private boolean shouldKeepRuntimeInBackground() {
+        return keepGameInBackground && runtimeLaunchStarted && !stopping
+                && !isFinishing() && !isDestroyed();
+    }
+
+    private void cancelPendingBackgroundServiceStop() {
+        if (pendingBackgroundServiceStop == null) return;
+        backgroundServiceHandler.removeCallbacks(pendingBackgroundServiceStop);
+        pendingBackgroundServiceStop = null;
+    }
+
+    private void scheduleBackgroundServiceStop() {
+        cancelPendingBackgroundServiceStop();
+        pendingBackgroundServiceStop = () -> {
+            pendingBackgroundServiceStop = null;
+            if (!backgroundTransitionPending && !isFinishing() && !isDestroyed())
+                BackgroundGameService.stop(this);
+        };
+        backgroundServiceHandler.postDelayed(pendingBackgroundServiceStop, 500);
     }
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -3584,6 +4162,11 @@ public final class RuntimeActivity extends LocalizedActivity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_BACKGROUND_NOTIFICATIONS) {
+            chooseMidletThenLaunch();
+            return;
+        }
+        if (requestCode == REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS) return;
         if (requestCode != REQUEST_BT_PERMISSIONS) return;
         boolean granted = grantResults.length > 0;
         for (int result : grantResults) granted &= result == PackageManager.PERMISSION_GRANTED;

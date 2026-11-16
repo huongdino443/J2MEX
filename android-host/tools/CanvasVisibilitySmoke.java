@@ -36,6 +36,15 @@ public final class CanvasVisibilitySmoke {
 
     public static void main(String[] args) throws Exception {
         System.setProperty("java.awt.headless", "true");
+        require(Canvas.frameRateLimitForSpeed(60, 100) == 60,
+                "normal emulation keeps display-paced repaints");
+        require(Canvas.frameRateLimitForSpeed(144, 25) == 144,
+                "slow emulation keeps display-paced repaints");
+        require(Canvas.frameRateLimitForSpeed(60, 101) == 0,
+                "accelerated emulation disables the refresh-based repaint limit");
+        require(Canvas.frameRateLimitForSpeed(144, 2000) == 0,
+                "maximum acceleration is not capped by a high-refresh display either");
+
         MobilePlatform platform = new MobilePlatform(24, 32);
         Mobile.setPlatform(platform);
         AtomicInteger frames = new AtomicInteger();

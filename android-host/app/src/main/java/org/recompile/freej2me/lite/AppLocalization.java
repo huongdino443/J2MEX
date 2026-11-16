@@ -64,6 +64,7 @@ public final class AppLocalization {
         add("Game đã có trong bộ sưu tập này.", "This game is already in the collection.");
         add("Chọn tệp", "Choose files");
         add("Chọn thư mục", "Choose folder");
+        add("Chọn MIDlet", "Choose MIDlet");
         add("Mở thư mục", "Open folder");
         add("Đường dẫn hiện tại, chạm để lên thư mục cha",
                 "Current path. Tap to go to the parent folder.");
@@ -339,6 +340,13 @@ public final class AppLocalization {
         add("Chưa khả dụng", "Not available yet");
         add("Bật", "On");
         add("Tắt", "Off");
+        add("Hoạt động dưới nền", "Background activity");
+        add("Duy trì chạy nền, giảm thiểu khả năng khởi động lại hoặc mất kết nối dữ liệu",
+                "Keep running in the background, reducing the chance of restarts or data connection loss.");
+        add("J2MEX đang chạy nền", "J2MEX is running in the background");
+        add("Chạm để quay lại", "Tap to return");
+        add("Thông báo khi J2MEX hoạt động dưới nền.",
+                "Notification when J2MEX runs in the background.");
         add("Trên", "Top");
         add("Giữa", "Center");
         add("Dưới", "Bottom");
@@ -354,10 +362,25 @@ public final class AppLocalization {
         add("Thiết lập lại", "Reset");
         add("Trình sửa bộ nhớ", "Memory editor");
         add("Tiếp tục", "Continue");
-        add("Chỉ dùng với game offline. Trình sửa chỉ tìm và thay đổi giá trị số trong bộ nhớ Java của game đang chạy. Sau khi mở, kết nối mạng sẽ bị chặn đến khi khởi động lại game; nếu game đã dùng mạng, tính năng không khả dụng.",
-                "For offline games only. This editor searches and changes numeric values in the running game's Java heap. Network access stays blocked until the game restarts; it is unavailable if the game has already used a network connection.");
+        add("Chỉ dùng với game offline. Trình sửa chỉ tìm và thay đổi giá trị số trong bộ nhớ Java của game đang chạy. Thiết bị phải ngắt Wi-Fi và dữ liệu di động trước khi mở. Sau khi mở, kết nối đến máy chủ bên ngoài sẽ bị chặn đến khi khởi động lại game; kết nối local hoặc mạng nội bộ vẫn được phép.",
+                "For offline games only. This editor searches and changes numeric values in the running game's Java heap. Turn off Wi-Fi and mobile data before opening it. External server connections stay blocked until the game restarts; local and private-network connections remain available.");
         add("Tìm giá trị số trong heap Java của MIDlet đang chạy. Kết quả bị giới hạn để tránh làm chậm game.",
                 "Search numeric values in the running MIDlet's Java heap. Results are bounded to limit impact on gameplay.");
+        add("Tất cả", "All");
+        add("Trang", "Page");
+        add("Trang trước", "Previous page");
+        add("Trang sau", "Next page");
+        add("Chọn giá trị", "Select value");
+        add("Chọn kiểu dữ liệu", "Choose value type");
+        add("Sửa các giá trị đã chọn", "Edit selected values");
+        add("Sửa hàng loạt", "Edit selected values");
+        add("giá trị được chọn", "values selected");
+        add("Giá trị cần áp dụng", "Value to apply");
+        add("Không thể sửa đồng loạt: giá trị không phù hợp hoặc đã mất.",
+                "Bulk edit failed: the value is invalid for a selection or an item is unavailable.");
+        add("Một hoặc nhiều giá trị đã chọn không còn khả dụng.",
+                "One or more selected values are no longer available.");
+        add("Chọn ít nhất một giá trị.", "Select at least one value.");
         add("Giá trị số", "Numeric value");
         add("Tham chiếu tĩnh", "Static reference");
         add("Tham chiếu đối tượng", "Object reference");
@@ -366,7 +389,6 @@ public final class AppLocalization {
         add("Nhập giá trị rồi tìm kiếm.", "Enter a value and search.");
         add("Đang tìm kiếm…", "Searching…");
         add("Không có kết quả", "No results");
-        add("Hiển thị 100 kết quả đầu tiên", "Showing the first 100 results");
         add("Sửa giá trị", "Edit value");
         add("Lưu", "Save");
         add("Nhập giá trị số", "Enter a numeric value");
@@ -377,13 +399,15 @@ public final class AppLocalization {
         add("Giá trị này không còn khả dụng.", "This result is no longer available.");
         add("Không thể thay đổi giá trị này.", "This value could not be changed.");
         add("Trình sửa bộ nhớ phải được mở trước.", "Open the memory editor first.");
-        add("Không thể mở trình sửa bộ nhớ sau khi game đã dùng kết nối mạng.",
-                "Memory editing is unavailable after the game uses a network connection.");
+        add("Thiết bị đang kết nối mạng. Hãy tắt Wi-Fi và dữ liệu di động rồi thử lại.",
+                "The device is connected to a network. Turn off Wi-Fi and mobile data, then try again.");
+        add("Game đang bắt đầu kết nối mạng bên ngoài. Hãy thử lại sau.",
+                "The game is starting an external network connection. Try again after it finishes.");
         add("Không xác định thao tác trình sửa bộ nhớ.", "Unknown memory-editor action.");
-        add("Hãy đóng trình sửa bộ nhớ trước khi dùng kết nối mạng.",
-                "Close the memory editor before using network connections.");
-        add("Không thể dùng mạng trong phiên này vì trình sửa bộ nhớ đã được mở.",
-                "Network access is disabled for this session because the memory editor was opened.");
+        add("Hãy đóng trình sửa bộ nhớ trước khi dùng kết nối mạng bên ngoài.",
+                "Close the memory editor before using external network connections.");
+        add("Không thể dùng mạng bên ngoài trong phiên này vì trình sửa bộ nhớ đã được mở.",
+                "External network access is disabled for this session because the memory editor was opened.");
     }
 
     private AppLocalization() { }

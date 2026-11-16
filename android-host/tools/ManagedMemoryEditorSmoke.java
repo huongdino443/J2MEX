@@ -53,7 +53,57 @@ public final class ManagedMemoryEditorSmoke {
             editor.edit(instanceId, "9000");
             if (fixtureClass.getField("currentValue").getInt(fixture) != 9000)
                 throw new AssertionError("Instance field edit did not reach the MIDlet heap");
+
+            ManagedMemoryEditor.Result unsigned = editor.search("60000", false, "UInt16", 0);
+            if (!unsigned.success || unsigned.total != 3)
+                throw new AssertionError("UInt16 search did not include short, char, and array values: "
+                        + unsigned.total);
+            int unsignedFieldId = -1;
+            java.util.ArrayList<Integer> unsignedIds = new java.util.ArrayList<Integer>();
+            for (ManagedMemoryEditor.Entry entry : unsigned.entries) {
+                if (!"UInt16".equals(entry.type) || !"60000".equals(entry.value))
+                    throw new AssertionError("Unsigned 16-bit value was displayed incorrectly: "
+                            + entry.location + " " + entry.type + "=" + entry.value);
+                unsignedIds.add(entry.id);
+                if (entry.location.endsWith(".unsignedValue")) unsignedFieldId = entry.id;
+            }
+            if (unsignedFieldId < 0)
+                throw new AssertionError("UInt16 short field was not found");
+            ManagedMemoryEditor.Result editedUnsigned = editor.editAll(
+                    toIntArray(unsignedIds), "50000");
+            if (!editedUnsigned.success || editedUnsigned.total != 3)
+                throw new AssertionError("Batch UInt16 edit failed");
+            if (fixtureClass.getField("unsignedValue").getShort(fixture) != (short) 50000)
+                throw new AssertionError("UInt16 batch edit did not preserve short bits");
+            if (fixtureClass.getField("characterValue").getChar(fixture) != (char) 50000
+                    || ((short[]) fixtureClass.getField("unsignedCounters").get(fixture))[0]
+                            != (short) 50000)
+                throw new AssertionError("UInt16 batch edit missed a char or array value");
+            ManagedMemoryEditor.Result rejectedBatch =
+                    editor.editAll(toIntArray(unsignedIds), "70000");
+            if (rejectedBatch.success
+                    || fixtureClass.getField("unsignedValue").getShort(fixture) != (short) 50000)
+                throw new AssertionError("Invalid UInt16 batch partially changed values");
+
+            ManagedMemoryEditor.Result firstPage =
+                    editor.search("7777", false, "Int32", 0);
+            if (!firstPage.success || firstPage.total != 205 || firstPage.entries.size() != 100
+                    || firstPage.pageIndex != 0 || firstPage.pageCount != 3)
+                throw new AssertionError("First result page metadata was incorrect");
+            ManagedMemoryEditor.Result secondPage = editor.page(1);
+            if (secondPage.entries.size() != 100 || secondPage.pageIndex != 1)
+                throw new AssertionError("Second result page was not returned");
+            ManagedMemoryEditor.Result lastPage = editor.page(2);
+            if (lastPage.entries.size() != 5 || lastPage.pageIndex != 2
+                    || lastPage.pageCount != 3)
+                throw new AssertionError("Last result page was not returned");
         }
         System.out.println("ManagedMemoryEditorSmoke passed");
+    }
+
+    private static int[] toIntArray(java.util.List<Integer> values) {
+        int[] result = new int[values.size()];
+        for (int index = 0; index < values.size(); index++) result[index] = values.get(index);
+        return result;
     }
 }

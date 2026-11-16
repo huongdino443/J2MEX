@@ -265,10 +265,14 @@ else
 		{
 			if(transform == 0)
 			{
+				BufferedImage source = image.platformImage.getCanvas();
+				if (subx < 0 || suby < 0 || subw < 1 || subh < 1
+						|| (long) subx + subw > source.getWidth()
+						|| (long) suby + subh > source.getHeight()) return;
 				x = AnchorX(x, subw, anchor);
 				y = AnchorY(y, subh, anchor);
-				BufferedImage sub = image.platformImage.getCanvas().getSubimage(subx, suby, subw, subh);
-				gc.drawImage(sub, x, y, null);
+				gc.drawImage(source, x, y, x + subw, y + subh,
+						subx, suby, subx + subw, suby + subh, null);
 			}
 			else
 			{

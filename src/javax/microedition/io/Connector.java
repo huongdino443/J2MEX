@@ -118,7 +118,17 @@ MemoryEditorGuard.checkConnector(name);
 
 if(name.regionMatches(true, 0, "btspp://", 0, 8)
         || name.regionMatches(true, 0, "btl2cap://", 0, 10))
-{ return BluetoothConnector.open(name, mode); }
+{
+boolean tracked = MemoryEditorGuard.beginConnection(name);
+try
+{
+return BluetoothConnector.open(name, mode);
+}
+finally
+{
+MemoryEditorGuard.finishConnection(tracked);
+}
+}
 
 if(name.regionMatches(true, 0, "sms:", 0, 4))
 {
@@ -128,10 +138,30 @@ return new SmsConnectionImpl(name);
 }
 
 if(name.regionMatches(true, 0, "socket:", 0, 7))
-{ return new SocketConnectionImpl(name, mode, timeouts); }
+{
+boolean tracked = MemoryEditorGuard.beginConnection(name);
+try
+{
+return new SocketConnectionImpl(name, mode, timeouts);
+}
+finally
+{
+MemoryEditorGuard.finishConnection(tracked);
+}
+}
 
 if(name.regionMatches(true, 0, "ssl:", 0, 4))
-{ return new SecureConnectionImpl(name, mode, timeouts); }
+{
+boolean tracked = MemoryEditorGuard.beginConnection(name);
+try
+{
+return new SecureConnectionImpl(name, mode, timeouts);
+}
+finally
+{
+MemoryEditorGuard.finishConnection(tracked);
+}
+}
 
 if(name.regionMatches(true, 0, "file:", 0, 5))
 { return new FileConnectionImpl(name, mode); }

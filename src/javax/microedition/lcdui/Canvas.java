@@ -221,6 +221,16 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 		frameRateLimit = framesPerSecond;
 	}
 
+	/**
+	 * Keep normal-speed repaint pacing aligned with the display, but let
+	 * accelerated MIDlet loops run without a refresh-rate sleep. Android still
+	 * presents the newest completed frame on its own vsync cadence.
+	 */
+	public static int frameRateLimitForSpeed(int displayRefreshHz, int speedPercent)
+	{
+		return speedPercent > 100 ? 0 : displayRefreshHz;
+	}
+
 	protected final void limitFrameRate()
 	{
 		synchronized (framePaceLock)
@@ -252,7 +262,7 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 
 	public void repaint()
 	{
-if (!beginRepaint()) return;
+		if (!beginRepaint()) return;
 		limitFrameRate();
 		PlatformGraphics graphics;
 		try
@@ -270,25 +280,25 @@ if (!beginRepaint()) return;
 			System.out.print("Canvas repaint(): "+e.getMessage());
 			e.printStackTrace();
 		}
-finally { endRepaint(); }
+		finally { endRepaint(); }
 	}
 
 	public void repaint(int x, int y, int width, int height)
 	{
-if (!beginRepaint()) return;
-limitFrameRate();
-try
-{
-		PlatformGraphics graphics = platformImage.getGraphics();
-		graphics.reset();
-		paint(graphics);
-		if(Mobile.getDisplay().getCurrent() == this)
+		if (!beginRepaint()) return;
+		limitFrameRate();
+		try
 		{
-			Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+			PlatformGraphics graphics = platformImage.getGraphics();
+			graphics.reset();
+			paint(graphics);
+			if(Mobile.getDisplay().getCurrent() == this)
+			{
+				Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+			}
 		}
+		finally { endRepaint(); }
 	}
-finally { endRepaint(); }
-}
 
 	public void serviceRepaints()
 	{

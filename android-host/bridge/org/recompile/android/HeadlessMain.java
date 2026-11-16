@@ -34,8 +34,10 @@ public final class HeadlessMain {
     private static final AtomicBoolean exitRequested = new AtomicBoolean();
     private static final AtomicLong revision = new AtomicLong();
     private static volatile Thread frameWriterThread;
+    private static volatile int displayRefreshHz;
     private static final String TOUCH_INPUT_ARGUMENT = "--j2mex-touch-input=";
     private static final String UI_LANGUAGE_ARGUMENT = "--j2mex-ui-language=";
+    private static final String MIDLET_CLASS_ARGUMENT = "--j2mex-midlet-class=";
 
     private static boolean parseTouchInputEnabled(String value) {
         if ("true".equalsIgnoreCase(value)) return true;
@@ -75,6 +77,8 @@ public final class HeadlessMain {
                 output.writeBoolean(result.success);
                 output.writeUTF(result.message == null ? "" : result.message);
                 output.writeInt(result.total);
+                output.writeInt(result.pageIndex);
+                output.writeInt(result.pageCount);
                 int count = Math.min(ManagedMemoryEditor.MAX_VISIBLE_RESULTS,
                         result.entries.size());
                 output.writeInt(count);
@@ -108,10 +112,20 @@ public final class HeadlessMain {
     public static void main(String[] args) throws Exception {
         // jar URL, width, height, localhost port, token, RMS directory, audio cache,
         // refresh Hz, locale, required Android Paint port, optional legacy font paths,
-        // and optional --j2mex-touch-input= and --j2mex-ui-language= flags.
+        // and optional --j2mex-touch-input=, --j2mex-ui-language=, and
+        // --j2mex-midlet-class= flags.
         int launchArgumentCount = args.length;
         boolean touchInputEnabled = true;
         String uiLanguage = "en";
+        String selectedMidletClass = null;
+        if (launchArgumentCount > 10
+                && args[launchArgumentCount - 1].startsWith(MIDLET_CLASS_ARGUMENT)) {
+            selectedMidletClass = args[launchArgumentCount - 1]
+                    .substring(MIDLET_CLASS_ARGUMENT.length()).trim();
+            if (selectedMidletClass.isEmpty())
+                throw new IllegalArgumentException("Selected MIDlet class is empty");
+            launchArgumentCount--;
+        }
         if (launchArgumentCount > 10
                 && args[launchArgumentCount - 1].startsWith(UI_LANGUAGE_ARGUMENT)) {
             uiLanguage = args[launchArgumentCount - 1]
@@ -127,7 +141,7 @@ public final class HeadlessMain {
         }
         if (args.length < 10 || launchArgumentCount > 13)
             throw new IllegalArgumentException("Expected ten to thirteen launch arguments, "
-                    + "optionally followed by touch input and app language flags");
+                    + "optionally followed by touch input, app language, and MIDlet selection flags");
         System.setProperty("j2mex.ui.language", "vi".equalsIgnoreCase(uiLanguage) ? "vi" : "en");
         Canvas.setPointerInputEnabled(touchInputEnabled);
         String deviceLocale = applyDeviceLocale(args.length >= 9
@@ -172,10 +186,18 @@ public final class HeadlessMain {
             try (JarFile jar = new JarFile(new File(new URI(args[0])))) {
                 Manifest manifest = JarManifestReader.read(jar);
                 String midlet = manifest == null ? null : manifest.getMainAttributes().getValue("MIDlet-1");
+                if (selectedMidletClass != null)
+                    midlet = findMidletDescriptor(manifest, selectedMidletClass);
                 if (midlet == null || midlet.split(",").length != 3)
-                    throw new IOException("MIDlet-1 missing or invalid");
-                String className = midlet.split(",")[2].trim().replace('.', '/') + ".class";
+                    throw new IOException(selectedMidletClass == null
+                            ? "MIDlet-1 missing or invalid"
+                            : "Selected MIDlet is not declared in the JAR manifest");
+                String[] descriptorParts = midlet.split(",", -1);
+                String resolvedClass = descriptorParts[2].trim();
+                String className = resolvedClass.replace('.', '/') + ".class";
                 if (jar.getJarEntry(className) == null) throw new IOException("Missing class " + className);
+                if (selectedMidletClass == null) System.clearProperty("j2mex.midlet.class");
+                else System.setProperty("j2mex.midlet.class", resolvedClass);
                 status(2, "MIDlet manifest: " + midlet);
             }
             MobilePlatform platform = new MobilePlatform(width, height);
@@ -183,8 +205,9 @@ public final class HeadlessMain {
             Mobile.setPlatform(platform);
             RuntimeTiming.reset();
             MemoryEditorGuard.resetSession();
-            int displayRefreshHz = args.length >= 8 ? Integer.parseInt(args[7]) : 0;
-            Canvas.setFrameRateLimit(displayRefreshHz);
+            displayRefreshHz = args.length >= 8 ? Integer.parseInt(args[7]) : 0;
+            Canvas.setFrameRateLimit(Canvas.frameRateLimitForSpeed(
+                    displayRefreshHz, RuntimeTiming.getSpeedPercent()));
             platform.setMidletExitHandler(() -> {
                 if (!exitRequested.compareAndSet(false, true)) return;
                 status(5, "MIDlet sent Destroyed Notification");
@@ -454,29 +477,58 @@ public final class HeadlessMain {
                 } else if (command == 13) {
                     AudioBridge.dispatchEvent(input.readInt(), input.readInt(), input.readLong(), input.readUTF());
                 } else if (command == 14) {
-                    Canvas.setFrameRateLimit(input.readInt());
+                    displayRefreshHz = input.readInt();
+                    Canvas.setFrameRateLimit(Canvas.frameRateLimitForSpeed(
+                            displayRefreshHz, RuntimeTiming.getSpeedPercent()));
                 } else if (command == BluetoothProtocol.SET_SPEED) {
-                    RuntimeTiming.setSpeedPercent(input.readInt());
+                    int speedPercent = input.readInt();
+                    RuntimeTiming.setSpeedPercent(speedPercent);
+                    Canvas.setFrameRateLimit(Canvas.frameRateLimitForSpeed(
+                            displayRefreshHz, speedPercent));
                 } else if (command == BluetoothProtocol.MEMORY_EDITOR_COMMAND) {
                     int operation = input.readInt();
+                    boolean networkAvailable = operation == 0 && input.readBoolean();
                     int requestId = input.readInt();
                     String query = input.readUTF();
                     int candidateId = input.readInt();
                     String newValue = input.readUTF();
+                    String typeFilter = input.readUTF();
+                    int pageIndex = input.readInt();
+                    int selectedCount = input.readInt();
+                    if (selectedCount < 0
+                            || selectedCount > ManagedMemoryEditor.MAX_BATCH_EDIT_VALUES)
+                        throw new IOException("Invalid memory-editor selection count");
+                    int[] selectedIds = new int[selectedCount];
+                    for (int index = 0; index < selectedCount; index++)
+                        selectedIds[index] = input.readInt();
                     ManagedMemoryEditor.Result result;
                     if (operation == 0) {
-                        result = MemoryEditorGuard.openEditor()
+                        result = networkAvailable
+                                ? ManagedMemoryEditor.notice(false,
+                                        "Thiết bị đang kết nối mạng. Hãy tắt Wi-Fi và dữ liệu di động rồi thử lại.")
+                                : MemoryEditorGuard.openEditor(false)
                                 ? ManagedMemoryEditor.notice(true, "")
                                 : ManagedMemoryEditor.notice(false,
-                                        "Không thể mở trình sửa bộ nhớ sau khi game đã dùng kết nối mạng.");
+                                        "Game đang bắt đầu kết nối mạng bên ngoài. Hãy thử lại sau.");
                     } else if (operation == 1 || operation == 2) {
                         result = MemoryEditorGuard.isEditorOpen()
-                                ? memoryEditor.search(query, operation == 2)
+                                ? memoryEditor.search(query, operation == 2,
+                                        typeFilter, pageIndex)
                                 : ManagedMemoryEditor.notice(false,
                                         "Trình sửa bộ nhớ phải được mở trước.");
                     } else if (operation == 3) {
                         result = MemoryEditorGuard.isEditorOpen()
                                 ? memoryEditor.edit(candidateId, newValue)
+                                : ManagedMemoryEditor.notice(false,
+                                        "Trình sửa bộ nhớ phải được mở trước.");
+                    } else if (operation == 5) {
+                        result = MemoryEditorGuard.isEditorOpen()
+                                ? memoryEditor.page(pageIndex)
+                                : ManagedMemoryEditor.notice(false,
+                                        "Trình sửa bộ nhớ phải được mở trước.");
+                    } else if (operation == 6) {
+                        result = MemoryEditorGuard.isEditorOpen()
+                                ? memoryEditor.editAll(selectedIds, newValue)
                                 : ManagedMemoryEditor.notice(false,
                                         "Trình sửa bộ nhớ phải được mở trước.");
                     } else if (operation == 4) {
@@ -517,6 +569,17 @@ public final class HeadlessMain {
         }
         System.out.println("[engine-shutdown] Java command loop ended; requesting System.exit(0)");
         System.exit(0);
+    }
+
+    private static String findMidletDescriptor(Manifest manifest, String className) {
+        if (manifest == null || manifest.getMainAttributes() == null) return null;
+        for (int index = 1; index <= 255; index++) {
+            String descriptor = manifest.getMainAttributes().getValue("MIDlet-" + index);
+            if (descriptor == null) continue;
+            String[] parts = descriptor.split(",", -1);
+            if (parts.length == 3 && className.equals(parts[2].trim())) return descriptor;
+        }
+        return null;
     }
 
     private static String applySystemFontPath(String property, String rawPath)

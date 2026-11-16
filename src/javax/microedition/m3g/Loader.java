@@ -39,7 +39,11 @@ String key;
 try { key = new java.net.URI(name).normalize().toString(); }
 catch (java.net.URISyntaxException e) { throw new java.io.IOException("Invalid M3G resource URI", e); }
 if (stack.size() >= 16 || !stack.add(key)) throw new java.io.IOException("Cyclic/deep M3G external reference: " + key);
-try (java.io.InputStream input = open(key)) {
+ boolean tracked = false;
+ try {
+ if (key.startsWith("http://") || key.startsWith("https://"))
+     tracked = org.recompile.mobile.MemoryEditorGuard.beginConnection(key);
+ try (java.io.InputStream input = open(key)) {
 if (input == null) throw new java.io.IOException("M3G resource not found: " + key);
 java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
 byte[] buffer = new byte[8192];
@@ -49,7 +53,9 @@ if (output.size() > M3GInput.MAX_BYTES - count) throw new java.io.IOException("M
 output.write(buffer, 0, count);
 }
 return M3GLoader.decode(output.toByteArray(), 0, key);
-} finally {
+ }
+ } finally {
+ org.recompile.mobile.MemoryEditorGuard.finishConnection(tracked);
 stack.remove(key);
 if (stack.isEmpty()) loading.remove();
 }
@@ -57,7 +63,11 @@ if (stack.isEmpty()) loading.remove();
 
 private static java.io.InputStream open(String name) throws java.io.IOException
 {
-if (name.startsWith("http://") || name.startsWith("https://")) return new java.net.URL(name).openStream();
+ if (name.startsWith("http://") || name.startsWith("https://")) {
+     java.net.URLConnection connection = new java.net.URL(name).openConnection();
+     connection.connect();
+     return connection.getInputStream();
+ }
 if (name.indexOf(':') >= 0) throw new java.io.IOException("Unsupported M3G resource scheme");
 org.recompile.mobile.MobilePlatform platform = org.recompile.mobile.Mobile.getPlatform();
 if (platform == null || platform.loader == null) throw new java.io.IOException("No MIDlet resource loader");

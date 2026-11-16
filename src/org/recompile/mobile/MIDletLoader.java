@@ -415,6 +415,28 @@ private static String throwableTypes(Throwable error)
 					properties.put(key, value);
 				}
 			}
+			String selectedClass = System.getProperty("j2mex.midlet.class");
+			if (selectedClass != null && !selectedClass.trim().isEmpty())
+			{
+				boolean selectedFound = false;
+				for (int index = 1; index <= 255; index++)
+				{
+					String descriptor = properties.get("MIDlet-" + index);
+					if (descriptor == null) continue;
+					String[] selectedParts = descriptor.split(",", -1);
+					if (selectedParts.length != 3
+							|| !selectedClass.trim().equals(selectedParts[2].trim())) continue;
+					name = selectedParts[0].trim();
+					icon = selectedParts[1].trim();
+					className = selectedParts[2].trim();
+					suitename = name;
+					selectedFound = true;
+					break;
+				}
+				if (!selectedFound)
+					throw new IOException("Selected MIDlet is not declared in the manifest: "
+							+ selectedClass);
+			}
 			// for RecordStore, remove illegal chars from name
 			suitename = suitename.replace(":","");
 		}
@@ -686,7 +708,8 @@ return output.toByteArray();
 
 	byte[] adaptPackageQualifiedFactoryConstruction(byte[] bytecode, String className)
 	{
-		if (className == null || !className.endsWith(".dl")) return bytecode;
+		if (!ClassFileCompatibility.mayContainPackageQualifiedFactoryConstruction(
+				bytecode, className)) return bytecode;
 		String internalName = className.replace('.', '/');
 		int separator = internalName.lastIndexOf('/');
 		if (separator <= 0) return bytecode;

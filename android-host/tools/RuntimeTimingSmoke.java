@@ -15,6 +15,14 @@ public final class RuntimeTimingSmoke {
         if (fastElapsed < 100_000_000L)
             throw new AssertionError("Guest monotonic clock did not accelerate: " + fastElapsed);
 
+        RuntimeTiming.setSpeedPercent(1500);
+        long preciseSleepStartedAt = System.nanoTime();
+        for (int i = 0; i < 64; i++) RuntimeTiming.sleep(16L);
+        long preciseSleepAverage = (System.nanoTime() - preciseSleepStartedAt) / 64L;
+        if (preciseSleepAverage >= 1_950_000L)
+            throw new AssertionError("Fast-forward sleep rounded to whole milliseconds: "
+                    + preciseSleepAverage + " ns average");
+
         RuntimeTiming.setSpeedPercent(50);
         long slowBefore = RuntimeTiming.nanoTime();
         Thread.sleep(40L);
@@ -42,16 +50,57 @@ public final class RuntimeTimingSmoke {
         if (!rejected) throw new AssertionError("Speed above 20x was accepted");
 
         MemoryEditorGuard.resetSession();
-        if (!MemoryEditorGuard.openEditor())
+        if (!MemoryEditorGuard.openEditor(false))
             throw new AssertionError("Offline memory editor should open before network use");
+        expectNetworkDenied();
+        expectNetworkBeginDenied();
+        MemoryEditorGuard.closeEditor();
+        expectNetworkDenied();
+        if (!MemoryEditorGuard.openEditor(true))
+            throw new AssertionError(
+                    "Reopening after the editor has locked the session must not require offline status");
+        expectNetworkDenied();
+        MemoryEditorGuard.closeEditor();
+        expectNetworkDenied();
+
+        MemoryEditorGuard.resetSession();
+        MemoryEditorGuard.checkConnector("datagram://8.8.8.8:53");
+        MemoryEditorGuard.checkConnector("socket://:22122");
+        MemoryEditorGuard.checkConnector("socket://127.0.0.1:14445");
+        MemoryEditorGuard.checkConnector("http://192.168.1.40:8080");
+        MemoryEditorGuard.checkConnector("http://game-server.local:8080");
+        if (!MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("Unsupported probes and local servers must not lock editing");
+        MemoryEditorGuard.checkConnector("socket://127.0.0.1:14445");
         expectNetworkDenied();
         MemoryEditorGuard.closeEditor();
         expectNetworkDenied();
 
         MemoryEditorGuard.resetSession();
         MemoryEditorGuard.checkConnector("https://example.invalid");
-        if (MemoryEditorGuard.openEditor())
-            throw new AssertionError("Memory editor opened after network use");
+        if (MemoryEditorGuard.openEditor(true))
+            throw new AssertionError("The editor must remain unavailable while a network is active");
+        if (!MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("The editor should be allowed after connectivity is disabled");
+        MemoryEditorGuard.closeEditor();
+
+        MemoryEditorGuard.resetSession();
+        boolean pending = MemoryEditorGuard.beginConnection("https://time.gov/");
+        if (!pending || MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("An in-flight external connection must block editing");
+        MemoryEditorGuard.finishConnection(pending);
+        if (!MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("A failed external connection must release the editor lock");
+        MemoryEditorGuard.closeEditor();
+
+        MemoryEditorGuard.resetSession();
+        boolean connected = MemoryEditorGuard.beginConnection("https://example.invalid");
+        MemoryEditorGuard.finishConnection(connected);
+        if (MemoryEditorGuard.openEditor(true))
+            throw new AssertionError("Memory editor opened while network connectivity was active");
+        if (!MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("Offline mode should permit editing after disconnecting");
+        expectNetworkDenied();
 
         RuntimeTiming.reset();
         System.out.println("RuntimeTimingSmoke passed");
@@ -64,5 +113,14 @@ public final class RuntimeTimingSmoke {
             return;
         }
         throw new AssertionError("Network connector was not denied");
+    }
+
+    private static void expectNetworkBeginDenied() throws Exception {
+        try {
+            MemoryEditorGuard.beginConnection("https://m3g.example/resource.m3g");
+        } catch (IOException expected) {
+            return;
+        }
+        throw new AssertionError("Direct external resource connection was not denied");
     }
 }

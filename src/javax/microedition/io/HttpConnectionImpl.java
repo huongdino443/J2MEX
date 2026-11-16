@@ -18,6 +18,7 @@ import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Map;
 import java.util.TreeMap;
+import org.recompile.mobile.MemoryEditorGuard;
 
 class HttpConnectionImpl implements HttpConnection
 {
@@ -56,6 +57,19 @@ private void ensureOpen() throws IOException
 if(closed) { throw new IOException("Connection is closed"); }
 }
 
+private void establishAndRecordConnection() throws IOException
+{
+boolean tracked = MemoryEditorGuard.beginConnection(url.toExternalForm());
+try
+{
+connection.connect();
+}
+finally
+{
+MemoryEditorGuard.finishConnection(tracked);
+}
+}
+
 public void close() throws IOException
 {
 if(closed) { return; }
@@ -78,7 +92,11 @@ public InputStream openInputStream() throws IOException
 {
 ensureOpen();
 if((mode & Connector.READ) == 0) { throw new IOException("Connection is not open for reading"); }
-if(input == null) { input = connection.getInputStream(); }
+if(input == null)
+{
+establishAndRecordConnection();
+input = connection.getInputStream();
+}
 return input;
 }
 
@@ -92,6 +110,7 @@ if(output == null)
 {
 if(GET.equals(requestMethod)) { setRequestMethod(POST); }
 connection.setDoOutput(true);
+establishAndRecordConnection();
 output = connection.getOutputStream();
 }
 return output;
@@ -99,19 +118,82 @@ return output;
 
 public DataOutputStream openDataOutputStream() throws IOException { return new DataOutputStream(openOutputStream()); }
 
-public String getEncoding() { return headerValue("Content-Encoding"); }
-public long getLength() { return connection.getContentLengthLong(); }
-public String getType() { return connection.getContentType(); }
-public long getDate() throws IOException { ensureOpen(); return connection.getDate(); }
-public long getExpiration() throws IOException { ensureOpen(); return connection.getExpiration(); }
+public String getEncoding() throws IOException
+{
+establishAndRecordConnection();
+String value = headerValue("Content-Encoding");
+return value;
+}
+public long getLength() throws IOException
+{
+establishAndRecordConnection();
+long value = connection.getContentLengthLong();
+return value;
+}
+public String getType() throws IOException
+{
+establishAndRecordConnection();
+String value = connection.getContentType();
+return value;
+}
+public long getDate() throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+long value = connection.getDate();
+return value;
+}
+public long getExpiration() throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+long value = connection.getExpiration();
+return value;
+}
 public String getFile() { return url.getFile(); }
-public String getHeaderField(int n) throws IOException { ensureOpen(); return connection.getHeaderField(n); }
-public String getHeaderField(String name) throws IOException { ensureOpen(); return headerValue(name); }
-public long getHeaderFieldDate(String name, long def) throws IOException { ensureOpen(); return connection.getHeaderFieldDate(name, def); }
-public int getHeaderFieldInt(String name, int def) throws IOException { ensureOpen(); return connection.getHeaderFieldInt(name, def); }
-public String getHeaderFieldKey(int n) throws IOException { ensureOpen(); return connection.getHeaderFieldKey(n); }
+public String getHeaderField(int n) throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+String value = connection.getHeaderField(n);
+return value;
+}
+public String getHeaderField(String name) throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+String value = headerValue(name);
+return value;
+}
+public long getHeaderFieldDate(String name, long def) throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+long value = connection.getHeaderFieldDate(name, def);
+return value;
+}
+public int getHeaderFieldInt(String name, int def) throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+int value = connection.getHeaderFieldInt(name, def);
+return value;
+}
+public String getHeaderFieldKey(int n) throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+String value = connection.getHeaderFieldKey(n);
+return value;
+}
 public String getHost() { return url.getHost(); }
-public long getLastModified() throws IOException { ensureOpen(); return connection.getLastModified(); }
+public long getLastModified() throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+long value = connection.getLastModified();
+return value;
+}
 public int getPort() { return url.getPort() < 0 ? defaultPort() : url.getPort(); }
 public String getProtocol() { return url.getProtocol(); }
 public String getQuery() { return url.getQuery(); }
@@ -122,8 +204,20 @@ public String getRequestProperty(String key)
 String value = requestProperties.get(key);
 return value == null ? connection.getRequestProperty(key) : value;
 }
-public int getResponseCode() throws IOException { ensureOpen(); return connection.getResponseCode(); }
-public String getResponseMessage() throws IOException { ensureOpen(); return connection.getResponseMessage(); }
+public int getResponseCode() throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+int value = connection.getResponseCode();
+return value;
+}
+public String getResponseMessage() throws IOException
+{
+ensureOpen();
+establishAndRecordConnection();
+String value = connection.getResponseMessage();
+return value;
+}
 public String getURL() { return url.toExternalForm(); }
 
 public void setRequestMethod(String method) throws IOException

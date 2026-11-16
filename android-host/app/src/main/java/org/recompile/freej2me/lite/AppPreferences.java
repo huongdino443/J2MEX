@@ -13,6 +13,9 @@ final class AppPreferences {
     private static final String DEBUG_LOGS = "debug_logs_enabled";
     private static final String STATUS_BAR = "status_bar_visible";
     private static final String LOCK_ORIENTATION = "lock_orientation";
+    private static final String KEEP_GAME_IN_BACKGROUND = "keep_game_in_background";
+    private static final String BACKGROUND_NOTIFICATION_PROMPTED =
+            "background_notification_prompted";
     private static final String LANGUAGE = "language";
     static final String ACTION_RUNTIME_SETTINGS_CHANGED =
             "org.recompile.freej2me.lite.RUNTIME_SETTINGS_CHANGED";
@@ -20,6 +23,10 @@ final class AppPreferences {
     static final String EXTRA_DEBUG_LOGS = "app_preferences.debug_logs";
     static final String EXTRA_STATUS_BAR = "app_preferences.status_bar";
     static final String EXTRA_LOCK_ORIENTATION = "app_preferences.lock_orientation";
+    static final String EXTRA_KEEP_GAME_IN_BACKGROUND =
+            "app_preferences.keep_game_in_background";
+    static final String EXTRA_BACKGROUND_NOTIFICATION_PROMPTED =
+            "app_preferences.background_notification_prompted";
 
     private AppPreferences() { }
 
@@ -32,16 +39,21 @@ final class AppPreferences {
         intent.putExtra(EXTRA_DEBUG_LOGS, debugLogsEnabled(context));
         intent.putExtra(EXTRA_STATUS_BAR, statusBarVisible(context));
         intent.putExtra(EXTRA_LOCK_ORIENTATION, orientationLocked(context));
+        intent.putExtra(EXTRA_KEEP_GAME_IN_BACKGROUND, keepGameInBackground(context));
+        intent.putExtra(EXTRA_BACKGROUND_NOTIFICATION_PROMPTED,
+                backgroundNotificationPrompted(context));
     }
 
     static void syncRuntimeSettingsToMain(Context context, boolean showFps,
-            boolean debugLogs, boolean statusBar, boolean lockOrientation) {
+            boolean debugLogs, boolean statusBar, boolean lockOrientation,
+            boolean keepGameInBackground) {
         Intent update = new Intent(context, AppPreferencesReceiver.class);
         update.setAction(ACTION_RUNTIME_SETTINGS_CHANGED);
         update.putExtra(EXTRA_SHOW_FPS, showFps);
         update.putExtra(EXTRA_DEBUG_LOGS, debugLogs);
         update.putExtra(EXTRA_STATUS_BAR, statusBar);
         update.putExtra(EXTRA_LOCK_ORIENTATION, lockOrientation);
+        update.putExtra(EXTRA_KEEP_GAME_IN_BACKGROUND, keepGameInBackground);
         context.sendBroadcast(update);
     }
 
@@ -52,6 +64,9 @@ final class AppPreferences {
                 .putBoolean(STATUS_BAR, update.getBooleanExtra(EXTRA_STATUS_BAR, true))
                 .putBoolean(LOCK_ORIENTATION,
                         update.getBooleanExtra(EXTRA_LOCK_ORIENTATION, false))
+                .putBoolean(KEEP_GAME_IN_BACKGROUND,
+                        update.getBooleanExtra(EXTRA_KEEP_GAME_IN_BACKGROUND,
+                                keepGameInBackground(context)))
                 .commit();
     }
 
@@ -85,6 +100,22 @@ final class AppPreferences {
 
     static void setOrientationLocked(Context context, boolean locked) {
         preferences(context).edit().putBoolean(LOCK_ORIENTATION, locked).apply();
+    }
+
+    static boolean keepGameInBackground(Context context) {
+        return preferences(context).getBoolean(KEEP_GAME_IN_BACKGROUND, false);
+    }
+
+    static void setKeepGameInBackground(Context context, boolean enabled) {
+        preferences(context).edit().putBoolean(KEEP_GAME_IN_BACKGROUND, enabled).apply();
+    }
+
+    static boolean backgroundNotificationPrompted(Context context) {
+        return preferences(context).getBoolean(BACKGROUND_NOTIFICATION_PROMPTED, false);
+    }
+
+    static void markBackgroundNotificationPrompted(Context context) {
+        preferences(context).edit().putBoolean(BACKGROUND_NOTIFICATION_PROMPTED, true).commit();
     }
 
     static String automaticLanguage(Context context) {

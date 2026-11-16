@@ -21,6 +21,30 @@ final class ClassFileCompatibility {
 
 	private ClassFileCompatibility() { }
 
+	static boolean mayContainPackageQualifiedFactoryConstruction(
+			byte[] bytecode, String className) {
+		if (bytecode == null || className == null) return false;
+		String internalName = className.replace('.', '/');
+		int separator = internalName.lastIndexOf('/');
+		if (separator <= 0) return false;
+		String packageName = internalName.substring(0, separator);
+		return containsAscii(bytecode,
+				"(Ljava/lang/String;II)L" + packageName + "/G;")
+				&& containsAscii(bytecode,
+						"(L" + internalName + ";Ljava/lang/String;II)V")
+				&& containsAscii(bytecode, "Z");
+	}
+
+	private static boolean containsAscii(byte[] bytes, String value) {
+		for (int start = 0; start <= bytes.length - value.length(); start++) {
+			int index = 0;
+			while (index < value.length()
+					&& bytes[start + index] == (byte)value.charAt(index)) index++;
+			if (index == value.length()) return true;
+		}
+		return false;
+	}
+
 	interface ClassDefiner {
 		Class<?> define(byte[] bytecode);
 	}
@@ -109,7 +133,9 @@ final class ClassFileCompatibility {
 		try {
 			final String internalName = className.replace('.', '/');
 			final int separator = internalName.lastIndexOf('/');
-			if (separator <= 0 || !"dl".equals(internalName.substring(separator + 1))) return bytecode;
+			if (separator <= 0
+					|| !mayContainPackageQualifiedFactoryConstruction(bytecode, className))
+				return bytecode;
 			final String packageName = internalName.substring(0, separator);
 			final String siblingName = packageName + "/Z";
 			final String resultName = packageName + "/G";
@@ -149,19 +175,28 @@ final class ClassFileCompatibility {
 
 			public MethodVisitor visitMethod(int access, String name, String descriptor,
 					String signature, String[] exceptions) {
-				if (!"a".equals(name)
-						|| !("(Ljava/lang/String;II)L" + resultName + ";").equals(descriptor)) return null;
-				factoryCounts[0]++;
+				if (!("(Ljava/lang/String;II)L" + resultName + ";").equals(descriptor)) return null;
+				final int[] methodFactoryCounts = new int[2]; // NEW target + constructor
 				return new MethodAdapter(new EmptyVisitor()) {
 					public void visitTypeInsn(int opcode, String type) {
-						if (opcode == Opcodes.NEW && "Z".equals(type)) factoryCounts[1]++;
+						if (opcode == Opcodes.NEW && "Z".equals(type)) methodFactoryCounts[0]++;
 					}
 
 					public void visitMethodInsn(int opcode, String owner, String methodName,
 							String methodDescriptor) {
 						if (opcode == Opcodes.INVOKESPECIAL && "Z".equals(owner)
 								&& "<init>".equals(methodName)
-								&& constructorDescriptor.equals(methodDescriptor)) factoryCounts[2]++;
+								&& constructorDescriptor.equals(methodDescriptor))
+							methodFactoryCounts[1]++;
+					}
+
+					public void visitEnd() {
+						if (methodFactoryCounts[0] == 1 && methodFactoryCounts[1] == 1) {
+							factoryCounts[0]++;
+							factoryCounts[1] += methodFactoryCounts[0];
+							factoryCounts[2] += methodFactoryCounts[1];
+						}
+						super.visitEnd();
 					}
 				};
 			}
@@ -202,8 +237,7 @@ final class ClassFileCompatibility {
 		public MethodVisitor visitMethod(int access, String name, String descriptor,
 				String signature, String[] exceptions) {
 			MethodVisitor downstream = super.visitMethod(access, name, descriptor, signature, exceptions);
-			if (!"a".equals(name)
-					|| !("(Ljava/lang/String;II)L" + packageName + "/G;").equals(descriptor))
+			if (!("(Ljava/lang/String;II)L" + packageName + "/G;").equals(descriptor))
 				return downstream;
 			return new MethodAdapter(downstream) {
 				public void visitTypeInsn(int opcode, String type) {

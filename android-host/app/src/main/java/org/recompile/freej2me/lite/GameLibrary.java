@@ -41,6 +41,18 @@ final class GameLibrary {
         }
     }
 
+    static final class MidletDescriptor {
+        final String name;
+        final String icon;
+        final String className;
+
+        MidletDescriptor(String name, String icon, String className) {
+            this.name = name;
+            this.icon = icon;
+            this.className = className;
+        }
+    }
+
     private GameLibrary() { }
 
     static List<Game> scan(Activity activity) throws IOException {
@@ -141,6 +153,30 @@ final class GameLibrary {
             Bitmap icon = readIcon(jar, iconPath);
             return new Game(jarFile, title, sourceName, icon);
         }
+    }
+
+    static List<MidletDescriptor> readMidlets(File jarFile) throws IOException {
+        ArrayList<MidletDescriptor> midlets = new ArrayList<>();
+        try (JarFile jar = new JarFile(jarFile)) {
+            Manifest manifest = JarManifestReader.read(jar);
+            Attributes attributes = manifest == null ? null : manifest.getMainAttributes();
+            if (attributes == null) throw new IOException("Không đọc được manifest MIDlet.");
+            for (int index = 1; index <= 255; index++) {
+                String descriptor = attributes.getValue("MIDlet-" + index);
+                if (descriptor == null || descriptor.trim().isEmpty()) continue;
+                String[] parts = descriptor.split(",", -1);
+                if (parts.length != 3) continue;
+                String name = parts[0].trim();
+                String icon = parts[1].trim();
+                String className = parts[2].trim();
+                if (name.isEmpty() || className.isEmpty()) continue;
+                String classPath = className.replace('.', '/') + ".class";
+                if (jar.getJarEntry(classPath) == null) continue;
+                midlets.add(new MidletDescriptor(name, icon, className));
+            }
+        }
+        if (midlets.isEmpty()) throw new IOException("Không tìm thấy MIDlet hợp lệ trong JAR.");
+        return midlets;
     }
 
     static void saveDisplayName(File gameDirectory, String displayName) throws IOException {

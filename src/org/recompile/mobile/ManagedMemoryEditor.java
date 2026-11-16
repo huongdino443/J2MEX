@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,8 +31,9 @@ import java.util.Vector;
  */
 public final class ManagedMemoryEditor {
     public static final int MAX_VISIBLE_RESULTS = 100;
+    public static final int MAX_BATCH_EDIT_VALUES = 20000;
     private static final int MAX_OBJECTS = 30000;
-    private static final int MAX_CANDIDATES = 20000;
+    private static final int MAX_CANDIDATES = MAX_BATCH_EDIT_VALUES;
     private static final int MAX_ARRAY_ELEMENTS = 100000;
 
     public static final class Entry {
@@ -54,18 +56,23 @@ public final class ManagedMemoryEditor {
         public final boolean success;
         public final String message;
         public final int total;
+        public final int pageIndex;
+        public final int pageCount;
         public final List<Entry> entries;
 
-        private Result(boolean success, String message, int total, List<Entry> entries) {
+        private Result(boolean success, String message, int total, int pageIndex,
+                int pageCount, List<Entry> entries) {
             this.success = success;
             this.message = message;
             this.total = total;
+            this.pageIndex = pageIndex;
+            this.pageCount = pageCount;
             this.entries = entries;
         }
     }
 
     public static Result notice(boolean success, String message) {
-        return new Result(success, message == null ? "" : message, 0,
+        return new Result(success, message == null ? "" : message, 0, 0, 1,
                 Collections.<Entry>emptyList());
     }
 
@@ -76,16 +83,18 @@ public final class ManagedMemoryEditor {
         final WeakReference<Object> array;
         final int index;
         final Class<?> valueType;
+        final boolean unsigned16;
         final String location;
 
         Candidate(int id, Field field, Object owner, Object array, int index,
-                Class<?> valueType, String location) {
+                Class<?> valueType, boolean unsigned16, String location) {
             this.id = id;
             this.field = field;
             this.owner = owner == null ? null : new WeakReference<>(owner);
             this.array = array == null ? null : new WeakReference<>(array);
             this.index = index;
             this.valueType = valueType;
+            this.unsigned16 = unsigned16;
             this.location = location;
         }
 
@@ -110,7 +119,16 @@ public final class ManagedMemoryEditor {
         }
 
         void write(String text) throws Exception {
-            Object value = parseValue(valueType, text);
+            writeValue(parseEditValue(text));
+        }
+
+        Object parseEditValue(String text) {
+            return unsigned16 && valueType == short.class
+                    ? Short.valueOf((short) parseUnsigned16(text))
+                    : parseValue(valueType, text);
+        }
+
+        void writeValue(Object value) throws Exception {
             if (field != null) {
                 if (!Modifier.isStatic(field.getModifiers()) && owner() == null)
                     throw new IllegalStateException("MIDlet object is no longer reachable");
@@ -124,13 +142,13 @@ public final class ManagedMemoryEditor {
         }
 
         String typeName() {
+            if (unsigned16 || valueType == char.class) return "UInt16";
             if (valueType == byte.class) return "Int8";
             if (valueType == short.class) return "Int16";
             if (valueType == int.class) return "Int32";
             if (valueType == long.class) return "Int64";
             if (valueType == float.class) return "Float32";
             if (valueType == double.class) return "Float64";
-            if (valueType == char.class) return "Char16";
             return valueType.getSimpleName();
         }
 
@@ -145,12 +163,22 @@ public final class ManagedMemoryEditor {
         String displayValue() {
             try {
                 Object value = read();
+                if (unsigned16 && value instanceof Short)
+                    return Integer.toString(Short.toUnsignedInt(((Short) value).shortValue()));
                 return value instanceof Character
                         ? Integer.toString(((Character) value).charValue())
                         : String.valueOf(value);
             } catch (Exception ignored) {
                 return "unavailable";
             }
+        }
+
+        boolean matches(BigDecimal target) throws Exception {
+            Object value = read();
+            if (unsigned16 && value instanceof Short)
+                return BigDecimal.valueOf(Short.toUnsignedInt(((Short) value).shortValue()))
+                        .compareTo(target) == 0;
+            return ManagedMemoryEditor.matches(value, target);
         }
     }
 
@@ -160,6 +188,7 @@ public final class ManagedMemoryEditor {
     private final LinkedHashMap<Integer, Candidate> candidates =
             new LinkedHashMap<Integer, Candidate>();
     private int nextId = 1;
+    private int currentPage;
 
     public ManagedMemoryEditor(MIDletLoader loader) {
         if (loader == null) throw new NullPointerException("loader");
@@ -176,6 +205,11 @@ public final class ManagedMemoryEditor {
     }
 
     public synchronized Result search(String query, boolean refine) {
+        return search(query, refine, "All", 0);
+    }
+
+    public synchronized Result search(String query, boolean refine, String typeFilter,
+            int pageIndex) {
         if (query == null || query.trim().isEmpty())
             return failure("Nhập giá trị số cần tìm.");
         final BigDecimal target;
@@ -189,7 +223,7 @@ public final class ManagedMemoryEditor {
             LinkedHashMap<Integer, Candidate> kept = new LinkedHashMap<Integer, Candidate>();
             for (Candidate candidate : candidates.values()) {
                 try {
-                    if (matches(candidate.read(), target)) kept.put(candidate.id, candidate);
+                    if (candidate.matches(target)) kept.put(candidate.id, candidate);
                 } catch (Throwable unavailable) {
                     // A collected object or replaced array invalidates this session candidate.
                 }
@@ -203,9 +237,15 @@ public final class ManagedMemoryEditor {
             Class<?>[] initializedClasses = ManagedMemoryDiscovery.snapshot(loader);
             if (root == null && initializedClasses.length == 0)
                 return failure("Game chưa khởi chạy xong.");
-            scan(root, initializedClasses, target);
+            scan(root, initializedClasses, target, normalizeFilter(typeFilter));
         }
-        return success(candidates.size(), page());
+        currentPage = clampPage(pageIndex);
+        return currentResult();
+    }
+
+    public synchronized Result page(int pageIndex) {
+        currentPage = clampPage(pageIndex);
+        return currentResult();
     }
 
     public synchronized Result edit(int id, String value) {
@@ -213,13 +253,52 @@ public final class ManagedMemoryEditor {
         if (candidate == null) return failure("Giá trị này không còn khả dụng.");
         try {
             candidate.write(value == null ? "" : value.trim());
-            return success(candidates.size(), page());
+            return currentResult();
         } catch (Throwable error) {
             return failure("Không thể thay đổi giá trị này.");
         }
     }
 
-    private void scan(Object root, Class<?>[] initializedClasses, BigDecimal target) {
+    public synchronized Result editAll(int[] ids, String value) {
+        if (ids == null || ids.length == 0)
+            return failure("Chọn ít nhất một giá trị.");
+        LinkedHashMap<Candidate, Object> previousValues =
+                new LinkedHashMap<Candidate, Object>();
+        LinkedHashMap<Candidate, Object> newValues =
+                new LinkedHashMap<Candidate, Object>();
+        try {
+            LinkedHashSet<Integer> uniqueIds = new LinkedHashSet<Integer>();
+            for (int id : ids) {
+                if (!uniqueIds.add(id)) continue;
+                Candidate candidate = candidates.get(id);
+                if (candidate == null)
+                    return failure("Một hoặc nhiều giá trị đã chọn không còn khả dụng.");
+                previousValues.put(candidate, candidate.read());
+                newValues.put(candidate, candidate.parseEditValue(value == null ? "" : value.trim()));
+            }
+            ArrayList<Candidate> written = new ArrayList<Candidate>();
+            try {
+                for (Map.Entry<Candidate, Object> update : newValues.entrySet()) {
+                    update.getKey().writeValue(update.getValue());
+                    written.add(update.getKey());
+                }
+            } catch (Throwable writeFailure) {
+                for (int index = written.size() - 1; index >= 0; index--) {
+                    Candidate candidate = written.get(index);
+                    try {
+                        candidate.writeValue(previousValues.get(candidate));
+                    } catch (Throwable ignored) { }
+                }
+                return failure("Không thể sửa đồng loạt: giá trị không phù hợp hoặc đã mất.");
+            }
+            return currentResult();
+        } catch (Throwable invalidValue) {
+            return failure("Không thể sửa đồng loạt: giá trị không phù hợp hoặc đã mất.");
+        }
+    }
+
+    private void scan(Object root, Class<?>[] initializedClasses, BigDecimal target,
+            String typeFilter) {
         ArrayDeque<Object> pending = new ArrayDeque<Object>();
         Set<Object> visited = Collections.newSetFromMap(
                 new IdentityHashMap<Object, Boolean>());
@@ -229,7 +308,7 @@ public final class ManagedMemoryEditor {
         for (Class<?> ownerType : initializedClasses) {
             if (ownerType == null || ownerType.getClassLoader() != loader
                     || !staticScanned.add(ownerType)) continue;
-            scanFields(ownerType, null, true, pending, target);
+            scanFields(ownerType, null, true, pending, target, typeFilter);
         }
         try {
             if (Mobile.getDisplay() != null)
@@ -246,12 +325,13 @@ public final class ManagedMemoryEditor {
                         Math.max(0, MAX_ARRAY_ELEMENTS - arrayElements));
                 arrayElements += length;
                 Class<?> component = type.getComponentType();
-                if (component.isPrimitive() && isNumeric(component)) {
+                if (component.isPrimitive() && isSelectedType(component, typeFilter)) {
                     for (int index = 0; index < length && candidates.size() < MAX_CANDIDATES; index++) {
                         try {
                             Object element = Array.get(value, index);
-                            if (matches(element, target)) {
-                                addArrayCandidate(value, index, component);
+                            boolean unsigned16 = isUnsigned16(component, typeFilter);
+                            if (matchesValue(element, target, unsigned16)) {
+                                addArrayCandidate(value, index, component, unsigned16);
                             }
                         } catch (Throwable ignored) { }
                     }
@@ -292,14 +372,14 @@ public final class ManagedMemoryEditor {
             for (Class<?> ownerType = type; ownerType != null && ownerType != Object.class
                     && ownerType.getClassLoader() == loader; ownerType = ownerType.getSuperclass()) {
                 if (staticScanned.add(ownerType))
-                    scanFields(ownerType, null, true, pending, target);
-                scanFields(ownerType, value, false, pending, target);
+                    scanFields(ownerType, null, true, pending, target, typeFilter);
+                scanFields(ownerType, value, false, pending, target, typeFilter);
             }
         }
     }
 
     private void scanFields(Class<?> ownerType, Object owner, boolean statics,
-            ArrayDeque<Object> pending, BigDecimal target) {
+            ArrayDeque<Object> pending, BigDecimal target, String typeFilter) {
         Field[] fields;
         try {
             fields = ownerType.getDeclaredFields();
@@ -313,9 +393,11 @@ public final class ManagedMemoryEditor {
             try {
                 field.setAccessible(true);
                 Object value = field.get(statics ? null : owner);
-                if (valueType.isPrimitive() && isNumeric(valueType)) {
-                    if (!Modifier.isFinal(modifiers) && matches(value, target))
-                        addFieldCandidate(field, owner, valueType);
+                if (valueType.isPrimitive() && isSelectedType(valueType, typeFilter)) {
+                    boolean unsigned16 = isUnsigned16(valueType, typeFilter);
+                    if (!Modifier.isFinal(modifiers)
+                            && matchesValue(value, target, unsigned16))
+                        addFieldCandidate(field, owner, valueType, unsigned16);
                 } else if (!valueType.isPrimitive()) {
                     enqueueIfGameObject(pending, value);
                 }
@@ -334,36 +416,92 @@ public final class ManagedMemoryEditor {
             pending.addLast(value);
     }
 
-    private void addFieldCandidate(Field field, Object owner, Class<?> type) {
+    private void addFieldCandidate(Field field, Object owner, Class<?> type,
+            boolean unsigned16) {
         if (candidates.size() >= MAX_CANDIDATES) return;
         int id = nextId++;
         String location = field.getDeclaringClass().getName() + "." + field.getName();
-        candidates.put(id, new Candidate(id, field, owner, null, -1, type, location));
+        candidates.put(id, new Candidate(id, field, owner, null, -1, type, unsigned16, location));
     }
 
-    private void addArrayCandidate(Object array, int index, Class<?> type) {
+    private void addArrayCandidate(Object array, int index, Class<?> type,
+            boolean unsigned16) {
         if (candidates.size() >= MAX_CANDIDATES) return;
         int id = nextId++;
         String location = type.getSimpleName() + "[" + index + "]";
-        candidates.put(id, new Candidate(id, null, null, array, index, type, location));
+        candidates.put(id, new Candidate(id, null, null, array, index, type,
+                unsigned16, location));
     }
 
-    private List<Entry> page() {
+    private List<Entry> visiblePage() {
         ArrayList<Entry> result = new ArrayList<Entry>(
-                Math.min(MAX_VISIBLE_RESULTS, candidates.size()));
+                Math.min(MAX_VISIBLE_RESULTS,
+                        Math.max(0, candidates.size() - currentPage * MAX_VISIBLE_RESULTS)));
+        int skipped = 0;
         for (Candidate candidate : candidates.values()) {
+            if (skipped++ < currentPage * MAX_VISIBLE_RESULTS) continue;
             if (result.size() >= MAX_VISIBLE_RESULTS) break;
             result.add(new Entry(candidate));
         }
         return result;
     }
 
-    private static Result success(int total, List<Entry> entries) {
-        return new Result(true, total == 0 ? "Không tìm thấy giá trị phù hợp." : "", total, entries);
+    private Result currentResult() {
+        int pages = Math.max(1,
+                (candidates.size() + MAX_VISIBLE_RESULTS - 1) / MAX_VISIBLE_RESULTS);
+        return new Result(true, candidates.isEmpty()
+                ? "Không tìm thấy giá trị phù hợp." : "", candidates.size(),
+                currentPage, pages, visiblePage());
     }
 
     private static Result failure(String message) {
-        return new Result(false, message, 0, Collections.<Entry>emptyList());
+        return new Result(false, message, 0, 0, 1, Collections.<Entry>emptyList());
+    }
+
+    private int clampPage(int requestedPage) {
+        int pages = Math.max(1,
+                (candidates.size() + MAX_VISIBLE_RESULTS - 1) / MAX_VISIBLE_RESULTS);
+        return Math.max(0, Math.min(requestedPage, pages - 1));
+    }
+
+    private static String normalizeFilter(String typeFilter) {
+        if ("UInt16".equals(typeFilter) || "Int8".equals(typeFilter)
+                || "Int16".equals(typeFilter) || "Int32".equals(typeFilter)
+                || "Int64".equals(typeFilter) || "Float32".equals(typeFilter)
+                || "Float64".equals(typeFilter)) return typeFilter;
+        return "All";
+    }
+
+    private static boolean isSelectedType(Class<?> type, String typeFilter) {
+        if ("All".equals(typeFilter)) return isNumeric(type);
+        if ("UInt16".equals(typeFilter)) return type == short.class || type == char.class;
+        if ("Int8".equals(typeFilter)) return type == byte.class;
+        if ("Int16".equals(typeFilter)) return type == short.class;
+        if ("Int32".equals(typeFilter)) return type == int.class;
+        if ("Int64".equals(typeFilter)) return type == long.class;
+        if ("Float32".equals(typeFilter)) return type == float.class;
+        if ("Float64".equals(typeFilter)) return type == double.class;
+        return false;
+    }
+
+    private static boolean isUnsigned16(Class<?> type, String typeFilter) {
+        return type == char.class
+                || ("UInt16".equals(typeFilter) && type == short.class);
+    }
+
+    private static boolean matchesValue(Object value, BigDecimal target,
+            boolean unsigned16) {
+        if (unsigned16 && value instanceof Short)
+            return BigDecimal.valueOf(Short.toUnsignedInt(((Short) value).shortValue()))
+                    .compareTo(target) == 0;
+        return matches(value, target);
+    }
+
+    private static int parseUnsigned16(String text) {
+        int value = Integer.parseInt(text);
+        if (value < 0 || value > 0xFFFF)
+            throw new IllegalArgumentException("UInt16 value is out of range");
+        return value;
     }
 
     private static boolean isNumeric(Class<?> type) {
