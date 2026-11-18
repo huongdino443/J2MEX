@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Công cụ JAR J2ME — Nhân bản, ghép game và tạo JAD</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*{box-sizing:border-box}
+:root{color-scheme:light;--bg:#f3f5f2;--panel:#fff;--panel-soft:#f7f8f6;--accent:#286a54;--accent-soft:#eaf2ed;--text:#202923;--muted:#66716a;--border:#d9dfda;--danger:#b44444;--info:#42677d}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:26px 16px 54px}
+.wrap{max-width:620px;margin:0 auto}
+.brand-row{display:flex;align-items:center;gap:9px;margin-bottom:13px}
+.brand-mark{display:inline-flex;align-items:center;justify-content:center;padding:5px 8px;border-radius:6px;background:#e1e8e2;color:var(--accent);font-size:.68rem;font-weight:800;letter-spacing:.08em}
+.brand-caption{color:var(--muted);font-size:.72rem;font-weight:700;letter-spacing:.09em}
+h1{font-size:1.55rem;line-height:1.2;font-weight:750;margin:0 0 8px;letter-spacing:-.025em}
+.sub{color:var(--muted);font-size:.93rem;margin:0 0 14px;line-height:1.55}
+.privacy-note{display:flex;align-items:flex-start;gap:9px;margin:0 0 22px;padding:10px 12px;border:1px solid #d7e3db;border-radius:9px;background:#edf3ef;color:#425a4b;font-size:.82rem;line-height:1.45}
+.privacy-note svg{flex:0 0 auto;margin-top:1px}
+/* Tab switcher */
+.tabs{display:flex;gap:5px;margin-bottom:14px;padding:4px;background:#e8ece8;border:1px solid #dde2dd;border-radius:11px}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:10px 8px;text-align:center;font:inherit;font-size:.9rem;font-weight:650;color:var(--muted);cursor:pointer;border:1px solid transparent;border-radius:8px;background:transparent;transition:background .15s,color .15s,border-color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);background:#fff;border-color:#d9dfda;box-shadow:0 1px 2px rgba(22,34,25,.05)}
+.tab svg{flex:0 0 auto;opacity:.8}
+.tab:focus-visible,.mode-btn:focus-visible,.choice-btn:focus-visible,button.run:focus-visible,.drop:focus-visible{outline:3px solid #8bb7a0;outline-offset:2px}
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:19px;margin-bottom:14px;box-shadow:0 2px 7px rgba(25,40,30,.035)}
+.card-intro{margin:0 0 12px;color:var(--muted);font-size:.84rem;line-height:1.45}
+/* Drop zone */
+.drop{border:1.5px dashed #b9c7bd;border-radius:10px;padding:24px 16px;text-align:center;cursor:pointer;background:#fbfcfb;transition:border-color .15s,background .15s}
+.drop:hover,.drop.drag{border-color:var(--accent);background:#f0f6f2}
+.drop svg{display:block;margin:0 auto 9px;color:var(--accent);opacity:.85}
+.drop .main{font-size:.97rem;font-weight:700}
+.drop .hint{font-size:.82rem;color:var(--muted);margin-top:5px;line-height:1.45}
+input[type=file]{display:none}
+input[type=text],input[type=number],select{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #cbd4cd;background:#fff;color:var(--text);font:inherit;font-size:.92rem}
+input[type=text]{margin-top:7px}
+input[type=text]:focus,input[type=number]:focus,select:focus{outline:2px solid #a6c3af;border-color:var(--accent)}
+.file-info{display:flex;align-items:center;gap:10px;font-size:.88rem;background:var(--panel-soft);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:11px}
+.file-info .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.file-info .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.section-title{font-size:.88rem;font-weight:700;color:var(--text);margin:19px 0 8px}
+.section-help{margin:-3px 0 9px;color:var(--muted);font-size:.8rem;line-height:1.45}
+/* Clone choices */
+.choices{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.choice-btn{padding:12px 4px;border-radius:8px;border:1px solid #cbd4cd;background:#fff;color:var(--text);font:inherit;font-size:.98rem;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.choice-btn:hover{border-color:#8aa997}
+.choice-btn.selected{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.mode-caption{margin:0 0 8px;color:var(--muted);font-size:.8rem;font-weight:650}
+.mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:15px;padding:4px;background:#f0f2ef;border:1px solid #e2e6e2;border-radius:9px}
+.mode-btn{min-height:42px;padding:10px 8px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);font:inherit;font-size:.9rem;font-weight:650;cursor:pointer}
+.mode-btn.active{border-color:#d7dfd8;background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(22,34,25,.05)}
+.multi-game-list{display:grid;gap:8px;margin-top:12px}
+.multi-game-row{display:grid;grid-template-columns:minmax(0,1fr) 76px 34px;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:#fbfcfb}
+.multi-game-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.85rem}
+.multi-game-row input[type=number]{width:76px;text-align:center;padding:8px}
+.remove-game{border:0;background:transparent;color:var(--danger);font-size:1.2rem;cursor:pointer}
+.multi-total{margin-top:10px;color:var(--muted);font-size:.81rem;line-height:1.5}
+#multiTotal{padding:10px 11px;border-radius:8px;background:#f0f4f1;color:#455c4d}
+/* Checkbox for JAD option */
+.checkbox-row{display:flex;align-items:center;gap:10px;margin-top:14px;padding:11px 12px;background:#f4f7f5;border:1px solid #dce4de;border-radius:8px;cursor:pointer;user-select:none}
+.checkbox-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.checkbox-row .ck-label{font-size:.87rem;color:var(--text);line-height:1.45}
+.checkbox-row .ck-label b{color:var(--accent)}
+/* Buttons */
+button.run{width:100%;min-height:48px;padding:13px 16px;border-radius:8px;border:1px solid #225a47;font:inherit;font-size:.95rem;font-weight:700;cursor:pointer;margin-top:16px;background:var(--accent);color:#fff;transition:background .15s,transform .1s}
+button.run:hover:not(:disabled){background:#205b46}
+button.run:disabled{background:#a9b7ad;border-color:#a9b7ad;color:#f8faf8;cursor:not-allowed}
+button.run:active:not(:disabled){transform:translateY(1px)}
+/* Status */
+.status{margin-top:12px;font-size:.85rem;padding:10px 12px;border-radius:8px;display:none;line-height:1.55;white-space:pre-wrap}
+.status.show{display:block}
+.status.ok{background:#edf5ef;color:#285a3d;border:1px solid #cfe0d3}
+.status.err{background:#fbefef;color:#9f3737;border:1px solid #ebcccc}
+.status.info{background:#eef3f6;color:var(--info);border:1px solid #d3e0e7}
+.download-link{display:block;text-align:center;margin-top:12px;padding:12px 16px;border-radius:8px;background:#edf4ef;color:var(--accent);text-decoration:none;font-weight:700;font-size:.93rem;border:1px solid #cbdccf}
+.download-link.jad{background:#eef3f6;color:var(--info);border-color:#d3e0e7;margin-top:8px}
+/* Log */
+.log{background:#f7f8f7;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:.74rem;line-height:1.5;color:#5d685f;max-height:160px;overflow-y:auto;margin-top:10px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}
+/* JAD preview */
+pre{background:#f7f8f7;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:.78rem;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all;color:#39443c;max-height:260px;overflow-y:auto}
+/* Help and footer */
+.more-info,.technical-notes{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fbfcfb;color:var(--muted);font-size:.8rem;line-height:1.5}
+.more-info summary,.technical-notes summary{color:#46544a;font-weight:650;cursor:pointer}
+.more-info p{margin:8px 0 0}
+footer{text-align:left;color:var(--muted);font-size:.77rem;margin-top:14px;line-height:1.6}
+/* Tab panels */
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+@media(max-width:420px){body{padding:19px 12px 40px}.wrap{max-width:100%}.card{padding:15px}.brand-row{margin-bottom:10px}h1{font-size:1.38rem}.drop{padding:20px 12px}.tabs{margin-bottom:11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand-row">
+    <span class="brand-mark">J2ME</span>
+    <span class="brand-caption">CÔNG CỤ QUẢN LÝ GAME</span>
+  </div>
+  <h1>Công cụ JAR J2ME</h1>
+  <p class="sub">Nhân bản một game, ghép nhiều game vào cùng một JAR hoặc tạo file JAD để cài đặt.</p>
+  <div class="privacy-note">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/></svg>
+    <span>File được xử lý ngay trong trình duyệt; nội dung game không được tải lên máy chủ.</span>
+  </div>
+
+  <!-- Tab switcher -->
+  <div class="tabs" role="tablist" aria-label="Chọn công cụ">
+    <button type="button" class="tab active" data-tab="clone" role="tab" aria-selected="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Nhân bản / ghép JAR
+    </button>
+    <button type="button" class="tab" data-tab="jad" role="tab" aria-selected="false">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+      Tạo JAD
+    </button>
+  </div>
+
+  <!-- ===== TAB 1: CLONE ===== -->
+  <div class="tab-panel active" id="panel-clone" role="tabpanel">
+    <div class="card">
+      <div class="mode-caption">Chọn cách bạn muốn tạo JAR</div>
+      <div class="mode-switch">
+        <button type="button" class="mode-btn active" id="singleModeBtn" aria-pressed="true">Một game ×N</button>
+        <button type="button" class="mode-btn" id="multiModeBtn" aria-pressed="false">Nhiều game</button>
+      </div>
+      <div id="singleGameControls">
+      <div class="drop" id="dropClone" role="button" tabindex="0" aria-label="Chọn một file game JAR">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        <div class="main">Chọn game .jar</div>
+        <div class="hint">Chạm để duyệt tệp hoặc kéo thả vào đây</div>
+      </div>
+      <input type="file" id="fileInputClone" accept=".jar">
+      <div class="file-info" id="fileInfoClone" style="display:none">
+        <div class="dot"></div>
+        <div class="name" id="fileNameClone"></div>
+      </div>
+
+      <div class="section-title">Số bản trong JAR kết quả</div>
+      <p class="section-help">Chọn nhanh một mức hoặc nhập số lượng khác.</p>
+      <div class="choices" id="choices">
+        <button class="choice-btn" data-n="2">x2</button>
+        <button class="choice-btn" data-n="3">x3</button>
+        <button class="choice-btn" data-n="5">x5</button>
+        <button class="choice-btn" data-n="10">x10</button>
+      </div>
+      <input type="text" inputmode="numeric" id="customNInput" aria-label="Số bản muốn tạo" placeholder="Số khác, ví dụ: 4, 15 hoặc 30">
+      </div>
+      <div id="multiGameControls" style="display:none">
+        <div class="drop" id="dropMulti" role="button" tabindex="0" aria-label="Chọn nhiều file game JAR">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+          <div class="main">Thêm các file game .jar</div>
+          <div class="hint">Chọn ít nhất 2 game; sau đó đặt số bản cho từng game</div>
+        </div>
+        <input type="file" id="fileInputMulti" accept=".jar" multiple>
+        <div class="multi-game-list" id="multiGameList"></div>
+        <div class="multi-total" id="multiTotal" aria-live="polite">Chọn ít nhất 2 game. Tổng tối đa 702 MIDlet để tách dữ liệu lưu giữa các bản.</div>
+        <details class="more-info">
+          <summary>Giới hạn và lưu ý khi ghép</summary>
+          <p>Tool đánh số bản bằng tiền tố a–z rồi aa–zz. Nhiều bản cần thêm RAM và dung lượng; mức tối đa thực tế tùy thiết bị.</p>
+          <p>Nếu thư viện hoặc tài nguyên trùng tên không thể ghép an toàn, tool sẽ dừng và báo lỗi thay vì xuất JAR có nguy cơ hỏng.</p>
+        </details>
+      </div>
+
+      <div class="section-title">Tên hiển thị trong điện thoại <span style="font-weight:400;color:var(--muted)">(không bắt buộc)</span></div>
+      <input type="text" id="titleInput" aria-label="Tên hiển thị cho JAR kết quả" placeholder="Để trống sẽ dùng tên gốc">
+
+      <!-- JAD checkbox -->
+      <label class="checkbox-row" id="jadCheckboxRow">
+        <input type="checkbox" id="includeJad">
+        <span class="ck-label">Tạo thêm file .jad<br><span style="font-size:.79rem;color:var(--muted)">Có thể cần cho một số cách cài game trên điện thoại.</span></span>
+      </label>
+
+      <button class="run" id="runBtn" disabled>Ghép ngay</button>
+      <div class="status" id="statusClone" aria-live="polite"></div>
+      <div class="log" id="log" style="display:none"></div>
+    </div>
+
+    <details class="technical-notes">
+      <summary>Chi tiết kỹ thuật</summary>
+      <footer>Framework menu gốc do Quyetdaik thực hiện; bản tích hợp và đóng gói trong tool này do TrVH thực hiện. Tool đổi namespace cho từng bản, chuyển các lớp MIDlet/UI/Thread sang thư viện tương thích, tách dữ liệu RecordStore và điều chỉnh các hàm Canvas cần thiết.</footer>
+    </details>
+  </div>
+
+  <!-- ===== TAB 2: JAD ===== -->
+  <div class="tab-panel" id="panel-jad" role="tabpanel">
+    <div class="card">
+      <div class="section-title" style="margin-top:0">Tạo file cài đặt JAD</div>
+      <p class="card-intro">JAD chứa thông tin để một số trình cài đặt nhận diện JAR. Chọn file .jar để tạo JAD tương ứng.</p>
+      <div class="drop" id="dropJad" role="button" tabindex="0" aria-label="Chọn file JAR để tạo JAD">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        <div class="main">Chọn file .jar</div>
+        <div class="hint">Chạm để duyệt tệp hoặc kéo thả vào đây</div>
+      </div>
+      <input type="file" id="fileInputJad" accept=".jar">
+      <div class="file-info" id="fileInfoJad" style="display:none">
+        <div class="dot"></div>
+        <div class="name" id="fileNameJad"></div>
+      </div>
+      <button class="run" id="convertBtn" disabled>Tạo JAD</button>
+      <div class="status" id="statusJad" aria-live="polite"></div>
+    </div>
+
+    <div class="card" id="previewCard" style="display:none">
+      <div class="section-title">Nội dung .jad</div>
+      <pre id="preview"></pre>
+    </div>
+
+    <details class="technical-notes">
+      <summary>JAD được tạo như thế nào?</summary>
+      <footer>JAD được tạo từ các thuộc tính MIDlet-* trong MANIFEST.MF của JAR và tự thêm kích thước cùng tên file JAR. Nếu JAR không có manifest hợp lệ, công cụ sẽ báo lỗi.</footer>
+    </details>
+  </div>
+</div>
+<script>
+
+// ===================== Core bytecode engine =====================
+'use strict';
+// Core bytecode engine — JS port of classfile.py + relocate2.py, validated
+// against real merged JARs (LHTX3.jar, AHTTH) before being embedded in the
+// browser tool.
+
+const TAG = {
+  Utf8: 1, Integer: 3, Float: 4, Long: 5, Double: 6, Class: 7, String: 8,
+  Fieldref: 9, Methodref: 10, InterfaceMethodref: 11, NameAndType: 12,
+  MethodHandle: 15, MethodType: 16, InvokeDynamic: 18
+};
+
+class Reader {
+  constructor(data) { this.data = data; this.pos = 0; }
+  u1() { return this.data[this.pos++]; }
+  u2() { const v = (this.data[this.pos] << 8) | this.data[this.pos + 1]; this.pos += 2; return v; }
+  u4() {
+    const v = ((this.data[this.pos] << 24) | (this.data[this.pos + 1] << 16) |
+               (this.data[this.pos + 2] << 8) | this.data[this.pos + 3]) >>> 0;
+    this.pos += 4; return v;
+  }
+  bytes(n) { const v = this.data.slice(this.pos, this.pos + n); this.pos += n; return v; }
+}
+
+class Writer {
+  constructor() { this.chunks = []; this.length = 0; }
+  pushByte(b) { this.chunks.push(Uint8Array.of(b & 0xFF)); this.length += 1; }
+  pushU16(v) { this.chunks.push(Uint8Array.of((v >> 8) & 0xFF, v & 0xFF)); this.length += 2; }
+  pushU32(v) { this.chunks.push(Uint8Array.of((v >>> 24) & 0xFF, (v >>> 16) & 0xFF, (v >>> 8) & 0xFF, v & 0xFF)); this.length += 4; }
+  pushBytes(b) { this.chunks.push(b); this.length += b.length; }
+  toUint8Array() {
+    const out = new Uint8Array(this.length);
+    let off = 0;
+    for (const c of this.chunks) { out.set(c, off); off += c.length; }
+    return out;
+  }
+}
+
+function bytesToStr(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return s;
+}
+function strToBytes(s) {
+  const b = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF;
+  return b;
+}
+function bytesEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function parseClassFile(data) {
+  const r = new Reader(data);
+  const magic = r.u4();
+  if (magic !== 0xCAFEBABE) throw new Error('not a class file');
+  const minor = r.u2();
+  const major = r.u2();
+  const cpCount = r.u2();
+  const cp = new Array(cpCount).fill(null);
+  let i = 1;
+  while (i < cpCount) {
+    const tag = r.u1();
+    if (tag === TAG.Utf8) {
+      const length = r.u2();
+      cp[i] = [tag, r.bytes(length)];
+    } else if (tag === TAG.Class || tag === TAG.String || tag === TAG.MethodType) {
+      cp[i] = [tag, r.u2()];
+    } else if (tag === TAG.Fieldref || tag === TAG.Methodref || tag === TAG.InterfaceMethodref ||
+               tag === TAG.NameAndType || tag === TAG.InvokeDynamic) {
+      cp[i] = [tag, r.u2(), r.u2()];
+    } else if (tag === TAG.Integer || tag === TAG.Float) {
+      cp[i] = [tag, r.u4()];
+    } else if (tag === TAG.Long || tag === TAG.Double) {
+      cp[i] = [tag, r.u4(), r.u4()];
+      i++;
+    } else if (tag === TAG.MethodHandle) {
+      cp[i] = [tag, r.u1(), r.u2()];
+    } else {
+      throw new Error('Unknown constant pool tag ' + tag + ' at index ' + i);
+    }
+    i++;
+  }
+  const access_flags = r.u2();
+  const this_class = r.u2();
+  const super_class = r.u2();
+  const nInterfaces = r.u2();
+  const interfaces = [];
+  for (let k = 0; k < nInterfaces; k++) interfaces.push(r.u2());
+  const nFields = r.u2();
+  const fields = [];
+  for (let k = 0; k < nFields; k++) fields.push(readMember(r));
+  const nMethods = r.u2();
+  const methods = [];
+  for (let k = 0; k < nMethods; k++) methods.push(readMember(r));
+  const nAttrs = r.u2();
+  const attributes = [];
+  for (let k = 0; k < nAttrs; k++) attributes.push(readAttr(r));
+  return { magic, minor, major, cp, access_flags, this_class, super_class, interfaces, fields, methods, attributes };
+}
+function readAttr(r) {
+  const name_index = r.u2();
+  const length = r.u4();
+  return { name_index, info: r.bytes(length) };
+}
+function readMember(r) {
+  const access_flags = r.u2();
+  const name_index = r.u2();
+  const descriptor_index = r.u2();
+  const nAttrs = r.u2();
+  const attributes = [];
+  for (let k = 0; k < nAttrs; k++) attributes.push(readAttr(r));
+  return { access_flags, name_index, descriptor_index, attributes };
+}
+
+function serializeClassFile(cf) {
+  const w = new Writer();
+  w.pushU32(cf.magic); w.pushU16(cf.minor); w.pushU16(cf.major);
+  w.pushU16(cf.cp.length);
+  let i = 1;
+  while (i < cf.cp.length) {
+    const entry = cf.cp[i];
+    const tag = entry[0];
+    w.pushByte(tag);
+    if (tag === TAG.Utf8) { w.pushU16(entry[1].length); w.pushBytes(entry[1]); }
+    else if (tag === TAG.Class || tag === TAG.String || tag === TAG.MethodType) { w.pushU16(entry[1]); }
+    else if (tag === TAG.Fieldref || tag === TAG.Methodref || tag === TAG.InterfaceMethodref ||
+             tag === TAG.NameAndType || tag === TAG.InvokeDynamic) { w.pushU16(entry[1]); w.pushU16(entry[2]); }
+    else if (tag === TAG.Integer || tag === TAG.Float) { w.pushU32(entry[1]); }
+    else if (tag === TAG.Long || tag === TAG.Double) { w.pushU32(entry[1]); w.pushU32(entry[2]); i++; }
+    else if (tag === TAG.MethodHandle) { w.pushByte(entry[1]); w.pushU16(entry[2]); }
+    i++;
+  }
+  w.pushU16(cf.access_flags); w.pushU16(cf.this_class); w.pushU16(cf.super_class);
+  w.pushU16(cf.interfaces.length);
+  for (const iface of cf.interfaces) w.pushU16(iface);
+  w.pushU16(cf.fields.length);
+  for (const f of cf.fields) serializeMember(w, f);
+  w.pushU16(cf.methods.length);
+  for (const m of cf.methods) serializeMember(w, m);
+  w.pushU16(cf.attributes.length);
+  for (const a of cf.attributes) serializeAttr(w, a);
+  return w.toUint8Array();
+}
+function serializeMember(w, m) {
+  w.pushU16(m.access_flags); w.pushU16(m.name_index); w.pushU16(m.descriptor_index);
+  w.pushU16(m.attributes.length);
+  for (const a of m.attributes) serializeAttr(w, a);
+}
+function serializeAttr(w, a) { w.pushU16(a.name_index); w.pushU32(a.info.length); w.pushBytes(a.info); }
+
+function utf8(cf, idx) { return cf.cp[idx][1]; }
+function setUtf8(cf, idx, bytes) { cf.cp[idx][1] = bytes; }
+
+function rewriteDescGeneric(descBytes, renameMap) {
+  const desc = bytesToStr(descBytes);
+  let out = '';
+  let i = 0;
+  while (i < desc.length) {
+    const c = desc[i];
+    if (c === 'L') {
+      const j = desc.indexOf(';', i);
+      if (j === -1) { out += desc.slice(i); break; }
+      const name = desc.slice(i + 1, j);
+      out += renameMap.has(name) ? ('L' + renameMap.get(name) + ';') : desc.slice(i, j + 1);
+      i = j + 1;
+    } else { out += c; i++; }
+  }
+  return strToBytes(out);
+}
+
+function applyRenames(data, renameMap) {
+  const cf = parseClassFile(data);
+  const classNameRole = new Map();
+  const descriptorRole = new Map();
+  const otherRole = new Set();
+
+  for (let cpIdx = 0; cpIdx < cf.cp.length; cpIdx++) {
+    const entry = cf.cp[cpIdx];
+    if (!entry) continue;
+    const tag = entry[0];
+    if (tag === TAG.Class) {
+      if (!classNameRole.has(entry[1])) classNameRole.set(entry[1], []);
+      classNameRole.get(entry[1]).push(cpIdx);
+    } else if (tag === TAG.NameAndType) {
+      otherRole.add(entry[1]);
+      if (!descriptorRole.has(entry[2])) descriptorRole.set(entry[2], []);
+      descriptorRole.get(entry[2]).push({ kind: 'nat', obj: entry, key: 2 });
+    } else if (tag === TAG.String) {
+      otherRole.add(entry[1]);
+    }
+  }
+  for (const f of cf.fields) {
+    otherRole.add(f.name_index);
+    if (!descriptorRole.has(f.descriptor_index)) descriptorRole.set(f.descriptor_index, []);
+    descriptorRole.get(f.descriptor_index).push({ kind: 'field', obj: f, key: 'descriptor_index' });
+    for (const a of f.attributes) otherRole.add(a.name_index);
+  }
+  for (const m of cf.methods) {
+    otherRole.add(m.name_index);
+    if (!descriptorRole.has(m.descriptor_index)) descriptorRole.set(m.descriptor_index, []);
+    descriptorRole.get(m.descriptor_index).push({ kind: 'method', obj: m, key: 'descriptor_index' });
+    for (const a of m.attributes) otherRole.add(a.name_index);
+  }
+  for (const a of cf.attributes) otherRole.add(a.name_index);
+
+  for (const [utf8Idx, classCpIndices] of Array.from(classNameRole.entries())) {
+    const contentBytes = utf8(cf, utf8Idx);
+    const content = bytesToStr(contentBytes);
+    let newContentBytes;
+    if (content.startsWith('[')) {
+      newContentBytes = rewriteDescGeneric(contentBytes, renameMap);
+      if (bytesEqual(newContentBytes, contentBytes)) continue;
+    } else if (renameMap.has(content)) {
+      newContentBytes = strToBytes(renameMap.get(content));
+    } else continue;
+
+    if (otherRole.has(utf8Idx)) {
+      const newIdx = cf.cp.length;
+      cf.cp.push([TAG.Utf8, newContentBytes]);
+      for (const ci of classCpIndices) cf.cp[ci][1] = newIdx;
+    } else {
+      setUtf8(cf, utf8Idx, newContentBytes);
+    }
+  }
+
+  for (const [utf8Idx, consumers] of Array.from(descriptorRole.entries())) {
+    const contentBytes = utf8(cf, utf8Idx);
+    const newContentBytes = rewriteDescGeneric(contentBytes, renameMap);
+    if (bytesEqual(newContentBytes, contentBytes)) continue;
+    if (otherRole.has(utf8Idx) || classNameRole.has(utf8Idx)) {
+      const newIdx = cf.cp.length;
+      cf.cp.push([TAG.Utf8, newContentBytes]);
+      for (const c of consumers) c.obj[c.key] = newIdx;
+    } else {
+      setUtf8(cf, utf8Idx, newContentBytes);
+    }
+  }
+  return serializeClassFile(cf);
+}
+
+function relocateClassBytes(data, internalNames, prefix) {
+  const renameMap = new Map();
+  for (const name of internalNames) renameMap.set(name, prefix + '/' + name);
+  return applyRenames(data, renameMap);
+}
+
+function rewriteReflectiveClassNameStrings(data, internalNames, prefix) {
+  // Relocating a class does not update names passed as Strings to reflection.
+  // Limit this rewrite to classes that actually call Class.forName/loadClass.
+  const cf = parseClassFile(data);
+  let hasReflectiveLoader = false;
+  for (const entry of cf.cp) {
+    if (!entry || (entry[0] !== TAG.Methodref && entry[0] !== TAG.InterfaceMethodref)) continue;
+    const owner = cf.cp[entry[1]];
+    const nat = cf.cp[entry[2]];
+    if (!owner || owner[0] !== TAG.Class || !nat || nat[0] !== TAG.NameAndType) continue;
+    const ownerName = bytesToStr(utf8(cf, owner[1]));
+    const methodName = bytesToStr(utf8(cf, nat[1]));
+    if ((ownerName === 'java/lang/Class' && methodName === 'forName') ||
+        (ownerName === 'java/lang/ClassLoader' && methodName === 'loadClass')) {
+      hasReflectiveLoader = true;
+      break;
+    }
+  }
+  if (!hasReflectiveLoader) return data;
+
+  const classNames = new Map();
+  for (const name of internalNames) {
+    classNames.set(name, prefix + '/' + name);
+    classNames.set(name.replace(/\//g, '.'), (prefix + '/' + name).replace(/\//g, '.'));
+  }
+  let changed = false;
+  for (const entry of cf.cp) {
+    if (!entry || entry[0] !== TAG.String) continue;
+    const oldValue = bytesToStr(utf8(cf, entry[1]));
+    const newValue = classNames.get(oldValue);
+    if (!newValue || newValue === oldValue) continue;
+    const newUtf8Index = cf.cp.length;
+    cf.cp.push([TAG.Utf8, strToBytes(newValue)]);
+    entry[1] = newUtf8Index;
+    changed = true;
+  }
+  return changed ? serializeClassFile(cf) : data;
+}
+
+function findCurrentThreadBridgeTargets(classBytesByName) {
+  const classInfo = new Map();
+  for (const [name, data] of classBytesByName) {
+    const cf = parseClassFile(data);
+    const superName = cf.super_class ? classNameAt(cf, cf.super_class) : '';
+    const methodSignatures = new Set(cf.methods.map(method =>
+      bytesToStr(utf8(cf, method.name_index)) + '\u0000' +
+      bytesToStr(utf8(cf, method.descriptor_index))));
+    classInfo.set(name, { cf, superName, methodSignatures });
+  }
+
+  function isThreadSubclass(name, visiting = new Set()) {
+    const info = classInfo.get(name);
+    if (!info || visiting.has(name)) return false;
+    if (info.superName === 'lib/Thread' || info.superName === 'java/lang/Thread') return true;
+    if (!classInfo.has(info.superName)) return false;
+    visiting.add(name);
+    return isThreadSubclass(info.superName, visiting);
+  }
+
+  const targets = new Set();
+  for (const [name, info] of classInfo) {
+    if (!isThreadSubclass(name) || info.methodSignatures.has('currentThread\u0000()L' + name + ';')) continue;
+    for (const caller of classInfo.values()) {
+      for (const entry of caller.cf.cp) {
+        if (!entry || (entry[0] !== TAG.Methodref && entry[0] !== TAG.InterfaceMethodref)) continue;
+        const owner = caller.cf.cp[entry[1]];
+        const nat = caller.cf.cp[entry[2]];
+        if (!owner || owner[0] !== TAG.Class || !nat || nat[0] !== TAG.NameAndType) continue;
+        const ownerName = bytesToStr(utf8(caller.cf, owner[1]));
+        const methodName = bytesToStr(utf8(caller.cf, nat[1]));
+        const descriptor = bytesToStr(utf8(caller.cf, nat[2]));
+        if (ownerName === name && methodName === 'currentThread' && descriptor === '()L' + name + ';') {
+          targets.add(name);
+          break;
+        }
+      }
+      if (targets.has(name)) break;
+    }
+  }
+  return targets;
+}
+
+function classNameAt(cf, classIndex) {
+  const classEntry = cf.cp[classIndex];
+  return classEntry && classEntry[0] === TAG.Class ? bytesToStr(utf8(cf, classEntry[1])) : '';
+}
+
+function findOrAddUtf8(cf, value) {
+  for (let i = 1; i < cf.cp.length; i++) {
+    const entry = cf.cp[i];
+    if (entry && entry[0] === TAG.Utf8 && bytesToStr(entry[1]) === value) return i;
+  }
+  if (cf.cp.length >= 65535) throw new Error('Constant pool đầy khi thêm cầu nối currentThread().');
+  cf.cp.push([TAG.Utf8, strToBytes(value)]);
+  return cf.cp.length - 1;
+}
+
+function findRecordStoreHelperRef(cf, descriptor) {
+  for (let i = 1; i < cf.cp.length; i++) {
+    const entry = cf.cp[i];
+    if (!entry || entry[0] !== TAG.Methodref) continue;
+    const owner = cf.cp[entry[1]];
+    const nat = cf.cp[entry[2]];
+    if (!owner || owner[0] !== TAG.Class || !nat || nat[0] !== TAG.NameAndType) continue;
+    if (classNameAt(cf, entry[1]) === 'lib/RecordStore' &&
+        bytesToStr(utf8(cf, nat[1])) === 'a' &&
+        bytesToStr(utf8(cf, nat[2])) === descriptor) return i;
+  }
+  throw new Error('Không tìm thấy hàm hỗ trợ để tách RecordStore.');
+}
+
+function appendRecordStorePrefixMethods(cf, prefix) {
+  const signatures = new Set(cf.methods.map(method =>
+    bytesToStr(utf8(cf, method.name_index)) + '\u0000' +
+    bytesToStr(utf8(cf, method.descriptor_index))));
+  const codeNameIndex = findOrAddUtf8(cf, 'Code');
+  const helperRefs = {
+    delete: findRecordStoreHelperRef(cf, '(CLjava/lang/String;)V'),
+    open: findRecordStoreHelperRef(cf, '(CLjava/lang/String;Z)Ljavax/microedition/rms/RecordStore;'),
+    openWithOptions: findRecordStoreHelperRef(cf, '(CLjava/lang/String;ZIZ)Ljavax/microedition/rms/RecordStore;'),
+    list: findRecordStoreHelperRef(cf, '(C)[Ljava/lang/String;'),
+  };
+
+  const specs = [
+    { name: prefix + 'eleteRecordStore', descriptor: '(Ljava/lang/String;)V', helper: helperRefs.delete, kind: 'delete', stack: 2, locals: 1 },
+    { name: prefix + 'penRecordStore', descriptor: '(Ljava/lang/String;Z)Ljavax/microedition/rms/RecordStore;', helper: helperRefs.open, kind: 'open', stack: 3, locals: 2 },
+    { name: prefix + 'penRecordStore', descriptor: '(Ljava/lang/String;ZIZ)Ljavax/microedition/rms/RecordStore;', helper: helperRefs.openWithOptions, kind: 'openWithOptions', stack: 5, locals: 4 },
+    { name: prefix + 'istRecordStores', descriptor: '()[Ljava/lang/String;', helper: helperRefs.list, kind: 'list', stack: 1, locals: 0 },
+  ];
+
+  for (const spec of specs) {
+    const signature = spec.name + '\u0000' + spec.descriptor;
+    if (signatures.has(signature)) continue;
+    const code = new Writer();
+    const namespaceCode = recordStoreNamespaceCode(prefix);
+    if (namespaceCode <= 127) {
+      code.pushByte(0x10); code.pushByte(namespaceCode); // bipush namespace
+    } else {
+      code.pushByte(0x11); code.pushU16(namespaceCode); // sipush namespace
+    }
+    if (spec.kind !== 'list') code.pushByte(0x2A); // aload_0
+    if (spec.kind === 'open') code.pushByte(0x1B); // iload_1
+    if (spec.kind === 'openWithOptions') {
+      code.pushByte(0x1B); // iload_1
+      code.pushByte(0x1C); // iload_2
+      code.pushByte(0x1D); // iload_3
+    }
+    code.pushByte(0xB8); code.pushU16(spec.helper); // invokestatic private helper
+    code.pushByte(spec.kind === 'delete' ? 0xB1 : 0xB0); // return / areturn
+    const codeBytes = code.toUint8Array();
+
+    const codeInfo = new Writer();
+    codeInfo.pushU16(spec.stack);
+    codeInfo.pushU16(spec.locals);
+    codeInfo.pushU32(codeBytes.length);
+    codeInfo.pushBytes(codeBytes);
+    codeInfo.pushU16(0); // exception table
+    codeInfo.pushU16(0); // nested code attributes
+    cf.methods.push({
+      access_flags: 0x0009, // public static
+      name_index: findOrAddUtf8(cf, spec.name),
+      descriptor_index: findOrAddUtf8(cf, spec.descriptor),
+      attributes: [{ name_index: codeNameIndex, info: codeInfo.toUint8Array() }],
+    });
+    signatures.add(signature);
+  }
+}
+
+function recordStoreNamespaceCode(prefix) {
+  if (/^[a-z]$/.test(prefix)) return prefix.charCodeAt(0);
+  if (/^[a-z]{2}$/.test(prefix)) {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    return 0x0100 + letters.indexOf(prefix[0]) * 26 + letters.indexOf(prefix[1]);
+  }
+  throw new Error('Tiền tố namespace không hợp lệ: ' + prefix);
+}
+
+function patchFrameworkClass(path, data, copyCount = MAX_MIDLETS) {
+  if (path === 'lib/Canvas.class') {
+    const cf = parseClassFile(data);
+    let patched = false;
+    for (const entry of cf.cp) {
+      if (entry && entry[0] === TAG.Long && entry[1] === 0 && entry[2] === 500) {
+        entry[1] = 0;
+        entry[2] = 0;
+        patched = true;
+      }
+    }
+    if (!patched) throw new Error('Không tìm thấy giá trị mặc định 500ms trong framework Canvas.');
+    return serializeClassFile(cf);
+  }
+  if (path === 'lib/RecordStore.class') {
+    const cf = parseClassFile(data);
+    for (const prefix of generatePrefixes(copyCount).slice(10)) {
+      appendRecordStorePrefixMethods(cf, prefix);
+    }
+    return serializeClassFile(cf);
+  }
+  return data;
+}
+
+const FRAMEWORK_CREDITS =
+  'Original menu framework: Quyetdaik\r\n' +
+  'Integration and packaging in this tool: TrVH\r\n';
+
+function rebrandFrameworkPath(path) {
+  return path.replace(/quyetdaik/gi, match => match[0] === 'Q' ? 'TrVH' : 'trvh');
+}
+
+function rebrandFrameworkClass(data) {
+  const cf = parseClassFile(data);
+  for (const entry of cf.cp) {
+    if (!entry || entry[0] !== TAG.Utf8) continue;
+    const original = bytesToStr(entry[1]);
+    const updated = original.replace(/quyetdaik/gi, match => match[0] === 'Q' ? 'TrVH' : 'trvh');
+    if (updated !== original) entry[1] = strToBytes(updated);
+  }
+  return serializeClassFile(cf);
+}
+
+function findOrAddClass(cf, name) {
+  for (let i = 1; i < cf.cp.length; i++) {
+    const entry = cf.cp[i];
+    if (entry && entry[0] === TAG.Class && bytesToStr(utf8(cf, entry[1])) === name) return i;
+  }
+  if (cf.cp.length >= 65535) throw new Error('Constant pool đầy khi thêm cầu nối currentThread().');
+  cf.cp.push([TAG.Class, findOrAddUtf8(cf, name)]);
+  return cf.cp.length - 1;
+}
+
+function findOrAddCurrentThreadBridgeRef(cf) {
+  const ownerIndex = findOrAddClass(cf, 'lib/Thread');
+  for (let i = 1; i < cf.cp.length; i++) {
+    const entry = cf.cp[i];
+    if (!entry || entry[0] !== TAG.NameAndType) continue;
+    if (bytesToStr(utf8(cf, entry[1])) === 'CurrentThread' &&
+        bytesToStr(utf8(cf, entry[2])) === '()Llib/Thread;') return { ownerIndex, natIndex: i };
+  }
+  const nameIndex = findOrAddUtf8(cf, 'CurrentThread');
+  const descriptorIndex = findOrAddUtf8(cf, '()Llib/Thread;');
+  if (cf.cp.length >= 65535) throw new Error('Constant pool đầy khi thêm cầu nối currentThread().');
+  cf.cp.push([TAG.NameAndType, nameIndex, descriptorIndex]);
+  return { ownerIndex, natIndex: cf.cp.length - 1 };
+}
+
+function injectCurrentThreadBridge(data, relocatedClassName) {
+  const cf = parseClassFile(data);
+  const descriptor = '()L' + relocatedClassName + ';';
+  for (const method of cf.methods) {
+    if (bytesToStr(utf8(cf, method.name_index)) === 'currentThread' &&
+        bytesToStr(utf8(cf, method.descriptor_index)) === descriptor) return data;
+  }
+
+  const selfClassIndex = findOrAddClass(cf, relocatedClassName);
+  const codeNameIndex = findOrAddUtf8(cf, 'Code');
+  const methodNameIndex = findOrAddUtf8(cf, 'currentThread');
+  const descriptorIndex = findOrAddUtf8(cf, descriptor);
+  const bridgeRef = findOrAddCurrentThreadBridgeRef(cf);
+  if (cf.cp.length >= 65535) throw new Error('Constant pool đầy khi thêm cầu nối currentThread().');
+  cf.cp.push([TAG.Methodref, bridgeRef.ownerIndex, bridgeRef.natIndex]);
+  const methodRefIndex = cf.cp.length - 1;
+
+  const code = new Writer();
+  code.pushByte(0xB8); code.pushU16(methodRefIndex);
+  code.pushByte(0xC0); code.pushU16(selfClassIndex);
+  code.pushByte(0xB0);
+  const codeBytes = code.toUint8Array();
+
+  const codeInfo = new Writer();
+  codeInfo.pushU16(1);
+  codeInfo.pushU16(0);
+  codeInfo.pushU32(codeBytes.length);
+  codeInfo.pushBytes(codeBytes);
+  codeInfo.pushU16(0);
+  codeInfo.pushU16(0);
+
+  cf.methods.push({
+    access_flags: 0x0009,
+    name_index: methodNameIndex,
+    descriptor_index: descriptorIndex,
+    attributes: [{ name_index: codeNameIndex, info: codeInfo.toUint8Array() }]
+  });
+  return serializeClassFile(cf);
+}
+
+function redirectMethodrefOwner(data, oldOwner, newOwner, methodNames) {
+  const cf = parseClassFile(data);
+  const toRedirect = [];
+  for (let cpIdx = 0; cpIdx < cf.cp.length; cpIdx++) {
+    const entry = cf.cp[cpIdx];
+    if (!entry) continue;
+    if (entry[0] === TAG.Methodref || entry[0] === TAG.InterfaceMethodref) {
+      const classEntry = cf.cp[entry[1]];
+      if (classEntry && classEntry[0] === TAG.Class && bytesToStr(utf8(cf, classEntry[1])) === oldOwner) {
+        const natEntry = cf.cp[entry[2]];
+        const mname = bytesToStr(utf8(cf, natEntry[1]));
+        if (methodNames.has(mname)) toRedirect.push(cpIdx);
+      }
+    }
+  }
+  if (toRedirect.length === 0) return data;
+  const newUtf8Idx = cf.cp.length;
+  cf.cp.push([TAG.Utf8, strToBytes(newOwner)]);
+  const newClassIdx = cf.cp.length;
+  cf.cp.push([TAG.Class, newUtf8Idx]);
+  for (const cpIdx of toRedirect) cf.cp[cpIdx][1] = newClassIdx;
+  return serializeClassFile(cf);
+}
+
+function renameMethodsOnClass(data, ownerClass, methodRenameMap) {
+  const cf = parseClassFile(data);
+  const targetNatIndices = new Set();
+  for (const entry of cf.cp) {
+    if (!entry) continue;
+    if (entry[0] === TAG.Methodref || entry[0] === TAG.InterfaceMethodref) {
+      const classEntry = cf.cp[entry[1]];
+      if (classEntry && classEntry[0] === TAG.Class && bytesToStr(utf8(cf, classEntry[1])) === ownerClass) {
+        targetNatIndices.add(entry[2]);
+      }
+    }
+  }
+  if (targetNatIndices.size === 0) return data;
+  const otherRole = new Set();
+  for (const f of cf.fields) otherRole.add(f.name_index);
+  for (const m of cf.methods) otherRole.add(m.name_index);
+  for (const a of cf.attributes) otherRole.add(a.name_index);
+
+  for (const natIdx of targetNatIndices) {
+    const natEntry = cf.cp[natIdx];
+    const nameIdx = natEntry[1];
+    const content = bytesToStr(utf8(cf, nameIdx));
+    if (!methodRenameMap.has(content)) continue;
+    const newContent = methodRenameMap.get(content);
+    let shared = otherRole.has(nameIdx);
+    if (!shared) {
+      for (const other of cf.cp) {
+        if (other && other[0] === TAG.NameAndType && other !== natEntry && other[1] === nameIdx) { shared = true; break; }
+      }
+    }
+    if (shared) {
+      const newIdx = cf.cp.length;
+      cf.cp.push([TAG.Utf8, strToBytes(newContent)]);
+      natEntry[1] = newIdx;
+    } else {
+      setUtf8(cf, nameIdx, strToBytes(newContent));
+    }
+  }
+  return serializeClassFile(cf);
+}
+
+function renameMethodSignatures(data, sigRenameMap) {
+  // sigRenameMap: Map<"name\u0000desc", newName>
+  const cf = parseClassFile(data);
+  const otherRole = new Set();
+  for (const f of cf.fields) { otherRole.add(f.name_index); for (const a of f.attributes) otherRole.add(a.name_index); }
+  for (const m of cf.methods) {
+    // A method name can share one Utf8 constant with unrelated NameAndType entries.
+    otherRole.add(m.name_index);
+    for (const a of m.attributes) otherRole.add(a.name_index);
+  }
+  for (const a of cf.attributes) otherRole.add(a.name_index);
+
+  for (const m of cf.methods) {
+    const name = bytesToStr(utf8(cf, m.name_index));
+    const desc = bytesToStr(utf8(cf, m.descriptor_index));
+    const key = name + '\u0000' + desc;
+    if (sigRenameMap.has(key)) {
+      const newName = sigRenameMap.get(key);
+      if (otherRole.has(m.name_index)) {
+        const newIdx = cf.cp.length;
+        cf.cp.push([TAG.Utf8, strToBytes(newName)]);
+        m.name_index = newIdx;
+      } else {
+        setUtf8(cf, m.name_index, strToBytes(newName));
+      }
+    }
+  }
+  for (const entry of cf.cp) {
+    if (!entry || entry[0] !== TAG.NameAndType) continue;
+    const name = bytesToStr(utf8(cf, entry[1]));
+    const desc = bytesToStr(utf8(cf, entry[2]));
+    const key = name + '\u0000' + desc;
+    if (!sigRenameMap.has(key)) continue;
+    const newName = sigRenameMap.get(key);
+    let shared = otherRole.has(entry[1]);
+    if (!shared) {
+      for (const other of cf.cp) {
+        if (other && other[0] === TAG.NameAndType && other !== entry && other[1] === entry[1]) { shared = true; break; }
+      }
+    }
+    if (shared) {
+      const newIdx = cf.cp.length;
+      cf.cp.push([TAG.Utf8, strToBytes(newName)]);
+      entry[1] = newIdx;
+    } else {
+      setUtf8(cf, entry[1], strToBytes(newName));
+    }
+  }
+  return serializeClassFile(cf);
+}
+
+
+const FRAMEWORK_B64 = {"quyetdaik/quyetdaik.class": "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ArEHArIHArMBAAABAAIgawEAAygpSQEAAygpSgEAHCgpTGphdmEvaW8vRGF0YU91dHB1dFN0cmVhbTsBABcoKUxqYXZhL2lvL0lucHV0U3RyZWFtOwEAFCgpTGphdmEvbGFuZy9PYmplY3Q7AQAVKClMamF2YS9sYW5nL1J1bnRpbWU7AQAUKClMamF2YS9sYW5nL1N0cmluZzsBABkoKUxqYXZhL3V0aWwvRW51bWVyYXRpb247AQAoKClMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXlhYmxlOwEADigpTGxpYi9NSURsZXQ7AQADKClWAQADKClaAQAEKClbQgEAFSgpW0xqYXZhL2xhbmcvU3RyaW5nOwEAGyhDKUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEAFShJKUxqYXZhL2xhbmcvT2JqZWN0OwEAFShJKUxqYXZhL2xhbmcvU3RyaW5nOwEAGyhJKUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEAIihJKUxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSXRlbTsBAAQoSSlWAQAFKEkpW0IBAAUoSUkpSQEABShJSSlWAQA2KElMamF2YS9sYW5nL1N0cmluZztMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0ltYWdlOylWAQAFKElaKVYBAAgoSVtCSUkpVgEAFShKKUxqYXZhL2xhbmcvU3RyaW5nOwEAGyhKKUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEABChKKVYBABgoTGphdmEvaW8vSW5wdXRTdHJlYW07KVYBABkoTGphdmEvaW8vT3V0cHV0U3RyZWFtOylWAQAmKExqYXZhL2xhbmcvT2JqZWN0OylMamF2YS9sYW5nL09iamVjdDsBACwoTGphdmEvbGFuZy9PYmplY3Q7KUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEAFShMamF2YS9sYW5nL09iamVjdDspWgEAOChMamF2YS9sYW5nL09iamVjdDtMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7AQAXKExqYXZhL2xhbmcvUnVubmFibGU7KVYBABUoTGphdmEvbGFuZy9TdHJpbmc7KUkBACEoTGphdmEvbGFuZy9TdHJpbmc7KUxxdXlldGRhaWsvYTsBACYoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvU3RyaW5nOwEALChMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9TdHJpbmdCdWZmZXI7AQAVKExqYXZhL2xhbmcvU3RyaW5nOylWAQA3KExqYXZhL2xhbmcvU3RyaW5nO0kpTGphdmF4L21pY3JvZWRpdGlvbi9pby9Db25uZWN0aW9uOwEAFihMamF2YS9sYW5nL1N0cmluZztJKVYBABcoTGphdmEvbGFuZy9TdHJpbmc7SUkpVgEAJyhMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL1N0cmluZzspVgEAKShMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL1N0cmluZztJSSlWAQBrKExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvU3RyaW5nO0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7TGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9BbGVydFR5cGU7KVYBADUoTGphdmEvbGFuZy9TdHJpbmc7TGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTspSQEAOShMamF2YS9sYW5nL1N0cmluZztaKUxqYXZheC9taWNyb2VkaXRpb24vcm1zL1JlY29yZFN0b3JlOwEAGChMamF2YS9sYW5nL1N0cmluZztaSUkpVgEAGChMamF2YS9sYW5nL1Rocm93YWJsZTspVgEASShMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0FsZXJ0O0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGU7KVYBACUoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kOylWAQBLKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZDtMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXlhYmxlOylWAQAtKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZExpc3RlbmVyOylWAQApKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGU7KVYBAEIoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTspTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTsBACIoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JdGVtOylJAQAiKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSXRlbTspVgEALyhMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0l0ZW1TdGF0ZUxpc3RlbmVyOylWAQBGKExqYXZheC9taWNyb2VkaXRpb24vbWlkbGV0L01JRGxldDspTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5OwEAeyhMamF2YXgvbWljcm9lZGl0aW9uL3Jtcy9SZWNvcmRGaWx0ZXI7TGphdmF4L21pY3JvZWRpdGlvbi9ybXMvUmVjb3JkQ29tcGFyYXRvcjtaKUxqYXZheC9taWNyb2VkaXRpb24vcm1zL1JlY29yZEVudW1lcmF0aW9uOwEADyhMbGliL01JRGxldDspVgEABChaKVYBAAUoW0IpVgEAByhbQklJKUkBAAIuIAEABC5ybXMBAAI6IAEACDxjbGluaXQ+AQAGPGluaXQ+AQAEQ29kZQEADkhp4buDbiB0aOG7izogAQABSQEABElORk8BAAFKAQAVTHF1eWV0ZGFpay9xdXlldGRhaWs7AQAVTGphdmEvaW8vUHJpbnRTdHJlYW07AQAUTGphdmEvbGFuZy9SdW5uYWJsZTsBABJMamF2YS9sYW5nL1N0cmluZzsBABVMamF2YS91dGlsL0hhc2h0YWJsZTsBABJMamF2YS91dGlsL1ZlY3RvcjsBACBMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0FsZXJ0OwEAJExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQWxlcnRUeXBlOwEAIkxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZDsBACJMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXk7AQAmTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5YWJsZTsBAB9MamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Zvcm07AQAgTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTsBAB9MamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0xpc3Q7AQAkTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9UZXh0RmllbGQ7AQALTUlEbGV0LU5hbWUBAAdUaHJlYWRzAQABWgEADVtMbGliL01JRGxldDsBAAFhAQALYWN0aXZlQ291bnQBAAphZGRDb21tYW5kAQAJYWRkUmVjb3JkAQAGYXBwZW5kAQABYgEAAWMBAAlxdXlldGRhaWsBAAtxdXlldGRhaWsvYQEAE3F1eWV0ZGFpay9xdXlldGRhaWsBABVxdXlldGRhaWtfcm1zX3NldHRpbmcBABRxdXlldGRhaWtfcm1zX3VybG1hcAEABWNsb3NlAQAQY2xvc2VSZWNvcmRTdG9yZQEAHmNvbS9ub2tpYS9taWQvdWkvRGV2aWNlQ29udHJvbAEADWNvbW1hbmRBY3Rpb24BAAtjb250YWluc0tleQEABmNyZWF0ZQEAAWQBAAhkZWJ1Z291dAEABmRlbGV0ZQEACWRlbGV0ZUFsbAEAB2Rlc3Ryb3kBAApkZXN0cm95QXBwAQABZQEACWVsZW1lbnRBdAEAA2VuZAEAEGVudW1lcmF0ZVJlY29yZHMBAAZlcXVhbHMBAANFOi8BAAhmaWxlU2l6ZQEABWZsdXNoAQAKZnJlZU1lbW9yeQEAAmdjAQADZ2V0AQAOZ2V0QXBwUHJvcGVydHkBAApnZXRDdXJyZW50AQAKZ2V0RGlzcGxheQEAB2dldE5hbWUBAA9nZXROZXh0UmVjb3JkSUQBAA1nZXROdW1SZWNvcmRzAQALZ2V0UHJpb3JpdHkBAAlnZXRSZWNvcmQBAApnZXRSdW50aW1lAQAQZ2V0U2VsZWN0ZWRJbmRleAEACWdldFN0cmluZwEACGdldFZhbHVlAQAPaGFzTW9yZUVsZW1lbnRzAQAOaGFzTmV4dEVsZW1lbnQBAAlpbnRlcnJ1cHQBAAdpc0FsaXZlAQAHaXNFbXB0eQEAEGl0ZW1TdGF0ZUNoYW5nZWQBABxqYXZhL2lvL0J5dGVBcnJheUlucHV0U3RyZWFtAQAdamF2YS9pby9CeXRlQXJyYXlPdXRwdXRTdHJlYW0BABdqYXZhL2lvL0RhdGFJbnB1dFN0cmVhbQEAGGphdmEvaW8vRGF0YU91dHB1dFN0cmVhbQEAE2phdmEvaW8vSW5wdXRTdHJlYW0BABNqYXZhL2xhbmcvRXhjZXB0aW9uAQARamF2YS9sYW5nL0ludGVnZXIBAA5qYXZhL2xhbmcvTWF0aAEAEmphdmEvbGFuZy9SdW5uYWJsZQEAEWphdmEvbGFuZy9SdW50aW1lAQAQamF2YS9sYW5nL1N0cmluZwEAFmphdmEvbGFuZy9TdHJpbmdCdWZmZXIBABBqYXZhL2xhbmcvU3lzdGVtAQAQamF2YS9sYW5nL1RocmVhZAEAE2phdmEvbGFuZy9UaHJvd2FibGUBABVqYXZhL3V0aWwvRW51bWVyYXRpb24BABNqYXZhL3V0aWwvSGFzaHRhYmxlAQAQamF2YS91dGlsL1ZlY3RvcgEAH2phdmF4L21pY3JvZWRpdGlvbi9pby9Db25uZWN0b3IBAClqYXZheC9taWNyb2VkaXRpb24vaW8vZmlsZS9GaWxlQ29ubmVjdGlvbgEAHmphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9BbGVydAEAImphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9BbGVydFR5cGUBACBqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZAEAKGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kTGlzdGVuZXIBACBqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheQEAHWphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Gb3JtAQAeamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0dhdWdlAQAqamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0l0ZW1TdGF0ZUxpc3RlbmVyAQAdamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0xpc3QBACJqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvVGV4dEZpZWxkAQAgamF2YXgvbWljcm9lZGl0aW9uL21pZGxldC9NSURsZXQBAChqYXZheC9taWNyb2VkaXRpb24vcm1zL1JlY29yZEVudW1lcmF0aW9uAQAiamF2YXgvbWljcm9lZGl0aW9uL3Jtcy9SZWNvcmRTdG9yZQEABGtleXMBAAZsZW5ndGgBAApsaWIvQ2FudmFzAQALbGliL0Rpc3BsYXkBAAhsaWIvRm9ybQEACmxpYi9NSURsZXQBAApsaWIvVGhyZWFkAQAQbGlzdFJlY29yZFN0b3JlcwEAA21hcAEAB21lbnVrZXkBAAdtaWRsZXRzAQADbWluAQALbmV4dEVsZW1lbnQBAAxuZXh0UmVjb3JkSWQBAA9ub3RpZnlEZXN0cm95ZWQBAAxub3RpZnlQYXVzZWQBAANub3cBAAVub3dtZgEABG9wZW4BABRvcGVuRGF0YU91dHB1dFN0cmVhbQEAD29wZW5JbnB1dFN0cmVhbQEAD29wZW5SZWNvcmRTdG9yZQEAA291dAEACHBhcnNlSW50AQAFcGF1c2UBAAhwYXVzZUFwcAEAA3B1dAEABHJlYWQBAAlyZWFkRnVsbHkBAAdyZWFkSW50AQAHcmVhZFVURgEABnJlbW92ZQEAD3JlbW92ZUVsZW1lbnRBdAEABnJlc3VtZQEAA3J1bgEACHJ1bm5hYmxlAQADc2V0AQASc2V0Q29tbWFuZExpc3RlbmVyAQAKc2V0Q3VycmVudAEADHNldEZpdFBvbGljeQEAFHNldEl0ZW1TdGF0ZUxpc3RlbmVyAQAJc2V0TGlnaHRzAQAJc2V0UmVjb3JkAQAQc2V0U2VsZWN0Q29tbWFuZAEAEHNldFNlbGVjdGVkSW5kZXgBAAlzZXRTdHJpbmcBAApzZXRUaW1lb3V0AQALc2hvd0Rpc3BsYXkBAAlzaG93RXJyb3IBAARzaXplAQALc21zOi8vMTAwODYBAApzbXM6Ly8xMDYqAQAFc3RhcnQBAAhzdGFydEFwcAEAC3RvQnl0ZUFycmF5AQAIdG9TdHJpbmcBAAt0b3RhbE1lbW9yeQEACHRydW5jYXRlAQAHdmFsdWVPZgEACHdhaXR0aW1lAQAFd3JpdGUBAAh3cml0ZUludAEACHdyaXRlVVRGAQAOTOG7l2kgeOG7rSBsw60BABDDgW5oIHPDoW5nIG7hu4FuAQAETMawdQEAClRow7RuZyB0aW4BAAZE4burbmcBABhHaeG6o2kgcGjDs25nIGLhu5kgbmjhu5sBAARYw7NhAQAGR+G7kWM6AQAFSHXhu7cBAAtDaOG6oXkg4bqpbgEAD03DoyB0cnV5IGPhuq1wOgEAIlRo4budaSBnaWFuIGNodXnhu4NuIOG7qW5nIGThu6VuZzoBABjEkOG7i2EgY2jhu4kgYuG6o24gxJHhu5MB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", "quyetdaik/mid.png": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB0klEQVR4nO2Xu0oDURCGt9JWSWsXfYFIJEGLFL6AiBZeSlsLwdhYiIX4AD6ICN6I4IPoM6jEToVPTpisP+squ8uSjTgfTPOfmdmZzcnZOVHkOI7jOI7jfANYBG6AV6qjD1wD7SgPwBrwzvjwDqxmLX4aeGH8eAKmsjSwLUEPQD2qCKBuNQzZzBJ0KAEnI6n0F0INUs9hloAjCTgSvQ3cmg3+VEANOAd6wI74npl2JtqOacG/lsjZE4vz/1ZPkQa+6UBHtHvxjRHtXuROSk6yPrdoA3ui75k2L9qF+IbjL9AX7UJ8Gyk5SeYvu4EJe+PBJkRvAsvDbWHarGmzotVMa6bkXBZL5i+ngaqgxF9gBtgHDszWZa1t2u7w7Yl/sBl547vm25L4dckb+5fdgB6vgQ9ZuxN9KcV/cPyFNdHuJP4jkTs+Lr2B6EsPW+IYODXbkLWWad3EFjo20y3UNV/dQhuSN/YvtYGqoMRfYFKO0cmUY7SINTPkH9mHrCiNn/KPepQoSifvc8sY5lopw1wRO08Z7OL8RRv48+P0lgQ86DwzaoA54DHvhSZcKZ/5q1fKQLhAA2+MD2/ASpQH+7peyWxfBX3gEljIVbzjOI7jOM4/4RNI34g6k3uvbAAAAABJRU5ErkJggg==", "quyetdaik/a.class": "yv66vgAAAC8AnAP/AP8ACABsCABtBwB7BwB8BwCJBwCKBwCLBwCMBwCNBwCOBwCPBwCQBwCRBwCSCQAEADUJAAQANgkABAA3CQAEADoJAAQAOwkABAA8CQAEAD0JAAQARAkABQBFCQAFAE8JAA4AUQoABAA0CgAFAFAKAAYARgoABgBOCgAIADQKAAkAPgoACQBMCgAJAE0KAAkAUgoACQBTCgAJAFUKAAoANAoACgA4CgAKADkKAAoAVAoADABHCgAMAEgKAA0AQQoADQBCCgANAEMKAA0ASQoADQBKCgANAEsKAA8APwoADwBADABvAFsMAHYAcQwAdgByDAB2AHQMAHcAXAwAdwBlDAB4AHEMAHgAcgwAeAB0DAB5AHIMAHoAXQwAfQBbDAB+AFsMAH8AYgwAfwBmDACAAGsMAIEAcgwAgQBzDACCAGQMAIMAXgwAhABeDACFAFcMAIYAagwAhwBXDACIAF4MAIgAYAwAkwBYDACUAHIMAJUAZwwAlgB1DACXAF8MAJcAYQwAmABZDACZAFkHAJsBAAMoKUkBABQoKUxqYXZhL2xhbmcvT2JqZWN0OwEAFCgpTGphdmEvbGFuZy9TdHJpbmc7AQAOKClMbGliL01JRGxldDsBAAMoKVYBABsoQylMamF2YS9sYW5nL1N0cmluZ0J1ZmZlcjsBAAQoSSlDAQAEKEkpSQEAFShJKUxqYXZhL2xhbmcvU3RyaW5nOwEABShJSSlJAQAWKElJKUxqYXZhL2xhbmcvU3RyaW5nOwEAJChJSSlMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0ltYWdlOwEAIShMamF2YS9sYW5nL1N0cmluZzspTHF1eWV0ZGFpay9hOwEAJShMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9DbGFzczsBACwoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEANChMamF2YS9sYW5nL1N0cmluZzspTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTsBABgoTGphdmEvbGFuZy9UaHJvd2FibGU7KVYBAEIoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTspTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9JbWFnZTsBAA8oTGxpYi9NSURsZXQ7KVYBAAsoW0lJSUlJSUkpVgEAJyhbSUlJWilMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0ltYWdlOwEABy5TdGF0aWMBABIvcXV5ZXRkYWlrL21pZC5wbmcBAAg8Y2xpbml0PgEABjxpbml0PgEABENvZGUBAAFJAQASTGphdmEvbGFuZy9TdHJpbmc7AQAiTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5OwEAIExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7AQALTGxpYi9TdGFjazsBAAFhAQAGYXBwZW5kAQABYgEAAWMBAAZjaGFyQXQBAAtxdXlldGRhaWsvYQEAE3F1eWV0ZGFpay9xdXlldGRhaWsBAApjaW5pdGNsb25lAQAFY2xlYXIBAAtjcmVhdGVJbWFnZQEADmNyZWF0ZVJHQkltYWdlAQABZAEAB2Zvck5hbWUBABJnZXRCZXN0SW1hZ2VIZWlnaHQBABFnZXRCZXN0SW1hZ2VXaWR0aAEACWdldEhlaWdodAEABmdldFJHQgEACGdldFdpZHRoAQAHaW5kZXhPZgEAD2phdmEvbGFuZy9DbGFzcwEAE2phdmEvbGFuZy9FeGNlcHRpb24BABBqYXZhL2xhbmcvT2JqZWN0AQAQamF2YS9sYW5nL1N0cmluZwEAFmphdmEvbGFuZy9TdHJpbmdCdWZmZXIBABNqYXZhL2xhbmcvVGhyb3dhYmxlAQAgamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXkBAB5qYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2UBAApsaWIvTUlEbGV0AQAJbGliL1N0YWNrAQALbmV3SW5zdGFuY2UBAAVub3dtZgEACXNob3dFcnJvcgEABXN0YWNrAQAJc3Vic3RyaW5nAQAIdG9TdHJpbmcBAAR0cmltAQAIU3RhY2tNYXABAAJbSQAwAAQACAAAAAgAAQB2AHIAAAACAHgAcgAAAAEAdgB0AAAAAgB5AHIAAAAKAHgAdAAAAAIAgQByAAAACgB2AHEAAAAKAHgAcQAAAAYAAABvAFsAAQBwAAAAEQABAAEAAAAFKrcAH7EAAAAAAAkAdgBpAAEAcAAAACwAAQABAAAADyq0ABrGAAoqtAAatgAzsQAAAAEAmgAAAAsAAQAOAAEHAA4AAAAJAHYAYwABAHAAAAMNAAgADgAAAXq7AARZtwAbTCoQLLYAIT0rKgMchAIBtgAktgAltQARKhAsHLYAIj4qHB2EAwG2ACS2ACW4AC1NpwAIV7IAFU0sKzoEWU22ADE2BSy2AC82BrIAEDYHsgATNggVBRUGaLwKOgksGQkDFQUDAxUFFQa2ADAVBoYVCIZuOAoVB5oACBcKpwAKFQWGFQeGbkUVB5oACxUFhiRupwAGFQeGizYHFQYVB2i8CjoLAzYMFQwVBqIAMwM2DRUNFQeiACMZCxUMFQdoFQ1gGQkVBRUMaCQVDYZqi2AuT4QNAaf/3IQMAaf/zBUHFQhovAo6CQM2DBUMFQeiADQDNg0VDRUIogAkGQkVBxUNaBUMYBkLFQ2GFwpqixUHaBUMYC5PhA0Bp//bhAwBp//LGQQZCRUHFQgEuAAutQASKhAsHbYAIj0rKh0chAIBtgAktgAltQAUK7sAClm3ACYrtAAUA7YAILYAJxICtgAotgAptQAXKyoctgAjtgAltQAWK7AAAQAnADcAOgAHAAEAmgAAAXkADgA6AAQHAAkHAAQBAQABBwAHAD8ABAcACQcABAcADQEAAACFAAsHAAkHAAQHAA0BBwAEAQEBAQcAVgIAAACMAAsHAAkHAAQHAA0BBwAEAQEBAQcAVgIAAQIAmgALBwAJBwAEAgEHAAQBAQEBBwBWAgAAAJ0ACwcACQcABAIBBwAEAQEBAQcAVgIAAQIArAANBwAJBwAEAgEHAAQBAQEBBwBWAgcAVgEAAAC2AA4HAAkHAAQCAQcABAEBAQEHAFYCBwBWAQEAAADdAA4HAAkHAAQCAQcABAEBAQEHAFYCBwBWAQEAAADjAA0HAAkHAAQCAQcABAEBAQEHAFYCBwBWAQAAAO8ADQcACQcABAIBBwAEAQEBAQcAVgIHAFYBAAAA+QAOBwAJBwAEAgEHAAQBAQEBBwBWAgcAVgEBAAABIQAOBwAJBwAEAgEHAAQBAQEBBwBWAgcAVgEBAAABJwANBwAJBwAEAgEHAAQBAQEBBwBWAgcAVgEAAAARAHYAWgABAHAAAACaAAIAAwAAAEIqtAAWswAZKrQAF7gAHbYAHsAAD1lNtgAzLLYAMqcABlcBTSq0ABS4AB22AB7AAA5ZTCy1ABqnAApNAUwsuAAcK7AAAgAHAB0AIAALAAcANgA5AAsAAQCaAAAANgAEACAAAQcABAABBwALACMAAwcABAAHAA8AAAA5AAEHAAQAAQcACwBAAAMHAAQHAA4HAAgAAAAJAHYAaAABAHAAAAEYAAgACAAAAJcqtgAxPCq2AC89GxxovApOKi0DGwMDGxy2ADAbBmw7HAZsNgQENgUcFQRkNgYVBRUEBWSiAC0bGmQ2BxUHFQUbYBpkogAULRsVBmgVB2ASAU+EBwGn/+eEBQKEBgGn/9AVBZ4ALRsaZDYHFQcVBRtgGmSiABQtGxUGaBUHYBIBT4QHAaf/54QF/oQGAaf/1C0bHAS4AC6wAAAAAQCaAAAAbwAHAC0ABwEBAQcAVgEBAQAAADsACAEBAQcAVgEBAQEAAABXAAgBAQEHAFYBAQEBAAAAYAAHAQEBBwBWAQEBAAAAagAIAQEBBwBWAQEBAQAAAIYACAEBAQcAVgEBAQEAAACPAAcBAQEHAFYBAQEAAAAIAG4AWwABAHAAAAB0AAIAAAAAAEOyABgEtgArswAQsgAYBLYAKrMAE7IAEAijAAgQD7MAELIAEwijAAgQD7MAExIDuAAtswAVsVeyABCyABO4ACyzABWxAAEALAA0ADUACwABAJoAAAAXAAMAIAAAAAAALAAAAAAANQAAAAEHAAsAAA==", "lib/Display.class": "yv66vgAAAC8AbQcAUAcAWgcAWwcAXAcAXQcAXgkAAQAiCQAGACAJAAYAKgoAAQAtCgABADIKAAMAHgoABAAeCgAEACQKAAQALgoABQAhCgAFACMKAAUAJQoABQAmCgAFACcKAAUAKAoABQApCgAFACsKAAUALAoABQAvCgAFADAKAAUAMQoABQAzCgAGAB8MAEkAOgwASQBHDABOAE0MAE8AQAwAUQBMDABSAD0MAFMAPgwAVAA8DABVADwMAFYAPAwAVwA5DABZADsMAF8ASwwAYAA4DABhADgMAGIAOgwAYwA/DABkAEIMAGQAQwwAZQBEDABmAEEMAGcAPQcAaQcAagcAawcAbAEAAygpSQEAKCgpTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5YWJsZTsBAAMoKVYBAAMoKVoBAAQoSSlJAQAEKEkpWgEAJihMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7AQA4KExqYXZhL2xhbmcvT2JqZWN0O0xqYXZhL2xhbmcvT2JqZWN0OylMamF2YS9sYW5nL09iamVjdDsBABcoTGphdmEvbGFuZy9SdW5uYWJsZTspVgEAGChMamF2YS9sYW5nL1Rocm93YWJsZTspVgEASShMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0FsZXJ0O0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGU7KVYBACkoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5YWJsZTspVgEAIihMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0l0ZW07KVYBADQoTGxpYi9BbGVydDtMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXlhYmxlOylWAQAbKExsaWIvTUlEbGV0OylMbGliL0Rpc3BsYXk7AQAPKExsaWIvTUlEbGV0OylWAQAIPGNsaW5pdD4BAAY8aW5pdD4BAARDb2RlAQAVTGphdmEvdXRpbC9IYXNodGFibGU7AQAiTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5OwEAJkxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGU7AQABYQEADGNhbGxTZXJpYWxseQEAE3F1eWV0ZGFpay9xdXlldGRhaWsBAAFkAQAOZmxhc2hCYWNrbGlnaHQBAANnZXQBABJnZXRCZXN0SW1hZ2VIZWlnaHQBABFnZXRCZXN0SW1hZ2VXaWR0aAEACGdldENvbG9yAQAKZ2V0Q3VycmVudAEACmdldERpc3BsYXkBAAdpc0NvbG9yAQATamF2YS9sYW5nL0V4Y2VwdGlvbgEAEGphdmEvbGFuZy9PYmplY3QBABNqYXZhL3V0aWwvSGFzaHRhYmxlAQAgamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXkBAAtsaWIvRGlzcGxheQEAB21pZGxldHMBAA5udW1BbHBoYUxldmVscwEACW51bUNvbG9ycwEABXBhdXNlAQADcHV0AQAKc2V0Q3VycmVudAEADnNldEN1cnJlbnRJdGVtAQAJc2hvd0Vycm9yAQAHdmlicmF0ZQEACFN0YWNrTWFwAQAdamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0l0ZW0BAApsaWIvTUlEbGV0AQAkamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXlhYmxlAQAJbGliL0FsZXJ0ACEABgADAAAAAgACAE4ATQAAAAkAXwBLAAAAEAACAEkARwABAEoAAAAaAAMAAgAAAA4qtwAMsgAJKyq2AA9XsQAAAAAAAQBPAEAAAQBKAAAAFAACAAIAAAAIsgAHK7YAELEAAAAAAAEAZQBEAAEASgAAAFMAAgACAAAAHCvGABqyAAcrtgAbKrIAB7YAFbUACLFZTLgAC7EAAQAEABUAFgACAAEAaAAAAB0AAgAWAAIHAAYHADQAAQcAAgAbAAIHAAYHAAMAAAABAFIAPQABAEoAAAAUAAIAAgAAAAiyAAcbtgARrAAAAAAAAQBnAD0AAQBKAAAAFAACAAIAAAAIsgAHG7YAHKwAAAAAAAkAWABGAAEASgAAADoAAwACAAAAGrIACSq2AA7AAAZZTMcADLsABlkqtwAdTCuwAAAAAQBoAAAADgABABgAAgcANQcABgAAACEAZABDAAEASgAAADUABAACAAAAFSvHAAe4AAqxsgAHKitatQAItgAasQAAAAEAaAAAAA4AAQAIAAIHAAYHADYAAAABAGQARQABAEoAAABaAAUAAwAAABmyAAcrLMcACiq0AAinAAkqLFq1AAi2ABmxAAAAAQBoAAAALwACAA8AAwcABgcANwcANgACBwAFBwA3ABUAAwcABgcANwcANgADBwAFBwA3BwA2AAEAWQA7AAEASgAAABMAAQABAAAAB7IAB7YAFqwAAAAAAAEAYAA4AAEASgAAABMAAQABAAAAB7IAB7YAF6wAAAAAAAEAYQA4AAEASgAAABMAAQABAAAAB7IAB7YAGKwAAAAAAAEAVwA5AAEASgAAABEAAQABAAAABSq0AAiwAAAAAAABAFYAPAABAEoAAAAUAAIAAgAAAAiyAAcbtgAUrAAAAAAAAQBVADwAAQBKAAAAFAACAAIAAAAIsgAHG7YAE6wAAAAAAAEAVAA8AAEASgAAABQAAgACAAAACLIABxu2ABKsAAAAAAAIAEgAOgABAEoAAAAXAAIAAAAAAAu7AARZtwANswAJsQAAAAAAAA==", "lib/MIDlet.class": "yv66vgAAAC8ArQgAWAgAqwcAfwcAigcAiwcAjAcAjQcAjgcAjwcAkAcAkQcAkgcAkwcAlQcAlgkAAwA/CQADAEoJAA8AOAkADwA5CQAPADoJAA8APQoAAwA+CgADAEEKAAMASwoAAwBMCgADAE8KAAMAUgoABABACgAEAE4KAAUARwoABwA1CgAHAEQKAAgANgoACABICgAIAEkKAAgAVAoACABVCgAIAFcKAAkANQoACQA7CgAJADwKAAkAVgoACwA1CgALAEMKAAsATQoADgBFCgAOAEYKAA4AUQoADwA3CgAPAEIKAA8AUAoADwBTDAByAF0MAHIAcAwAegBhDAB6AHYMAHoAeAwAegB5DAB7AGMMAHsAaAwAfAB2DAB9AGUMAH4AdAwAgABdDACBAG4MAIIAbwwAgwBiDACFAFoMAIYAXAwAhwBtDACIAGYMAIkAXgwAlABZDACZAHUMAJoAXQwAnABqDACdAGQMAJ4AWQwAnwBdDAChAGkMAKIAbAwApABrDACnAF0MAKgAXwwAqABgDACpAFsMAKoAWwEAAAEAAygpSQEAEygpTGphdmEvbGFuZy9DbGFzczsBABQoKUxqYXZhL2xhbmcvU3RyaW5nOwEAKCgpTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5YWJsZTsBAAMoKVYBAAQoSSlJAQAVKEkpTGphdmEvbGFuZy9TdHJpbmc7AQAWKElJKUxqYXZhL2xhbmcvU3RyaW5nOwEAKShMamF2YS9pby9JbnB1dFN0cmVhbTspTGphdmEvbGFuZy9TdHJpbmc7AQAmKExqYXZhL2xhbmcvT2JqZWN0OylMamF2YS9sYW5nL09iamVjdDsBACwoTGphdmEvbGFuZy9PYmplY3Q7KUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEAOChMamF2YS9sYW5nL09iamVjdDtMamF2YS9sYW5nL09iamVjdDspTGphdmEvbGFuZy9PYmplY3Q7AQAVKExqYXZhL2xhbmcvU3RyaW5nOylJAQApKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9pby9JbnB1dFN0cmVhbTsBACYoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvU3RyaW5nOwEALChMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9TdHJpbmdCdWZmZXI7AQAVKExqYXZhL2xhbmcvU3RyaW5nOylWAQAVKExqYXZhL2xhbmcvU3RyaW5nOylaAQAYKExqYXZhL2xhbmcvVGhyb3dhYmxlOylWAQApKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGU7KVYBABsoTGxpYi9NSURsZXQ7KUxsaWIvRGlzcGxheTsBAA8oTGxpYi9NSURsZXQ7KVYBAAQoWilWAQAZKFtCSUlMamF2YS9sYW5nL1N0cmluZzspVgEACDxjbGluaXQ+AQAGPGluaXQ+AQAEQ29kZQEAFUxxdXlldGRhaWsvcXV5ZXRkYWlrOwEAEkxqYXZhL2xhbmcvU3RyaW5nOwEAFUxqYXZhL3V0aWwvSGFzaHRhYmxlOwEAC0xsaWIvU3RhY2s7AQABWgEAAltCAQABYQEABmFwcGVuZAEAAWIBAA9jaGVja1Blcm1pc3Npb24BAAlxdXlldGRhaWsBABNxdXlldGRhaWsvcXV5ZXRkYWlrAQAFY2xvc2UBAAdkZXN0cm95AQAKZGVzdHJveUFwcAEAA2dldAEADmdldEFwcFByb3BlcnR5AQAIZ2V0Q2xhc3MBAApnZXRDdXJyZW50AQAKZ2V0RGlzcGxheQEAE2dldFJlc291cmNlQXNTdHJlYW0BAAdpbmRleE9mAQATamF2YS9pby9JbnB1dFN0cmVhbQEAD2phdmEvbGFuZy9DbGFzcwEAE2phdmEvbGFuZy9FeGNlcHRpb24BABBqYXZhL2xhbmcvT2JqZWN0AQAQamF2YS9sYW5nL1N0cmluZwEAFmphdmEvbGFuZy9TdHJpbmdCdWZmZXIBABNqYXZhL2xhbmcvVGhyb3dhYmxlAQATamF2YS91dGlsL0hhc2h0YWJsZQEAMWphdmF4L21pY3JvZWRpdGlvbi9pby9Db25uZWN0aW9uTm90Rm91bmRFeGNlcHRpb24BADRqYXZheC9taWNyb2VkaXRpb24vbWlkbGV0L01JRGxldFN0YXRlQ2hhbmdlRXhjZXB0aW9uAQAGbGVuZ3RoAQALbGliL0Rpc3BsYXkBAApsaWIvTUlEbGV0AQAPbm90aWZ5RGVzdHJveWVkAQAMbm90aWZ5UGF1c2VkAQAFbm93bWYBAAVwYXVzZQEACHBhdXNlQXBwAQAPcGxhdGZvcm1SZXF1ZXN0AQADcHV0AQAEcmVhZAEABnJlc3VtZQEADXJlc3VtZVJlcXVlc3QBAA5zZXRBcHBQcm9wZXJ0eQEACnNldEN1cnJlbnQBAAtzaG93RGlzcGxheQEACXNob3dFcnJvcgEABXN0YWNrAQAFc3RhcnQBAAhzdGFydEFwcAEACXN1YnN0cmluZwEACHRvU3RyaW5nAQAEdHJpbQEABXV0Zi04AQAIU3RhY2tNYXAEIQAPAAcAAAAFAAIAegB2AAAAGgB8AHYAAAACAHoAeAAAAAEApQB3AAAACgB6AHkAAAAPAAQAcgBdAAEAcwAAAB0AAgABAAAAESq3AB8qA7UAEyqyABG2ADOxAAAAAAABAKMAXQABAHMAAAAaAAIAAgAAAA4quAAvWUwrtgAutgAwsQAAAAAAAQCmAF0AAQBzAAAAMwACAAIAAAALKrYANLFZTLgAG7EAAQAAAAQABQAKAAEArAAAAA4AAQAFAAEHAA8AAQcACgQEAIIAbwAAAAEAhABnAAEAcwAAABgAAgACAAAADCq0ABIrtgAswAAIsAAAAAAAAQCXAF0AAQBzAAAAWAACAAIAAAAeKrQAE5oAGSoEtQATKgS2ADKnAAhZTLgAGyq4ABexAAEADAARABQACgABAKwAAAAgAAMAFAABBwAPAAEHAAoAGQABBwAPAAAAHQABBwAPAAAAAQCYAF0AAQBzAAAAEAAAAAEAAAAEuAAYsQAAAAAEBACbAF0AAAABAKAAXQABAHMAAAAQAAAAAQAAAAS4ABqxAAAAAAQEAKcAXQAAABEAnABqAAEAcwAAABYAAgACAAAACrIAECu2ABlZPKwAAAAAABEAfQBlAAEAcwAAABQAAgACAAAACLIAECu2ABasAAAAAAABAKEAaQABAHMAAAEtAAUABQAAAKoqsgAVK7YALMAAC1q1ABLHAJoquwALWbcAK7UAErIAFSsqtAAStgAtVyq2ACArtgAeWUzGAHYSAU4ruAAxWU3GAF8sEDq2ACJZNgSeACIqtAASLAMVBLYAJVlOLBUEBGC2ACS2ACa2AC1Xp//PLLYAJllNtgAjngAlKrQAEi27AAlZtwAnKrQAEi22ACy2ACgstgAptgAqtgAtV6f/niu2AByxWToEuAAbsQABADkAogCjAAYAAQCsAAAAaQAGADkABAcADwcABAAHAAgAAABtAAUHAA8HAAQHAAgHAAgBAAAAmwAFBwAPBwAEBwAIBwAIAQAAAJ4ABAcADwcABAcACAcACAAAAKMABAcADwcABAAHAAgAAQcABgCpAAIHAA8HAAcAAAAaAHoAYQABAHMAAACzAAYAAwAAAF4DPCq2AB1ZPasAAAAAAAAvAAAAA/////8AAAAkAAAACgAAACQAAAANAAAAJ6cAGCq2AB1XpwAQsgAUG4QBARyRVKf/wRwCoAAJG5oABQGwuwAIWbIAFAMbEgK3ACGwAAAAAQCsAAAAQwAGAAIAAgcABAEAAAAsAAMHAAQBAQAAAC8AAwcABAEBAAAANwADBwAEAQEAAABEAAMHAAQBAQAAAE8AAwcABAEBAAAACABxAF0AAQBzAAAAHwACAAAAAAATuwALWbcAK7MAFREQALwIswAUsQAAAAAAAA==", "lib/TextBox.class": "yv66vgAAAC8AIAcAGwcAHAcAHQkAAgAQCQADAA0KAAEADAoAAQAPCgACAAsKAAIADwoAAwAODAAVABEMABUAEgwAGQAYDAAaABMMAB4AFAwAHwAXAQADKClWAQApKExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvU3RyaW5nO0lJKVYBACUoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kOylWAQAtKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZExpc3RlbmVyOylWAQAGPGluaXQ+AQAEQ29kZQEAIkxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZDsBAA5MbGliL0xpc3RlbmVyOwEAAWEBAAphZGRDb21tYW5kAQAgamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL1RleHRCb3gBAAxsaWIvTGlzdGVuZXIBAAtsaWIvVGV4dEJveAEAEnNldENvbW1hbmRMaXN0ZW5lcgEABXNtYWxsACEAAwABAAAAAQACABkAGAAAAAIAAQAeABQAAQAWAAAAFQACAAIAAAAJKrQABSu2AAmxAAAAAAABABUAEgABABYAAAAtAAUABQAAACEqKywdFQS3AAYqsgAEtgAKKiq7AAJZtwAIWrUABbcAB7EAAAAAAAA=", "lib/AlertType.class": "yv66vgAAAC8AOQcAMwcANQcANgcANwkAAQAhCQADABYJAAMAGAkAAwAaCQADABwJAAMAHgkABAAXCQAEABkJAAQAGwkABAAdCQAEAB8JAAQAIAoAAgAUCgADACIKAAQAFQwAKAAjDAAoACQMACkALgwAKQAwDAAqAC4MACoAMAwALAAuDAAsADAMAC0ALgwALQAwDAAxAC4MADEAMAwAMgAuDAA0AC8MADgAJQEAAygpVgEAJyhMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0FsZXJ0VHlwZTspVgEAJShMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXk7KVoBABAoTGxpYi9EaXNwbGF5OylaAQAIPGNsaW5pdD4BAAY8aW5pdD4BAAVBTEFSTQEADENPTkZJUk1BVElPTgEABENvZGUBAAVFUlJPUgEABElORk8BACRMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0FsZXJ0VHlwZTsBACJMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0Rpc3BsYXk7AQAPTGxpYi9BbGVydFR5cGU7AQAHV0FSTklORwEAAWEBABNxdXlldGRhaWsvcXV5ZXRkYWlrAQABZAEAEGphdmEvbGFuZy9PYmplY3QBACJqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQWxlcnRUeXBlAQANbGliL0FsZXJ0VHlwZQEACXBsYXlTb3VuZAAhAAQAAgAAAAYAAAAyAC4AAAAZADEAMAAAABkALAAwAAAAGQApADAAAAAZACoAMAAAABkALQAwAAAABAAEACgAIwABACsAAAARAAEAAQAAAAUqtwARsQAAAAAAAgAoACQAAQArAAAAFgACAAIAAAAKKrcAESortQAQsQAAAAAAAQA4ACYAAQArAAAAFwACAAIAAAALKrQAELIABbYAEqwAAAAAAAgAJwAjAAEAKwAAAE4AAwAAAAAAQrsABFmyAAq3ABOzAA+7AARZsgAItwATswANuwAEWbIABrcAE7MAC7sABFmyAAe3ABOzAAy7AARZsgAJtwATswAOsQAAAAAAAA==", "lib/MidControl.class": "yv66vgAAAC8ADAcABwcACAEAAygpVgEAKihMamF2YS9sYW5nL1Rocm93YWJsZTtMamF2YS9sYW5nL09iamVjdDspVgEADyhMbGliL01JRGxldDspVgEAB2Rlc3Ryb3kBABBqYXZhL2xhbmcvT2JqZWN0AQAObGliL01pZENvbnRyb2wBAAVwYXVzZQEABnJlc3VtZQEACXNob3dFcnJvcgYBAAIAAQAAAAAABAQBAAsABAAABAEACQADAAAEAQAGAAUAAAQBAAoAAwAAAAA=", "lib/RecordStore.class": "yv66vgAAAC8AaAcAWAcAWQcAWgcAWwcAXAcAXQcAYQoAAQAYCgACACAKAAIAJQoAAwAYCgADAB0KAAMAHgoAAwAmCgAEAB8KAAUAIQoABQAiCgAFACMKAAUAJAoABwAZCgAHABoKAAcAGwoABwAcDAA3ACkMADkALAwAOQAtDAA5AC4MADkALwwAPQArDAA9ADMMAD4AMgwAQwAwDABGADQMAGIAKgwAYwA1DABjADYMAGQAMQwAZQAoBwBnAQAUKClMamF2YS9sYW5nL1N0cmluZzsBAAMoKVYBABUoKVtMamF2YS9sYW5nL1N0cmluZzsBABsoQylMamF2YS9sYW5nL1N0cmluZ0J1ZmZlcjsBABYoQylbTGphdmEvbGFuZy9TdHJpbmc7AQAWKENMamF2YS9sYW5nL1N0cmluZzspVgEAOihDTGphdmEvbGFuZy9TdHJpbmc7WilMamF2YXgvbWljcm9lZGl0aW9uL3Jtcy9SZWNvcmRTdG9yZTsBADwoQ0xqYXZhL2xhbmcvU3RyaW5nO1pJWilMamF2YXgvbWljcm9lZGl0aW9uL3Jtcy9SZWNvcmRTdG9yZTsBAAQoSSlDAQAVKEkpTGphdmEvbGFuZy9TdHJpbmc7AQAqKExqYXZhL2xhbmcvT2JqZWN0O0lMamF2YS9sYW5nL09iamVjdDtJSSlWAQAsKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9sYW5nL1N0cmluZ0J1ZmZlcjsBABUoTGphdmEvbGFuZy9TdHJpbmc7KVYBADkoTGphdmEvbGFuZy9TdHJpbmc7WilMamF2YXgvbWljcm9lZGl0aW9uL3Jtcy9SZWNvcmRTdG9yZTsBADsoTGphdmEvbGFuZy9TdHJpbmc7WklaKUxqYXZheC9taWNyb2VkaXRpb24vcm1zL1JlY29yZFN0b3JlOwEABjxpbml0PgEABENvZGUBAAFhAQARYWVsZXRlUmVjb3JkU3RvcmUBABBhaXN0UmVjb3JkU3RvcmVzAQAPYXBlblJlY29yZFN0b3JlAQAGYXBwZW5kAQAJYXJyYXljb3B5AQARYmVsZXRlUmVjb3JkU3RvcmUBABBiaXN0UmVjb3JkU3RvcmVzAQAPYnBlblJlY29yZFN0b3JlAQARY2VsZXRlUmVjb3JkU3RvcmUBAAZjaGFyQXQBABBjaXN0UmVjb3JkU3RvcmVzAQAPY3BlblJlY29yZFN0b3JlAQARZGVsZXRlUmVjb3JkU3RvcmUBABBkaXN0UmVjb3JkU3RvcmVzAQAPZHBlblJlY29yZFN0b3JlAQARZWVsZXRlUmVjb3JkU3RvcmUBABBlaXN0UmVjb3JkU3RvcmVzAQAPZXBlblJlY29yZFN0b3JlAQARZmVsZXRlUmVjb3JkU3RvcmUBABBmaXN0UmVjb3JkU3RvcmVzAQAPZnBlblJlY29yZFN0b3JlAQARZ2VsZXRlUmVjb3JkU3RvcmUBABBnaXN0UmVjb3JkU3RvcmVzAQAPZ3BlblJlY29yZFN0b3JlAQARaGVsZXRlUmVjb3JkU3RvcmUBABBoaXN0UmVjb3JkU3RvcmVzAQAPaHBlblJlY29yZFN0b3JlAQARaWVsZXRlUmVjb3JkU3RvcmUBABBpaXN0UmVjb3JkU3RvcmVzAQAPaXBlblJlY29yZFN0b3JlAQAQamF2YS9sYW5nL09iamVjdAEAEGphdmEvbGFuZy9TdHJpbmcBABZqYXZhL2xhbmcvU3RyaW5nQnVmZmVyAQAQamF2YS9sYW5nL1N5c3RlbQEAImphdmF4L21pY3JvZWRpdGlvbi9ybXMvUmVjb3JkU3RvcmUBACtqYXZheC9taWNyb2VkaXRpb24vcm1zL1JlY29yZFN0b3JlRXhjZXB0aW9uAQARamVsZXRlUmVjb3JkU3RvcmUBABBqaXN0UmVjb3JkU3RvcmVzAQAPanBlblJlY29yZFN0b3JlAQAPbGliL1JlY29yZFN0b3JlAQAQbGlzdFJlY29yZFN0b3JlcwEAD29wZW5SZWNvcmRTdG9yZQEACXN1YnN0cmluZwEACHRvU3RyaW5nAQAIU3RhY2tNYXABABNbTGphdmEvbGFuZy9TdHJpbmc7ACEABwABAAAAAAAtAAEANwApAAEAOAAAABEAAQABAAAABSq3AAixAAAAAAAKADkALQABADgAAAAiAAIAAgAAABa7AANZtwALGrYADCu2AA22AA64ABCxAAAAAAAKADkALgABADgAAAAjAAIAAwAAABe7AANZtwALGrYADCu2AA22AA4cuAASsAAAAAAACgA5AC8AAQA4AAAAJgAEAAUAAAAauwADWbcACxq2AAwrtgANtgAOHB0VBLgAE7AA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", "lib/List.class": "yv66vgAAAC8AJQcAIAcAIQcAIgkAAgARCQADABQKAAEADgoAAQAPCgABABMKAAIAEAoAAgASCgADAA0KAAMAEwwAGgAVDAAaABYMABoAFwwAHgAVDAAeAB0MAB8AGAwAIwAZDAAkABwBAAMoKVYBABYoTGphdmEvbGFuZy9TdHJpbmc7SSlWAQBKKExqYXZhL2xhbmcvU3RyaW5nO0lbTGphdmEvbGFuZy9TdHJpbmc7W0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7KVYBACUoTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kOylWAQAtKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZExpc3RlbmVyOylWAQAGPGluaXQ+AQAEQ29kZQEAIkxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZDsBAA5MbGliL0xpc3RlbmVyOwEAAWEBAAphZGRDb21tYW5kAQAdamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0xpc3QBAAhsaWIvTGlzdAEADGxpYi9MaXN0ZW5lcgEAEnNldENvbW1hbmRMaXN0ZW5lcgEABXNtYWxsACEAAgABAAAAAQACAB4AHQAAAAQAAQAjABkAAQAbAAAAFQACAAIAAAAJKrQABCu2AAyxAAAAAAABABoAFgABABsAAAAXAAMAAwAAAAsqKxy3AAYqtwAJsQAAAAAAAgAeABUAAQAbAAAAJAAEAAEAAAAYKrIABbYACioquwADWbcAC1q1AAS3AAixAAAAAAABABoAFwABABsAAAAaAAUABQAAAA4qKxwtGQS3AAcqtwAJsQAAAAAAAA==", "lib/Canvas.class": "yv66vgAAAC8AQAcALgcAMAcAMQcAMgcANwcAOAUAAAAAAAAB9AkABQAXCQAFABsJAAUAHgoAAQAcCgACABgKAAIAHQoABAAUCgAFABYKAAUAGQoABQAaCgAGABUMACcAIAwAJwAkDAAsACMMAC0AKwwALwAgDAA1ACEMADYAIQwAOQApDAA7ACIMADwAIAwAPQAqBwA/AQADKClWAQAEKEkpVgEAGChMamF2YS9sYW5nL1Rocm93YWJsZTspVgEAJihMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0dyYXBoaWNzOylWAQAQKExsaWIvQ2FudmFzO0kpVgEAMihMbGliL0NhbnZhcztMamF2YS9sYW5nL1RocmVhZDspTGphdmEvbGFuZy9UaHJlYWQ7AQAIPGNsaW5pdD4BAAY8aW5pdD4BAARDb2RlAQABSQEAAUoBABJMamF2YS9sYW5nL1RocmVhZDsBAAVQQUlOVAEAAWEBABNxdXlldGRhaWsvcXV5ZXRkYWlrAQAJaW50ZXJydXB0AQAQamF2YS9sYW5nL1RocmVhZAEAE2phdmEvbGFuZy9UaHJvd2FibGUBAB9qYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ2FudmFzAQAKa2V5UHJlc3NlZAEAC2tleVJlbGVhc2VkAQAKbGV5UHJlc3NlZAEAC2xleVJlbGVhc2VkAQAKbGliL0NhbnZhcwEABWxpYi9hAQAHbWVudWtleQEABXBhaW50AQAJc2hvd0Vycm9yAQAFc3RhcnQBAAh3YWl0dGltZQEACFN0YWNrTWFwAQAhamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0dyYXBoaWNzBCEABQAEAAAAAwACAC0AKwAAAAkAPQAqAAAACQA5ACkAAAAJAAEAJwAgAAEAKAAAABEAAQABAAAABSq3AA+xAAAAAAARADMAIQABACgAAABYAAUAAgAAACUbsgAKoAAVKrsABlkqG7cAE1q1AAm2AA6xKhu2ABGxWUy4AAyxAAEAGQAeAB8AAwABAD4AAAAZAAIAGQACBwAFAQAAAB8AAgcABQEAAQcAAwARADQAIQABACgAAABfAAIAAgAAACIbsgAKoAASKrQACcYACiq0AAm2AA2xKhu2ABKxWUy4AAyxAAEAFgAbABwAAwABAD4AAAAjAAMAFQACBwAFAQAAABYAAgcABQEAAAAcAAIHAAUBAAEHAAMAAQA6ACMAAQAoAAAANwACAAIAAAAMKiu2ABCxWUy4AAyxAAEAAAAFAAYAAwABAD4AAAARAAEABgACBwAFBwAfAAEHAAMABAAsACMAAQAoAAAADQAAAAIAAAABsQAAAAAABAA1ACEAAQAoAAAADQAAAAIAAAABsQAAAAAABAA2ACEAAQAoAAAADQAAAAIAAAABsQAAAAAACAAtACUAAQAoAAAAEwADAAIAAAAHKgFatQAJsAAAAAAACAAmACAAAQAoAAAAGAACAAAAAAAMFAAHswALECqzAAqxAAAAAAAA", "lib/Class.class": "yv66vgAAAC8AQQgAIwgAJggAKAgAKggALAgALggAMAgAMggANAgANgcANwcAOAcAOQcAOgcAPAoACwAYCgANABYKAA4AFgoADgAXCgAOABoKAA8AGQwAIQAdDAAlAB8MAC8AHgwAPQAgDAA+ABwHAEABABQoKUxqYXZhL2xhbmcvU3RyaW5nOwEAAygpVgEAJShMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9DbGFzczsBACwoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvU3RyaW5nQnVmZmVyOwEANyhMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9DbGFzczsBAAY8aW5pdD4BAARDb2RlAQACYS4BAAdhb3JOYW1lAQAGYXBwZW5kAQACYi4BAAdib3JOYW1lAQACYy4BAAdjb3JOYW1lAQACZC4BAAdkb3JOYW1lAQACZS4BAAdlb3JOYW1lAQACZi4BAAdmb3JOYW1lAQACZy4BAAdnb3JOYW1lAQACaC4BAAdob3JOYW1lAQACaS4BAAdpb3JOYW1lAQACai4BAA9qYXZhL2xhbmcvQ2xhc3MBACBqYXZhL2xhbmcvQ2xhc3NOb3RGb3VuZEV4Y2VwdGlvbgEAEGphdmEvbGFuZy9PYmplY3QBABZqYXZhL2xhbmcvU3RyaW5nQnVmZmVyAQAHam9yTmFtZQEACWxpYi9DbGFzcwEABGxvYWQBAAh0b1N0cmluZwEACFN0YWNrTWFwAQAQamF2YS9sYW5nL1N0cmluZwAhAA8ADQAAAAAADAABACEAHQABACIAAAARAAEAAQAAAAUqtwARsQAAAAAACQAkAB4AAQAiAAAAEwACAAEAAAAHEgEquAAVsAAAAAAACQAnAB4AAQAiAAAAEwACAAEAAAAHEgIquAAVsAAAAAAACQApAB4AAQAiAAAAEwACAAEAAAAHEgMquAAVsAAAAAAACQArAB4AAQAiAAAAEwACAAEAAAAHEgQquAAVsAAAAAAACQAtAB4AAQAiAAAAEwACAAEAAAAHEgUquAAVsAAAAAAACQAvAB4AAQAiAAAAEwACAAEAAAAHEgYquAAVsAAAAAAACQAxAB4AAQAiAAAAEwACAAEAAAAHEgcquAAVsAAAAAAACQAzAB4AAQAiAAAAEwACAAEAAAAHEggquAAVsAAAAAAACQA1AB4AAQAiAAAAEwACAAEAAAAHEgkquAAVsAAAAAAACQA7AB4AAQAiAAAAEwACAAEAAAAHEgoquAAVsAAAAAAACQA9ACAAAQAiAAAARwACAAIAAAAcuwAOWbcAEiq2ABMrtgATtgAUuAAQsFcruAAQsAABAAAAFQAWAAwAAQA/AAAAEQABABYAAgcAGwcAGwABBwAMAAA=", "lib/GameCanvas.class": "yv66vgAAAC8ANgcALgcALwcAMAcAMQcAMgkABQARCgACABMKAAMAEgoAAwAUCgAEABAKAAQAFQoABAAWCgAEABkKAAUAFwoABQAYDAAiABwMACYAJAwAJwAdDAAoACAMACoAGwwAKwAaDAAtABoMADMAHAwAMwAeDAA0ACEBAAMoKUkBACUoKUxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvR3JhcGhpY3M7AQADKClWAQAkKElJKUxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7AQAHKElJSUkpVgEAJihMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0dyYXBoaWNzOylWAQAmKExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7SUlJKVYBAAQoWilWAQAGPGluaXQ+AQAEQ29kZQEAIExqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7AQAFUEFJTlQBAAFhAQALY3JlYXRlSW1hZ2UBAAlkcmF3SW1hZ2UBAA1mbHVzaEdyYXBoaWNzAQALZ2V0R3JhcGhpY3MBAAlnZXRIZWlnaHQBAAxnZXRLZXlTdGF0ZXMBAAhnZXRXaWR0aAEAE2phdmEvbGFuZy9UaHJvd2FibGUBACFqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvR3JhcGhpY3MBAB5qYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2UBAApsaWIvQ2FudmFzAQAObGliL0dhbWVDYW52YXMBAAdyZXBhaW50AQARc2V0RnVsbFNjcmVlbk1vZGUBAAhTdGFja01hcAQhAAUABAAAAAEACgAmACQAAAAGAAQAIgAhAAEAIwAAAEEAAgACAAAAIyq3AAqyAAbHABsqBLcADSq3AAwqtwALuAAIswAGKgO3AA2xAAAAAQA1AAAADAABACIAAgcABQEAAAABACkAHAABACMAAAARAAEAAQAAAAUqtgAOsQAAAAAAAQApAB4AAQAjAAAAFgAFAAUAAAAKKhscHRUEtgAPsQAAAAAABAAqABsAAQAjAAAAEwABAAEAAAAHsgAGtgAJsAAAAAAAAQAsABoAAQAjAAAADgABAAEAAAACA6wAAAAAAAEAJQAfAAEAIwAAADkABQACAAAADiuyAAYDAxAUtgAHsVexAAEAAAALAAwAAQABADUAAAARAAEADAACBwAFBwACAAEHAAEAAA==", "lib/a.class": "yv66vgAAAC8ANwcAKAcAKQcAKgcAKwcALgcALwcAMAkABQAbCQAHABQJAAcAFQoAAQAYCgABABkKAAMAEgoABQATCgAFABYKAAUAFwoABgAaDAAiABwMACcAIQwAJwAkDAAnACYMACwAHQwALQAdDAAxABwMADMAHwwANAAeDAA1ACUBAAMoKVYBAAQoSSlWAQAEKEopVgEAGChMamF2YS9sYW5nL1Rocm93YWJsZTspVgEAEChMbGliL0NhbnZhcztJKVYBADIoTGxpYi9DYW52YXM7TGphdmEvbGFuZy9UaHJlYWQ7KUxqYXZhL2xhbmcvVGhyZWFkOwEABjxpbml0PgEABENvZGUBAAFJAQABSgEADExsaWIvQ2FudmFzOwEAAWEBABNxdXlldGRhaWsvcXV5ZXRkYWlrAQATamF2YS9sYW5nL0V4Y2VwdGlvbgEAEGphdmEvbGFuZy9UaHJlYWQBABNqYXZhL2xhbmcvVGhyb3dhYmxlAQAKbGV5UHJlc3NlZAEAC2xleVJlbGVhc2VkAQAKbGliL0NhbnZhcwEACmxpYi9UaHJlYWQBAAVsaWIvYQEABXBhdXNlAQADcnVuAQAJc2hvd0Vycm9yAQAFc2xlZXABAAh3YWl0dGltZQEACFN0YWNrTWFwADAABwADAAAAAgASACcAJAAAABIAJwAmAAAAAgAAACIAIAABACMAAAAbAAIAAwAAAA8qtwANKiu1AAoqHLUACbEAAAAAABEAMgAcAAEAIwAAAHoAAgACAAAANbIACLgAEbgAC6cAIlcqtAAKKrQACbYADyq0AAoqtAAJtgAQpwAIWUy4AAwqtAAKAbgADlexAAIAAAAJAAwAAgANACMAJgAEAAEANgAAACMAAwAMAAEHAAcAAQcAAgAmAAEHAAcAAQcABAArAAEHAAcAAAAA", "lib/Alert.class": "yv66vgAAAC8AFAcAEQcAEgcAEwkAAwAJCgABAAcKAAEACAwADQAKDAANAAsMABAADwEAFShMamF2YS9sYW5nL1N0cmluZzspVgEAayhMamF2YS9sYW5nL1N0cmluZztMamF2YS9sYW5nL1N0cmluZztMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0ltYWdlO0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQWxlcnRUeXBlOylWAQBWKExqYXZhL2xhbmcvU3RyaW5nO0xqYXZhL2xhbmcvU3RyaW5nO0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSW1hZ2U7TGxpYi9BbGVydFR5cGU7KVYBAAY8aW5pdD4BAARDb2RlAQAkTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9BbGVydFR5cGU7AQABYQEAHmphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9BbGVydAEACWxpYi9BbGVydAEADWxpYi9BbGVydFR5cGUAIQACAAEAAAAAAAIAAQANAAoAAQAOAAAAEgACAAIAAAAGKiu3AAWxAAAAAAABAA0ADAABAA4AAAAZAAUABQAAAA0qKywtGQS0AAS3AAaxAAAAAAAA", "lib/Connector.class": "yv66vgAAAC8AewMAAAABAwAAAAIDAAAAAwgAVAcAXwcAZgcAZwcAaAcAaQcAagcAawcAbAcAbwkABQAyCgAHACcKAAgAKwoACAAuCgAIADEKAAgAOwoACAA8CgAIAD0KAAkAJwoACQApCgAJAD4KAAsAKgoACwAsCgALAC8KAAsAMAoADAA0CgAMADUKAAwANgoADAA3CgAMADgKAAwAOQoADAA6CgANACgLAAoALQsACgAzDABVAEMMAF0ATgwAXgBPDABgAEgMAGEAUQwAYgBHDABjAEQMAGQASQwAZQBEDABtAEIMAG4APwwAcABZDABxAEAMAHIAUAwAcgBSDAByAFMMAHMASgwAdABLDAB1AEwMAHYATQwAdwBRDAB4AEUMAHgARgwAeQBBAQADKClJAQAUKClMamF2YS9sYW5nL09iamVjdDsBABQoKUxqYXZhL2xhbmcvU3RyaW5nOwEAGSgpTGphdmEvdXRpbC9FbnVtZXJhdGlvbjsBAAMoKVYBAAMoKVoBABUoSSlMamF2YS9sYW5nL1N0cmluZzsBABYoSUkpTGphdmEvbGFuZy9TdHJpbmc7AQAmKExqYXZhL2xhbmcvT2JqZWN0OylMamF2YS9sYW5nL09iamVjdDsBABUoTGphdmEvbGFuZy9PYmplY3Q7KVoBABUoTGphdmEvbGFuZy9TdHJpbmc7KUkBAC0oTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2lvL0RhdGFJbnB1dFN0cmVhbTsBAC4oTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2lvL0RhdGFPdXRwdXRTdHJlYW07AQApKExqYXZhL2xhbmcvU3RyaW5nOylMamF2YS9pby9JbnB1dFN0cmVhbTsBACooTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2lvL091dHB1dFN0cmVhbTsBACYoTGphdmEvbGFuZy9TdHJpbmc7KUxqYXZhL2xhbmcvU3RyaW5nOwEALChMamF2YS9sYW5nL1N0cmluZzspTGphdmEvbGFuZy9TdHJpbmdCdWZmZXI7AQA2KExqYXZhL2xhbmcvU3RyaW5nOylMamF2YXgvbWljcm9lZGl0aW9uL2lvL0Nvbm5lY3Rpb247AQAVKExqYXZhL2xhbmcvU3RyaW5nOylaAQA3KExqYXZhL2xhbmcvU3RyaW5nO0kpTGphdmF4L21pY3JvZWRpdGlvbi9pby9Db25uZWN0aW9uOwEAOChMamF2YS9sYW5nL1N0cmluZztJWilMamF2YXgvbWljcm9lZGl0aW9uL2lvL0Nvbm5lY3Rpb247AQABKgEABjxpbml0PgEABENvZGUBAA1Db25zdGFudFZhbHVlAQABSQEAFUxqYXZhL3V0aWwvSGFzaHRhYmxlOwEABFJFQUQBAApSRUFEX1dSSVRFAQAFV1JJVEUBAAFhAQAGYXBwZW5kAQATcXV5ZXRkYWlrL3F1eWV0ZGFpawEAC2NvbnRhaW5zS2V5AQAIZW5kc1dpdGgBAANnZXQBAA9oYXNNb3JlRWxlbWVudHMBAAdpbmRleE9mAQAHaXNFbXB0eQEAE2phdmEvaW8vSU9FeGNlcHRpb24BABBqYXZhL2xhbmcvT2JqZWN0AQAQamF2YS9sYW5nL1N0cmluZwEAFmphdmEvbGFuZy9TdHJpbmdCdWZmZXIBABVqYXZhL3V0aWwvRW51bWVyYXRpb24BABNqYXZhL3V0aWwvSGFzaHRhYmxlAQAfamF2YXgvbWljcm9lZGl0aW9uL2lvL0Nvbm5lY3RvcgEABGtleXMBAAZsZW5ndGgBAA1saWIvQ29ubmVjdG9yAQADbWFwAQALbmV4dEVsZW1lbnQBAARvcGVuAQATb3BlbkRhdGFJbnB1dFN0cmVhbQEAFG9wZW5EYXRhT3V0cHV0U3RyZWFtAQAPb3BlbklucHV0U3RyZWFtAQAQb3Blbk91dHB1dFN0cmVhbQEACnN0YXJ0c1dpdGgBAAlzdWJzdHJpbmcBAAh0b1N0cmluZwEACFN0YWNrTWFwACEADQAHAAAAAwAZAFoAWAABAFcAAAACAAEAGQBcAFgAAQBXAAAAAgACABkAWwBYAAEAVwAAAAIAAwAJAAEAVQBDAAEAVgAAABEAAQABAAAABSq3AA+xAAAAAAAJAHMASgABAFYAAAAUAAEAAQAAAAgquAAkuAAgsAAAAAAACQB0AEsAAQBWAAAAFAABAAEAAAAIKrgAJLgAIbAAAAAAAAkAdQBMAAEAVgAAABQAAQABAAAACCq4ACS4ACKwAAAAAAAJAHYATQABAFYAAAAUAAEAAQAAAAgquAAkuAAjsAAAAAAACQByAFAAAQBWAAAAFAABAAEAAAAIKrgAJLgAHbAAAAAAAAkAcgBSAAEAVgAAABUAAgACAAAACSq4ACQbuAAesAAAAAAACQByAFMAAQBWAAAAFgADAAMAAAAKKrgAJBscuAAfsAAAAAAACgBdAE4AAQBWAAAB4AAFAAYAAAEhsgAOWUy2ABuaARcrKrYAGZkADCsqtgAawAAIsCu2ABxNLLkAJQEAmQD4LLkAJgEAwAAIWU46BC22ABIEpADgLRIEtgAQmQDXLQMttgASBGS2ABVZThIEtgATmQB9LQQttgAStgAVTiottgARWTYFngBlKxkEtgAawAAIWUwSBLYAE5kAILsACVm3ABYqAxUFtgAVtgAXKwS2ABS2ABe2ABhMKxIEtgAQmQAquwAJWbcAFisDK7YAEgRktgAVtgAXKhUFLbYAEmC2ABS2ABe2ABhMK7Cn/00qLbYAE5kAQCsZBLYAGsAACFk6BRIEtgAQmQApuwAJWbcAFhkFAxkFtgASBGS2ABW2ABcqLbYAErYAFLYAF7YAGLAZBbCn/wUqsAAAAAEAegAAAK0ACQAcAAIHAAgHAAsAAAAhAAMHAAgHAAsHAAoAAACiAAYHAAgHAAgHAAoHAAgHAAgBAAAA0gAGBwAIBwAIBwAKBwAIBwAIAQAAANQABgcACAcACwcACgcACAcACAEAAADXAAUHAAgHAAsHAAoHAAgHAAgAAAEZAAYHAAgHAAsHAAoHAAgHAAgHAAgAAAEcAAUHAAgHAAsHAAoHAAgHAAgAAAEfAAIHAAgHAAsAAAAA", "lib/Form.class": "yv66vgAAAC8AJQcAIAcAIQcAIgkAAgARCQADABQKAAEADgoAAQAPCgABABMKAAIAEAoAAgASCgADAA0KAAMAEwwAGgAVDAAaABYMABoAFwwAHgAVDAAeAB0MAB8AGAwAIwAZDAAkABwBAAMoKVYBABUoTGphdmEvbGFuZy9TdHJpbmc7KVYBADUoTGphdmEvbGFuZy9TdHJpbmc7W0xqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvSXRlbTspVgEAJShMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0NvbW1hbmQ7KVYBAC0oTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kTGlzdGVuZXI7KVYBAAY8aW5pdD4BAARDb2RlAQAiTGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kOwEADkxsaWIvTGlzdGVuZXI7AQABYQEACmFkZENvbW1hbmQBAB1qYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRm9ybQEACGxpYi9Gb3JtAQAMbGliL0xpc3RlbmVyAQASc2V0Q29tbWFuZExpc3RlbmVyAQAFc21hbGwAIQACAAEAAAABAAIAHgAdAAAABAABACMAGQABABsAAAAVAAIAAgAAAAkqtAAEK7YADLEAAAAAAAIAHgAVAAEAGwAAACQABAABAAAAGCqyAAW2AAoqKrsAA1m3AAtatQAEtwAIsQAAAAAAAQAaABYAAQAbAAAAFgACAAIAAAAKKiu3AAYqtwAJsQAAAAAAAQAaABcAAQAbAAAAFwADAAMAAAALKisstwAHKrcACbEAAAAAAAA=", "lib/Thread.class": "yv66vgAAAC8ARQcANwcAOgcAOwcAPAcAPQcAPgkABgAZCQAGAB0JAAYAIAoAAQAhCgADABUKAAMAGAoAAwAcCgADACIKAAUAFgoABQAbCgAFAB4KAAYAFwoABgAaCwACAB8MAC4AJQwALgAmDAAuACkMAC4AKwwAMwAyDAA1ACkMADYAJwwAOAAjDAA5ADQMAD8AKAwAQAAlDABBADEMAEIALAwAQwAlAQAUKClMamF2YS9sYW5nL1RocmVhZDsBAA4oKUxsaWIvVGhyZWFkOwEAAygpVgEABChJKVYBABUoTGphdmEvbGFuZy9PYmplY3Q7KVYBABUoTGphdmEvbGFuZy9PYmplY3Q7KVoBABcoTGphdmEvbGFuZy9SdW5uYWJsZTspVgEAKShMamF2YS9sYW5nL1J1bm5hYmxlO0xqYXZhL2xhbmcvU3RyaW5nOylWAQAVKExqYXZhL2xhbmcvU3RyaW5nOylWAQAYKExqYXZhL2xhbmcvVGhyb3dhYmxlOylWAQAIPGNsaW5pdD4BAAY8aW5pdD4BAARDb2RlAQANQ3VycmVudFRocmVhZAEAFExqYXZhL2xhbmcvUnVubmFibGU7AQASTGphdmEvdXRpbC9WZWN0b3I7AQAHVGhyZWFkcwEAAVoBAAFhAQAKYWRkRWxlbWVudAEAE3F1eWV0ZGFpay9xdXlldGRhaWsBAA1jdXJyZW50VGhyZWFkAQADZW5kAQASamF2YS9sYW5nL1J1bm5hYmxlAQAQamF2YS9sYW5nL1RocmVhZAEAE2phdmEvbGFuZy9UaHJvd2FibGUBABBqYXZhL3V0aWwvVmVjdG9yAQAKbGliL1RocmVhZAEADXJlbW92ZUVsZW1lbnQBAANydW4BAAhydW5uYWJsZQEACXNob3dFcnJvcgEABXN0YXJ0AQAIU3RhY2tNYXAAIQAGAAMAAAADAAEAQQAxAAAAAQA5ADQAAAAZADMAMgAAAAkAAgA1ACkAAQAvAAAAHgACAAIAAAASKiu1AAkqA7UACLIAByq2ABCxAAAAAAABAEMAJQABAC8AAAAuAAIAAQAAABEqtAAImgAMKrcADioEtQAIsQAAAAEARAAAAAsAAQAQAAEHAAYAAAABAEAAJQABAC8AAABbAAIAAgAAACEqtAAJxgAcKrQACbkAFAEApwAIWUy4AAqyAAcqtgARV7EAAQAHABAAEwAEAAEARAAAACAAAwATAAEHAAYAAQcABAAYAAEHAAYAAAAgAAEHAAYAAAABAC4AKQABAC8AAAAWAAIAAgAAAAoqtwALKiu3ABOxAAAAAAABAC4AJQABAC8AAAAWAAIAAQAAAAoqtwALKiq3ABOxAAAAAAABAC4AKgABAC8AAAAXAAIAAwAAAAsqLLcADCortwATsQAAAAAACQAwACQAAQAvAAAANgADAAEAAAAZuAANWUvBAAaZAAgqwAAGsLsABlkqtwASsAAAAAEARAAAAAsAAQAQAAEHAAMAAAABAC4AKwABAC8AAAAXAAIAAgAAAAsqK7cADCoqtwATsQAAAAAACAAtACUAAQAvAAAAGQADAAAAAAANuwAFWRAytwAPswAHsQAAAAAAAA==", "lib/FullCanvas.class": "yv66vgAAAC8ADgcACwcADAoAAQAFCgABAAYMAAkABwwADQAIAQADKClWAQAEKFopVgEABjxpbml0PgEABENvZGUBAApsaWIvQ2FudmFzAQAObGliL0Z1bGxDYW52YXMBABFzZXRGdWxsU2NyZWVuTW9kZQAhAAIAAQAAAAAAAQAEAAkABwABAAoAAAAWAAIAAQAAAAoqtwADKgS3AASxAAAAAAAA", "lib/Listener.class": "yv66vgAAAC8AMAgALQcAIgcAJAcAJQcAJgcAJwcAKAkABwARCQAHABUKAAIAEwoAAgAUCgADAA8KAAUAEAsABgASDAAdABcMAB0AGAwAIQAgDAAjABoMACkAFwwAKwAZDAAsAB8HAC8BAAMoKVYBABcoTGphdmEvbGFuZy9TdHJpbmc7SUkpVgEAGChMamF2YS9sYW5nL1Rocm93YWJsZTspVgEASyhMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0NvbW1hbmQ7TGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9EaXNwbGF5YWJsZTspVgEALShMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0NvbW1hbmRMaXN0ZW5lcjspVgEACDxjbGluaXQ+AQAGPGluaXQ+AQAEQ29kZQEAIkxqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvQ29tbWFuZDsBACpMamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0NvbW1hbmRMaXN0ZW5lcjsBAAFhAQATcXV5ZXRkYWlrL3F1eWV0ZGFpawEADWNvbW1hbmRBY3Rpb24BABBqYXZhL2xhbmcvT2JqZWN0AQATamF2YS9sYW5nL1Rocm93YWJsZQEAIGphdmF4L21pY3JvZWRpdGlvbi9sY2R1aS9Db21tYW5kAQAoamF2YXgvbWljcm9lZGl0aW9uL2xjZHVpL0NvbW1hbmRMaXN0ZW5lcgEADGxpYi9MaXN0ZW5lcgEABXBhdXNlAQASc2V0Q29tbWFuZExpc3RlbmVyAQAJc2hvd0Vycm9yAQAFc21hbGwBAA1Qcm9ncmFtcyBMaXN0AQAIU3RhY2tNYXABACRqYXZheC9taWNyb2VkaXRpb24vbGNkdWkvRGlzcGxheWFibGUAIQAHAAMAAQAGAAIAGQAsAB8AAAACACEAIAAAAAQAAQAdABcAAQAeAAAAEQABAAEAAAAFKrcADLEAAAAAAAEAIwAaAAEAHgAAAHAAAwADAAAAJCuyAAmmAAe4AAqxKrQACMYAFCq0AAgrLLkADgMAsVlMuAALsQABABIAHQAeAAQAAQAuAAAAMgADAAsAAwcABwcABQcAFgAAAB4AAwcABwcABQcAFgABBwAEACMAAwcABwcAAwcAFgAAAAEAKgAbAAEAHgAAABIAAgACAAAABiortQAIsQAAAAAACAAcABcAAQAeAAAAGwAFAAAAAAAPuwAFWRIBBQS3AA2zAAmxAAAAAAAA", "lib/Stack.class": "yv66vgAAAC8ALwcAJwcAKAcAKQcAKgcAKwcALAkABgAQCgABABUKAAIADwoAAwAUCgAFABMKAAUAFgoABgARCgAGABIMABwAGAwAHwAeDAAhABoMACMAGgwAJAAZDAAlABgMACYAFwwALQAXAQADKClJAQADKClWAQAVKEkpTGphdmEvbGFuZy9PYmplY3Q7AQAEKEkpVgEAFShMamF2YS91dGlsL1ZlY3RvcjspVgEABjxpbml0PgEABENvZGUBABJMamF2YS91dGlsL1ZlY3RvcjsBAAFhAQAKY2luaXRjbG9uZQEAC2Npbml0Y2xvbmVzAQAFY2xlYXIBAAZjbGVhcnMBAAllbGVtZW50QXQBAAJnYwEACGludFZhbHVlAQARamF2YS9sYW5nL0ludGVnZXIBABBqYXZhL2xhbmcvT2JqZWN0AQAQamF2YS9sYW5nL1N5c3RlbQEAE2phdmEvbGFuZy9UaHJvd2FibGUBABBqYXZhL3V0aWwvVmVjdG9yAQAJbGliL1N0YWNrAQAEc2l6ZQEACFN0YWNrTWFwBCEABgACAAAAAQASAB8AHgAAAAUABAAcABsAAQAdAAAAFgACAAIAAAAKKrcACSortQAHsQAAAAAAAQAiABgAAQAdAAAAswADAAQAAAA9KrQAB1lMwiq0AAe2AAw9Az4dHKIAIioqtAAHHbYAC8AAAbYACLYADrgACqcABFeEAwGn/98rw7FNK8MsvwADABYAKwAuAAQABwA3ADgAAAA4ADsAOAAAAAEALgAAAEwABQARAAQHAAYHAAUBAQAAAC4ABAcABgcABQEBAAEHAAQALwAEBwAGBwAFAQEAAAA1AAQHAAYHAAUBAQAAADgAAgcABgcABQABBwAEAAEAIAAYAAEAHQAAALAAAwAEAAAAOiq0AAdZTMIqtAAHtgAMPQM+HRyiAB8qKrQABx22AAvAAAG2AAi2AA2nAARXhAMBp//iK8OxTSvDLL8AAwAWACgAKwAEAAcANAA1AAAANQA4ADUAAAABAC4AAABMAAUAEQAEBwAGBwAFAQEAAAArAAQHAAYHAAUBAQABBwAEACwABAcABgcABQEBAAAAMgAEBwAGBwAFAQEAAAA1AAIHAAYHAAUAAQcABAQEACEAGgAABAQAIwAaAAAAAA=="};
+
+// ===================== Merge orchestration (JS port of merge_tool.py) =====================
+
+// Generate n distinct package-prefix strings: 'a'..'z' first (matches the
+// established prefix convention — copy 1 uses 'a'), then two-letter
+// combinations ('aa','ab',...) if more than 26 copies are requested.
+function generatePrefixes(n) {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  if (!Number.isInteger(n) || n < 1 || n > MAX_MIDLETS) {
+    throw new Error('Tool hỗ trợ tối đa ' + MAX_MIDLETS + ' MIDlet trong một JAR.');
+  }
+  const result = letters.split('');
+  let i = 0;
+  while (result.length < n) {
+    result.push(letters[Math.floor(i / 26)] + letters[i % 26]);
+    i++;
+  }
+  return result.slice(0, n);
+}
+// lib/RecordStore wrappers are expanded through z, so each copy retains its
+// own RecordStore namespace for one- and two-letter package prefixes.
+const MAX_MIDLETS = 702;
+const SAFE_RECORDSTORE_PREFIXES = new Set(generatePrefixes(MAX_MIDLETS));
+const SHARED_TOP_DIRS = new Set(['META-INF','lib']);
+const API_REBASE_CANDIDATES = new Map([
+  ['javax/microedition/midlet/MIDlet','lib/MIDlet'],
+  ['javax/microedition/lcdui/Display','lib/Display'],
+  ['javax/microedition/lcdui/Canvas','lib/Canvas'],
+  ['javax/microedition/lcdui/Alert','lib/Alert'],
+  ['javax/microedition/lcdui/AlertType','lib/AlertType'],
+  ['javax/microedition/lcdui/Form','lib/Form'],
+  ['javax/microedition/lcdui/List','lib/List'],
+  ['javax/microedition/lcdui/TextBox','lib/TextBox'],
+  ['javax/microedition/lcdui/game/GameCanvas','lib/GameCanvas'],
+  // The bundled FullCanvas bridge supplies Canvas.paint/PAINT on PhoneME.
+  ['com/nokia/mid/ui/FullCanvas','lib/FullCanvas'],
+  ['java/lang/Thread','lib/Thread'],
+]);
+const STANDARD_RECORDSTORE = 'javax/microedition/rms/RecordStore';
+const LIB_RECORDSTORE = 'lib/RecordStore';
+const RECORDSTORE_METHODS = new Set(['openRecordStore','deleteRecordStore','listRecordStores']);
+const RECORDSTORE_SUFFIX = new Map([
+  ['openRecordStore','penRecordStore'],
+  ['deleteRecordStore','eleteRecordStore'],
+  ['listRecordStores','istRecordStores'],
+]);
+const CANVAS_METHOD_RENAME = new Map([
+  ['keyPressed\u0000(I)V','leyPressed'],
+  ['keyReleased\u0000(I)V','leyReleased'],
+  ['paint\u0000(Ljavax/microedition/lcdui/Graphics;)V','PAINT'],
+]);
+const LIB_THREAD = 'lib/Thread';
+// lib/Thread only provides a capitalized "CurrentThread()Llib/Thread;" static
+// method (not the real Thread's lowercase "currentThread") — after the blanket
+// java.lang.Thread -> lib.Thread rebase the descriptor already lines up
+// (return type becomes Llib/Thread; automatically); only the name casing
+// needs correcting.
+const LIB_THREAD_METHOD_RENAME = new Map([
+  ['currentThread','CurrentThread'],
+]);
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function parseManifest(text) {
+  const rawLines = text.split(/\r\n|\r|\n/);
+  const lines = [];
+  for (const line of rawLines) {
+    if (line.startsWith(' ') && lines.length > 0) lines[lines.length - 1] += line.slice(1);
+    else if (line.length > 0) lines.push(line);
+  }
+  const attrs = new Map();
+  for (const line of lines) {
+    const idx = line.indexOf(':');
+    if (idx === -1) continue;
+    attrs.set(line.slice(0, idx).trim(), line.slice(idx + 1).trim());
+  }
+  return attrs;
+}
+
+function topDir(relpath) { return relpath.split('/')[0]; }
+
+function normalizeJarResourcePath(value) {
+  return value.replace(/^\/+/, '').replace(/^(?:\.\/)+/, '').replace(/\\/g, '/');
+}
+
+function resourceLiteralMatches(path, literal) {
+  const normalized = normalizeJarResourcePath(literal);
+  if (!normalized) return false;
+  if (path === normalized) return true;
+  if (normalized.endsWith('/')) return path.startsWith(normalized);
+  if (path.startsWith(normalized + '/')) return true;
+  // Some games build asset names by appending an index or extension to a
+  // constant stem (e.g. "/yourcraft/480/anims" + "0.pak").
+  if (path.startsWith(normalized)) {
+    const suffix = path.slice(normalized.length);
+    const stem = normalized.slice(normalized.lastIndexOf('/') + 1);
+    // A numeric path such as "/1" is commonly a complete resource filename;
+    // do not let it accidentally claim "/10". Dot-suffixed shards such as
+    // "/3.1" may still belong to the "/3" resource family.
+    if (/^\d+$/.test(stem)) {
+      if (/^\.[^/]*$/.test(suffix)) return true;
+    } else if (/^(?:\d|\.)[^/]*$/.test(suffix)) {
+      return true;
+    }
+  }
+  // Absolute short prefixes such as "/x" are also used for numbered assets.
+  return literal.startsWith('/') && !normalized.includes('/') &&
+    !/^\d+$/.test(normalized) && path.startsWith(normalized);
+}
+
+function isKnownUnusedHaiTacNumericAsset(game, path) {
+  // HaiTac Ti Hon includes root files named 1..4, but its loaders use /mfont
+  // data or /x<scale> image paths. Its lone bare "1" string is a keypad label,
+  // not a resource path. Do not let those orphan numeric files block a merge.
+  return game.mainClass === 'com.silvershield.onepiece.GameMidlet' &&
+    game.attrs.get('MIDlet-Name') === 'HaiTacTiHon Midlet Suite' &&
+    /^[1-4]$/.test(path);
+}
+
+function rewriteResourceStrings(data, assetPaths, pathsToMove, assetNamespace) {
+  const cf = parseClassFile(data);
+  const moveSet = new Set(pathsToMove);
+  const mappedPaths = new Set();
+  const relativePaths = new Set();
+  let changed = false;
+
+  for (const entry of cf.cp) {
+    if (!entry || entry[0] !== TAG.String) continue;
+    const oldValue = bytesToStr(utf8(cf, entry[1]));
+    const normalized = normalizeJarResourcePath(oldValue);
+    // A bare digit is commonly a UI label/key (e.g. keypad "1"). Require
+    // an explicit resource path such as "/1" before treating it as a file.
+    if (!oldValue.includes('/') && /^\d+$/.test(normalized)) continue;
+    const pathLike = oldValue.startsWith('/') || oldValue.includes('/') ||
+      assetPaths.has(normalized) || /\.[A-Za-z0-9]{1,6}$/.test(normalized);
+    if (!pathLike) continue;
+
+    const matchedAssets = Array.from(assetPaths).filter(path => resourceLiteralMatches(path, oldValue));
+    if (!matchedAssets.length) continue;
+
+    const targeted = Array.from(moveSet).some(path => resourceLiteralMatches(path, oldValue));
+    for (const path of matchedAssets) {
+      if (targeted) mappedPaths.add(path);
+      if (!oldValue.startsWith('/')) relativePaths.add(path);
+    }
+    if (!targeted) continue;
+    const rewritten = (oldValue.startsWith('/') ? '/' : '') + assetNamespace + '/' + normalized;
+    if (rewritten === oldValue) continue;
+    const newUtf8Index = cf.cp.length;
+    cf.cp.push([TAG.Utf8, strToBytes(rewritten)]);
+    entry[1] = newUtf8Index;
+    changed = true;
+  }
+  return { data: changed ? serializeClassFile(cf) : data, mappedPaths, relativePaths };
+}
+
+async function mergeJar(file, nCopies, title, log) {
+  if (!Number.isInteger(nCopies) || nCopies < 2 || nCopies > MAX_MIDLETS) {
+    throw new Error('Mỗi JAR hỗ trợ nhân bản từ 2 đến ' + MAX_MIDLETS + ' MIDlet.');
+  }
+  log('Đang đọc file JAR...');
+  const zip = await JSZip.loadAsync(file);
+
+  const manifestFile = zip.file('META-INF/MANIFEST.MF');
+  if (!manifestFile) throw new Error('JAR không có META-INF/MANIFEST.MF');
+  const manifestText = await manifestFile.async('string');
+  const attrs = parseManifest(manifestText);
+
+  if (!attrs.has('MIDlet-1')) throw new Error('JAR không có thuộc tính MIDlet-1 trong manifest — không xác định được lớp chính.');
+  const midlet1Parts = attrs.get('MIDlet-1').split(',').map(s => s.trim());
+  if (midlet1Parts.length < 3) throw new Error('MIDlet-1 không đúng định dạng: ' + attrs.get('MIDlet-1'));
+  const [gameTitle, gameIcon, gameMainClassDotted] = midlet1Parts;
+  const baseTitle = title || attrs.get('MIDlet-Name') || gameTitle;
+
+  log('Đang tải toàn bộ nội dung JAR vào bộ nhớ...');
+  // workFiles: relpath -> Uint8Array (everything except manifest)
+  const workFiles = new Map();
+  const entries = Object.values(zip.files).filter(e => !e.dir);
+  for (const entry of entries) {
+    if (entry.name === 'META-INF/MANIFEST.MF') continue;
+    const data = await entry.async('uint8array');
+    workFiles.set(entry.name, data);
+  }
+  log('Đã nạp ' + workFiles.size + ' file.');
+
+  // internal class names = every .class NOT under META-INF/ or lib/
+  const internalNames = new Set();
+  for (const relpath of workFiles.keys()) {
+    if (!relpath.endsWith('.class')) continue;
+    if (SHARED_TOP_DIRS.has(topDir(relpath))) continue;
+    internalNames.add(relpath.slice(0, -6));
+  }
+  log('Tổng số class nội bộ của game: ' + internalNames.size);
+
+  const gameHasOwnLib = Array.from(workFiles.keys()).some(p => topDir(p) === 'lib' && p.endsWith('.class'));
+  if (gameHasOwnLib && nCopies > 10) {
+    throw new Error('JAR này có lib/ riêng chưa được mở rộng bộ tách dữ liệu lưu; không thể đảm bảo an toàn trên 10 MIDlet.');
+  }
+
+  // 1) Global API rebase (MIDlet/Display/Canvas/Alert/Form/List/TextBox/GameCanvas -> lib.*)
+  log('Đang chuyển các API MIDP chuẩn sang lib.*...');
+  for (const name of internalNames) {
+    const relpath = name + '.class';
+    if (!workFiles.has(relpath)) continue;
+    let data = workFiles.get(relpath);
+    data = applyRenames(data, API_REBASE_CANDIDATES);
+    data = renameMethodSignatures(data, CANVAS_METHOD_RENAME);
+    data = renameMethodsOnClass(data, LIB_THREAD, LIB_THREAD_METHOD_RENAME);
+    workFiles.set(relpath, data);
+  }
+  const threadBridgeTargets = gameHasOwnLib ? new Set() :
+    findCurrentThreadBridgeTargets(new Map(Array.from(internalNames)
+      .filter(name => workFiles.has(name + '.class'))
+      .map(name => [name, workFiles.get(name + '.class')])));
+
+  // 2) Generate N copies, each in its own prefix folder, with per-copy RecordStore method redirection
+  const finalFiles = new Map(); // relpath -> Uint8Array, for the OUTPUT jar
+  // copy over all non-internal, non-manifest files unchanged (shared assets, lib/ if game has its own, etc.)
+  for (const [relpath, data] of workFiles.entries()) {
+    if (internalNames.has(relpath.slice(0, -6)) && relpath.endsWith('.class')) continue; // handled below
+    finalFiles.set(relpath, data);
+  }
+
+  const prefixes = generatePrefixes(nCopies);
+  const entriesForManifest = [];
+  for (let i = 0; i < nCopies; i++) {
+    const prefix = prefixes[i];
+    log('Đang tạo bản ' + (i + 1) + ' (gói "' + prefix + '/")...');
+
+    for (const name of internalNames) {
+      const relpath = name + '.class';
+      if (!workFiles.has(relpath)) continue;
+      let data = workFiles.get(relpath);
+      data = relocateClassBytes(data, internalNames, prefix);
+      data = rewriteReflectiveClassNameStrings(data, internalNames, prefix);
+      if (threadBridgeTargets.has(name)) {
+        data = injectCurrentThreadBridge(data, prefix + '/' + name);
+      }
+      // Every supported one- or two-letter prefix has a lib/RecordStore
+      // wrapper, keeping persistent data isolated for all copies.
+      if (SAFE_RECORDSTORE_PREFIXES.has(prefix)) {
+        data = redirectMethodrefOwner(data, STANDARD_RECORDSTORE, LIB_RECORDSTORE, RECORDSTORE_METHODS);
+        const rsRenameForPrefix = new Map();
+        for (const [orig, suffix] of RECORDSTORE_SUFFIX.entries()) rsRenameForPrefix.set(orig, prefix + suffix);
+        data = renameMethodsOnClass(data, LIB_RECORDSTORE, rsRenameForPrefix);
+      }
+      finalFiles.set(prefix + '/' + relpath, data);
+    }
+    entriesForManifest.push([String(i + 1), gameIcon, prefix + '.' + gameMainClassDotted]);
+  }
+
+  // 3) Add the menu and MIDP compatibility framework.
+  log('Đang thêm framework menu...');
+  for (const [relpath, b64] of Object.entries(FRAMEWORK_B64)) {
+    if (relpath.startsWith('lib/') && gameHasOwnLib) continue;
+    let data = patchFrameworkClass(relpath, base64ToBytes(b64), nCopies);
+    if (relpath.endsWith('.class')) data = rebrandFrameworkClass(data);
+    finalFiles.set(rebrandFrameworkPath(relpath), data);
+  }
+
+  // 4) Build manifest
+  const manifestLines = [
+    'Manifest-Version: 1.0',
+    // Always CLDC-1.1, regardless of what the source game declares: verified
+    // against every known-working merged JAR (LHTX3.jar, nso-x2.jar,
+    // ahtth_x2_old.jar) that the embedded framework requires CLDC-1.1 to
+    // run correctly, even when merging a CLDC-1.0 game — a mismatched
+    // declaration causes strict runtimes (e.g. PhoneME) to reject the suite.
+    'MicroEdition-Configuration: CLDC-1.1',
+    // Always MIDP-2.0: some source games mislabel "MIDP-2.1" (not a real spec
+    // version) which strict runtimes like PhoneME may reject outright.
+    'MicroEdition-Profile: MIDP-2.0',
+    'MIDlet-Version: ' + (attrs.get('MIDlet-Version') || '1.0'),
+    'MIDlet-Vendor: TrVH',
+    'MIDlet-Name: ' + baseTitle,
+    'MIDlet-1: ' + baseTitle + ',' + gameIcon + ',trvh.trvh',
+    'num: ' + nCopies,
+  ];
+  entriesForManifest.forEach(([t, icon, cls], idx) => {
+    manifestLines.push(idx + ': ' + t + ',' + icon + ',' + cls + ',' + icon);
+  });
+  const manifestOut = manifestLines.join('\r\n') + '\r\n';
+
+  // 5) Zip it all up
+  log('Đang đóng gói JAR kết quả (' + finalFiles.size + ' file)...');
+  const outZip = new JSZip();
+  outZip.file('META-INF/MANIFEST.MF', manifestOut);
+  outZip.file('META-INF/CREDITS.TXT', FRAMEWORK_CREDITS);
+  for (const [relpath, data] of finalFiles.entries()) {
+    outZip.file(relpath, data);
+  }
+  const blob = await outZip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/java-archive' });
+  log('Hoàn tất.');
+  return { blob, entries: entriesForManifest };
+}
+
+
+
+// ===================== JAD Generation (from Jar→Jad tool) =====================
+function cleanManifestField(value) {
+  return String(value == null ? '' : value).replace(/[,\r\n]+/g, ' ').trim();
+}
+
+function foldManifestLine(line) {
+  const encoder = new TextEncoder();
+  const result = [];
+  let current = '';
+  let byteCount = 0;
+  let limit = 72;
+  for (const character of line) {
+    const size = encoder.encode(character).length;
+    if (byteCount + size > limit && current) {
+      result.push(current);
+      current = ' ';
+      byteCount = 1;
+      limit = 72;
+    }
+    current += character;
+    byteCount += size;
+  }
+  result.push(current);
+  return result.join('\r\n');
+}
+
+async function mergeMultipleJars(gameRows, title, log) {
+  if (!Array.isArray(gameRows) || gameRows.length < 2) {
+    throw new Error('Chế độ nhiều game cần ít nhất 2 file JAR.');
+  }
+  const totalCopies = gameRows.reduce((sum, row) => sum + Number(row.copies || 0), 0);
+  if (gameRows.some(row => !Number.isInteger(Number(row.copies)) || Number(row.copies) < 1)) {
+    throw new Error('Mỗi game phải có ít nhất 1 bản.');
+  }
+  if (totalCopies > MAX_MIDLETS) {
+    throw new Error('Chế độ nhiều game giới hạn tổng cộng ' + MAX_MIDLETS + ' MIDlet để tách dữ liệu lưu an toàn.');
+  }
+
+  const games = [];
+  for (let gameIndex = 0; gameIndex < gameRows.length; gameIndex++) {
+    const row = gameRows[gameIndex];
+    log('Đang đọc game ' + (gameIndex + 1) + ': ' + row.file.name);
+    const zip = await JSZip.loadAsync(row.file);
+    const manifest = zip.file('META-INF/MANIFEST.MF');
+    if (!manifest) throw new Error(row.file.name + ': không có META-INF/MANIFEST.MF.');
+    const attrs = parseManifest(await manifest.async('string'));
+    if (!attrs.has('MIDlet-1')) throw new Error(row.file.name + ': không có MIDlet-1 trong manifest.');
+    const parts = attrs.get('MIDlet-1').split(',').map(s => s.trim());
+    if (parts.length < 3) throw new Error(row.file.name + ': MIDlet-1 không đúng định dạng.');
+
+    const workFiles = new Map();
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir || entry.name === 'META-INF/MANIFEST.MF') continue;
+      if (/^META-INF\/.*\.(SF|RSA|DSA|EC)$/i.test(entry.name)) continue;
+      if (entry.name.startsWith('/') || entry.name.includes('\\') || entry.name.split('/').includes('..')) {
+        throw new Error(row.file.name + ': đường dẫn file không an toàn trong JAR: ' + entry.name);
+      }
+      workFiles.set(entry.name, await entry.async('uint8array'));
+    }
+    const internalNames = new Set();
+    for (const relpath of workFiles.keys()) {
+      if (relpath.endsWith('.class') && !SHARED_TOP_DIRS.has(topDir(relpath))) {
+        internalNames.add(relpath.slice(0, -6));
+      }
+    }
+    if (!internalNames.has(parts[2].replace(/\./g, '/'))) {
+      throw new Error(row.file.name + ': lớp MIDlet chính không nằm trong JAR.');
+    }
+    const hasOwnLib = Array.from(workFiles.keys()).some(path => topDir(path) === 'lib' && path.endsWith('.class'));
+    if (hasOwnLib) {
+      throw new Error(row.file.name + ': JAR có lib/ riêng. Chế độ nhiều game chưa thể ghép các framework lib khác nhau một cách an toàn.');
+    }
+
+    const assets = new Map();
+    for (const [path, data] of workFiles) {
+      if (path.endsWith('.class') || topDir(path) === 'META-INF') continue;
+      assets.set(path, data);
+    }
+    const iconPath = normalizeJarResourcePath(parts[1]);
+    games.push({
+      file: row.file,
+      copies: Number(row.copies),
+      attrs,
+      title: cleanManifestField(parts[0] || attrs.get('MIDlet-Name') || row.file.name.replace(/\.jar$/i, '')),
+      iconOriginal: parts[1],
+      iconPath: assets.has(iconPath) ? iconPath : null,
+      mainClass: parts[2],
+      workFiles,
+      internalNames,
+      assets,
+      assetNamespace: '__multi_assets/game' + (gameIndex + 1),
+      gameIndex
+    });
+  }
+
+  const assetSources = new Map();
+  for (const game of games) {
+    for (const [path, data] of game.assets) {
+      if (!assetSources.has(path)) assetSources.set(path, []);
+      assetSources.get(path).push({ game, data });
+    }
+  }
+  const conflictingPaths = new Set();
+  for (const [path, sources] of assetSources) {
+    if (sources.some(source => !bytesEqual(source.data, sources[0].data))) conflictingPaths.add(path);
+  }
+  log('Tìm thấy ' + conflictingPaths.size + ' đường dẫn tài nguyên trùng tên nhưng khác nội dung.');
+
+  for (const game of games) {
+    game.pathsToMove = new Set();
+    for (const path of conflictingPaths) if (game.assets.has(path)) game.pathsToMove.add(path);
+    if (game.iconPath) game.pathsToMove.add(game.iconPath);
+    game.preparedClasses = new Map();
+    game.relativePathsByClass = new Map();
+    game.mappedPaths = new Set();
+
+    for (const name of game.internalNames) {
+      const relpath = name + '.class';
+      let data = game.workFiles.get(relpath);
+      if (!data) continue;
+      data = applyRenames(data, API_REBASE_CANDIDATES);
+      data = renameMethodSignatures(data, CANVAS_METHOD_RENAME);
+      data = renameMethodsOnClass(data, LIB_THREAD, LIB_THREAD_METHOD_RENAME);
+      const rewritten = rewriteResourceStrings(data, new Set(game.assets.keys()), game.pathsToMove, game.assetNamespace);
+      data = rewritten.data;
+      for (const path of rewritten.mappedPaths) game.mappedPaths.add(path);
+      game.relativePathsByClass.set(name, rewritten.relativePaths);
+      game.preparedClasses.set(name, data);
+    }
+    game.currentThreadBridgeTargets = findCurrentThreadBridgeTargets(game.preparedClasses);
+    game.ignoredConflictingAssets = new Set();
+  }
+
+  // In HaiTac Ti Hon, root files 1..4 are not referenced by its resource
+  // loaders; the other JAR's explicit /1..4 references are safely namespaced.
+  // Keep the referenced game's copies and omit only these known unused files.
+  for (const path of conflictingPaths) {
+    if (!/^[1-4]$/.test(path)) continue;
+    const owners = games.filter(game => game.mappedPaths.has(path));
+    if (owners.length !== 1) continue;
+    for (const game of games) {
+      if (game !== owners[0] && game.assets.has(path) && isKnownUnusedHaiTacNumericAsset(game, path)) {
+        game.ignoredConflictingAssets.add(path);
+        game.pathsToMove.delete(path);
+        log('Đã giữ tài nguyên "' + path + '" của game có đường dẫn tham chiếu rõ; bỏ bản trùng không được HaiTac Ti Hon sử dụng.');
+      }
+    }
+  }
+
+  // A game may construct a resource path dynamically, so no constant string
+  // identifies the file to rewrite. If exactly one game has an unresolved
+  // reference to a conflicting path, leave that game's copy at the original
+  // JAR path and namespace the other copies whose references were identified.
+  // If multiple games are unresolved, ownership cannot be determined safely.
+  for (const path of conflictingPaths) {
+    const unresolvedOwners = games.filter(game =>
+      game.assets.has(path) &&
+      !game.mappedPaths.has(path) &&
+      path !== game.iconPath &&
+      !game.ignoredConflictingAssets.has(path)
+    );
+    if (unresolvedOwners.length === 1) {
+      const owner = unresolvedOwners[0];
+      owner.pathsToMove.delete(path);
+      owner.keepAtOriginalPath = owner.keepAtOriginalPath || new Set();
+      owner.keepAtOriginalPath.add(path);
+      log('Đã giữ "' + path + '" của ' + owner.file.name +
+        ' ở đường dẫn gốc vì game có thể tạo đường dẫn tài nguyên động; các bản khác đã được tách namespace.');
+    }
+  }
+
+  for (const game of games) {
+    for (const path of conflictingPaths) {
+      if (game.assets.has(path) && !game.mappedPaths.has(path) && path !== game.iconPath &&
+          !game.ignoredConflictingAssets.has(path) &&
+          !(game.keepAtOriginalPath && game.keepAtOriginalPath.has(path))) {
+        throw new Error('Không thể cô lập an toàn tài nguyên "' + path + '" trong ' + game.file.name +
+          '. Game có thể nạp tài nguyên theo cách động; hãy dùng cặp JAR khác hoặc gửi mình để bổ sung quy tắc.');
+      }
+    }
+    game.movedPaths = new Set([...game.mappedPaths, ...game.pathsToMove]);
+  }
+
+  const finalFiles = new Map();
+  function putFile(path, data) {
+    const old = finalFiles.get(path);
+    if (old && !bytesEqual(old, data)) throw new Error('Va chạm file sau khi tách namespace: ' + path);
+    finalFiles.set(path, data);
+  }
+  for (const game of games) {
+    for (const [path, data] of game.assets) {
+      if (game.ignoredConflictingAssets.has(path)) continue;
+      putFile(game.movedPaths.has(path) ? game.assetNamespace + '/' + path : path, data);
+    }
+  }
+
+  const prefixes = generatePrefixes(totalCopies);
+  const entriesForManifest = [];
+  let nextPrefix = 0;
+  for (const game of games) {
+    for (let copyIndex = 0; copyIndex < game.copies; copyIndex++) {
+      const prefix = prefixes[nextPrefix++];
+      log('Đang tạo ' + game.title + ' bản ' + (copyIndex + 1) + ' trong gói "' + prefix + '/"...');
+      for (const name of game.internalNames) {
+        let data = game.preparedClasses.get(name);
+        if (!data) continue;
+        data = relocateClassBytes(data, game.internalNames, prefix);
+        data = rewriteReflectiveClassNameStrings(data, game.internalNames, prefix);
+        if (game.currentThreadBridgeTargets.has(name)) {
+          data = injectCurrentThreadBridge(data, prefix + '/' + name);
+        }
+        if (SAFE_RECORDSTORE_PREFIXES.has(prefix)) {
+          data = redirectMethodrefOwner(data, STANDARD_RECORDSTORE, LIB_RECORDSTORE, RECORDSTORE_METHODS);
+          const rsRenameForPrefix = new Map();
+          for (const [original, suffix] of RECORDSTORE_SUFFIX.entries()) rsRenameForPrefix.set(original, prefix + suffix);
+          data = renameMethodsOnClass(data, LIB_RECORDSTORE, rsRenameForPrefix);
+        }
+        putFile(prefix + '/' + name + '.class', data);
+      }
+
+      for (const [className, relativePaths] of game.relativePathsByClass) {
+        if (!relativePaths.size) continue;
+        const packagePath = className.includes('/') ? className.slice(0, className.lastIndexOf('/') + 1) : '';
+        for (const path of relativePaths) {
+          const data = game.assets.get(path);
+          if (!data) continue;
+          const storedPath = game.movedPaths.has(path) ? game.assetNamespace + '/' + path : path;
+          putFile(prefix + '/' + packagePath + storedPath, data);
+        }
+      }
+
+      const shownTitle = game.copies === 1 ? game.title : game.title + ' (' + (copyIndex + 1) + ')';
+      const outputIcon = game.iconPath ? '/' + game.assetNamespace + '/' + game.iconPath : game.iconOriginal;
+      entriesForManifest.push([shownTitle, outputIcon, prefix + '.' + game.mainClass]);
+    }
+  }
+
+  log('Đang thêm menu và framework MIDP...');
+  for (const [path, b64] of Object.entries(FRAMEWORK_B64)) {
+    let data = patchFrameworkClass(path, base64ToBytes(b64), totalCopies);
+    if (path.endsWith('.class')) data = rebrandFrameworkClass(data);
+    putFile(rebrandFrameworkPath(path), data);
+  }
+  const suiteTitle = cleanManifestField(title || 'Multi-JAR');
+  const firstIcon = entriesForManifest[0][1];
+  const firstAttrs = games[0].attrs;
+  const manifestLines = [
+    'Manifest-Version: 1.0',
+    'MicroEdition-Configuration: CLDC-1.1',
+    'MicroEdition-Profile: MIDP-2.0',
+    'MIDlet-Version: ' + cleanManifestField(firstAttrs.get('MIDlet-Version') || '1.0'),
+    'MIDlet-Vendor: TrVH',
+    'MIDlet-Name: ' + suiteTitle,
+    'MIDlet-1: ' + suiteTitle + ',' + firstIcon + ',trvh.trvh',
+    'num: ' + totalCopies
+  ];
+  entriesForManifest.forEach(([entryTitle, icon, cls], index) => {
+    manifestLines.push(index + ': ' + entryTitle + ',' + icon + ',' + cls + ',' + icon);
+  });
+  const manifestOut = manifestLines.map(foldManifestLine).join('\r\n') + '\r\n';
+  log('Đang đóng gói ' + totalCopies + ' MIDlet từ ' + games.length + ' game (' + finalFiles.size + ' file)...');
+  const outZip = new JSZip();
+  outZip.file('META-INF/MANIFEST.MF', manifestOut);
+  outZip.file('META-INF/CREDITS.TXT', FRAMEWORK_CREDITS);
+  for (const [path, data] of finalFiles) outZip.file(path, data);
+  const blob = await outZip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/java-archive' });
+  return { blob, entries: entriesForManifest, totalCopies };
+}
+
+const MANIFEST_ONLY_KEYS = new Set([
+  'Manifest-Version', 'Created-By', 'Ant-Version', 'Built-By',
+  'Build-Jdk', 'Archiver-Version', 'Implementation-Title',
+  'Implementation-Version', 'Implementation-Vendor'
+]);
+
+// Generate JAD content from a JAR file's manifest.
+// Accepts: { manifestText, jarName, jarSize }
+// Returns: { content: string, blob: Blob, fileName: string }
+function generateJad(manifestText, jarName, jarSize) {
+  const attrs = parseManifest(manifestText);
+  const jadAttrs = new Map();
+  for (const [k, v] of attrs.entries()) {
+    if (!MANIFEST_ONLY_KEYS.has(k)) jadAttrs.set(k, v);
+  }
+  jadAttrs.set('MIDlet-Jar-URL', jarName.replace(/\.jar$/i, '.jar'));
+  jadAttrs.set('MIDlet-Jar-Size', String(jarSize));
+  const sortedKeys = [...jadAttrs.keys()].sort((a, b) => a.localeCompare(b));
+  let jadContent = '';
+  for (const k of sortedKeys) {
+    jadContent += k + ': ' + jadAttrs.get(k) + '\r\n';
+  }
+  const blob = new Blob([jadContent], { type: 'application/octet-stream' });
+  const fileName = jarName.replace(/\.jar$/i, '') + '.jad';
+  return { content: jadContent, blob, fileName };
+}
+
+// Generate JAD from a JAR Blob/File — reads manifest, calls generateJad
+async function generateJadFromJar(jarFile) {
+  const buf = await jarFile.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const manifestEntry = zip.file('META-INF/MANIFEST.MF');
+  if (!manifestEntry) throw new Error('Không tìm thấy META-INF/MANIFEST.MF bên trong file JAR này.');
+  const manifestText = await manifestEntry.async('string');
+  const hasMidlet = [...parseManifest(manifestText).keys()].some(k => k.startsWith('MIDlet'));
+  const result = generateJad(manifestText, jarFile.name, jarFile.size);
+  result.hasMidlet = hasMidlet;
+  return result;
+}
+
+// Download a blob as a file
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+
+// ===================== UI wiring (merged) =====================
+'use strict';
+
+// ── Tab switching ──
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Clone tab ──
+const dropClone = document.getElementById('dropClone');
+const fileInputClone = document.getElementById('fileInputClone');
+const fileInfoClone = document.getElementById('fileInfoClone');
+const fileNameClone = document.getElementById('fileNameClone');
+const choices = document.getElementById('choices');
+const customNInput = document.getElementById('customNInput');
+const singleModeBtn = document.getElementById('singleModeBtn');
+const multiModeBtn = document.getElementById('multiModeBtn');
+const singleGameControls = document.getElementById('singleGameControls');
+const multiGameControls = document.getElementById('multiGameControls');
+const dropMulti = document.getElementById('dropMulti');
+const fileInputMulti = document.getElementById('fileInputMulti');
+const multiGameList = document.getElementById('multiGameList');
+const multiTotal = document.getElementById('multiTotal');
+const titleInput = document.getElementById('titleInput');
+const includeJad = document.getElementById('includeJad');
+const runBtn = document.getElementById('runBtn');
+const statusClone = document.getElementById('statusClone');
+const logEl = document.getElementById('log');
+
+let currentFile = null;
+let selectedN = null;
+let cloneMode = 'single';
+let multiGames = [];
+
+function setCloneMode(mode) {
+  cloneMode = mode;
+  const multi = mode === 'multi';
+  singleModeBtn.classList.toggle('active', !multi);
+  multiModeBtn.classList.toggle('active', multi);
+  singleModeBtn.setAttribute('aria-pressed', String(!multi));
+  multiModeBtn.setAttribute('aria-pressed', String(multi));
+  singleGameControls.style.display = multi ? 'none' : 'block';
+  multiGameControls.style.display = multi ? 'block' : 'none';
+  runBtn.textContent = multi ? 'Ghép nhiều game' : 'Ghép ngay';
+  titleInput.placeholder = multi ? 'Để trống dùng tên "Multi-JAR"' : 'Để trống dùng tên gốc trong JAR';
+  updateRunEnabled();
+}
+singleModeBtn.addEventListener('click', () => setCloneMode('single'));
+multiModeBtn.addEventListener('click', () => setCloneMode('multi'));
+
+dropClone.addEventListener('click', () => fileInputClone.click());
+dropClone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputClone.click(); }
+});
+dropClone.addEventListener('dragover', e => { e.preventDefault(); dropClone.classList.add('drag'); });
+dropClone.addEventListener('dragleave', () => dropClone.classList.remove('drag'));
+dropClone.addEventListener('drop', e => {
+  e.preventDefault(); dropClone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleCloneFile(e.dataTransfer.files[0]);
+});
+fileInputClone.addEventListener('change', e => { if (e.target.files.length) handleCloneFile(e.target.files[0]); });
+dropMulti.addEventListener('click', () => fileInputMulti.click());
+dropMulti.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputMulti.click(); }
+});
+dropMulti.addEventListener('dragover', e => { e.preventDefault(); dropMulti.classList.add('drag'); });
+dropMulti.addEventListener('dragleave', () => dropMulti.classList.remove('drag'));
+dropMulti.addEventListener('drop', e => {
+  e.preventDefault(); dropMulti.classList.remove('drag');
+  if (e.dataTransfer.files.length) addMultiFiles(Array.from(e.dataTransfer.files));
+});
+fileInputMulti.addEventListener('change', e => {
+  if (e.target.files.length) addMultiFiles(Array.from(e.target.files));
+  fileInputMulti.value = '';
+});
+
+function addMultiFiles(files) {
+  for (const file of files) {
+    if (!/\.jar$/i.test(file.name)) continue;
+    const duplicate = multiGames.some(game => game.file.name === file.name &&
+      game.file.size === file.size && game.file.lastModified === file.lastModified);
+    if (!duplicate) multiGames.push({ file, copies: 1 });
+  }
+  renderMultiGames();
+}
+
+function renderMultiGames() {
+  multiGameList.textContent = '';
+  multiGames.forEach((game, index) => {
+    const row = document.createElement('div');
+    row.className = 'multi-game-row';
+    const name = document.createElement('div');
+    name.className = 'multi-game-name';
+    name.title = game.file.name;
+    name.textContent = game.file.name;
+    const count = document.createElement('input');
+    count.type = 'number'; count.min = '1'; count.max = String(MAX_MIDLETS); count.step = '1';
+    count.value = String(game.copies); count.setAttribute('aria-label', 'Số bản của ' + game.file.name);
+    count.addEventListener('input', () => {
+      game.copies = Number(count.value);
+      updateMultiTotal();
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'remove-game'; remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Bỏ ' + game.file.name);
+    remove.addEventListener('click', () => {
+      multiGames.splice(index, 1);
+      renderMultiGames();
+    });
+    row.append(name, count, remove);
+    multiGameList.appendChild(row);
+  });
+  updateMultiTotal();
+}
+
+function updateMultiTotal() {
+  const total = multiGames.reduce((sum, game) => sum + (Number.isFinite(game.copies) ? game.copies : 0), 0);
+  const validCounts = multiGames.every(game => Number.isInteger(game.copies) && game.copies >= 1 && game.copies <= MAX_MIDLETS);
+  multiTotal.textContent = multiGames.length + ' game · tổng ' + total + '/' + MAX_MIDLETS + ' MIDlet. Cần ít nhất 2 game; mỗi bản dùng namespace riêng và dữ liệu lưu được tách biệt.';
+  multiTotal.style.color = total > MAX_MIDLETS || !validCounts ? 'var(--danger)' : '';
+  updateRunEnabled();
+}
+
+function handleCloneFile(f) {
+  currentFile = f;
+  fileNameClone.textContent = f.name;
+  fileInfoClone.style.display = 'flex';
+  updateRunEnabled();
+}
+
+choices.addEventListener('click', e => {
+  const btn = e.target.closest('.choice-btn');
+  if (!btn) return;
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  customNInput.value = '';
+  selectedN = parseInt(btn.dataset.n, 10);
+  updateRunEnabled();
+});
+
+customNInput.addEventListener('input', () => {
+  const v = parseInt(customNInput.value, 10);
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  selectedN = (Number.isInteger(v) && v >= 2 && v <= MAX_MIDLETS) ? v : null;
+  updateRunEnabled();
+});
+
+function updateRunEnabled() {
+  if (cloneMode === 'multi') {
+    const total = multiGames.reduce((sum, game) => sum + (Number.isFinite(game.copies) ? game.copies : 0), 0);
+    const valid = multiGames.length >= 2 && total <= MAX_MIDLETS &&
+      multiGames.every(game => Number.isInteger(game.copies) && game.copies >= 1 && game.copies <= MAX_MIDLETS);
+    runBtn.disabled = !valid;
+  } else {
+    runBtn.disabled = !(currentFile && selectedN);
+  }
+}
+
+function showCloneStatus(msg, kind) {
+  statusClone.textContent = msg;
+  statusClone.className = 'status show ' + kind;
+}
+function appendLog(msg) {
+  logEl.style.display = 'block';
+  logEl.textContent += msg + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+runBtn.addEventListener('click', async () => {
+  runBtn.disabled = true;
+  logEl.textContent = '';
+  statusClone.className = 'status';
+  // Remove old download links
+  document.querySelectorAll('.download-link').forEach(el => el.remove());
+
+  try {
+    showCloneStatus('Đang xử lý...', 'info');
+    const isMulti = cloneMode === 'multi';
+    const result = isMulti
+      ? await mergeMultipleJars(multiGames, titleInput.value.trim(), appendLog)
+      : await mergeJar(currentFile, selectedN, titleInput.value.trim(), appendLog);
+    const multiStem = isMulti ? (titleInput.value.trim() || 'Multi-JAR') : '';
+    const safeStem = multiStem.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').slice(0, 90);
+    const outName = isMulti
+      ? safeStem + '.jar'
+      : currentFile.name.replace(/\.jar$/i, '') + '_x' + selectedN + '.jar';
+    const jarBlob = result.blob;
+    const jarSize = jarBlob.size;
+    const completionText = isMulti
+      ? 'Đã ghép xong ' + result.totalCopies + ' bản từ ' + multiGames.length + ' game'
+      : 'Đã ghép xong ' + selectedN + ' bản';
+
+    // If JAD checkbox is checked, generate JAD from the merged JAR's manifest
+    if (includeJad.checked) {
+      appendLog('Đang tạo file .jad từ JAR đã ghép...');
+      try {
+        // Read the merged JAR to get its manifest
+        const mergedBuf = await jarBlob.arrayBuffer();
+        const mergedZip = await JSZip.loadAsync(mergedBuf);
+        const mergedManifest = mergedZip.file('META-INF/MANIFEST.MF');
+        if (mergedManifest) {
+          const mergedManifestText = await mergedManifest.async('string');
+          const jadResult = generateJad(mergedManifestText, outName, jarSize);
+          appendLog('Đã tạo file .jad (' + jadResult.content.length + ' bytes).');
+          // We'll trigger JAD download after JAR download
+          var jadBlob = jadResult.blob;
+          var jadName = jadResult.fileName;
+        } else {
+          appendLog('Cảnh báo: JAR đã ghép không có manifest, không tạo được .jad.');
+        }
+      } catch (jadErr) {
+        appendLog('Lỗi khi tạo .jad: ' + jadErr.message);
+      }
+    }
+
+    // Download JAR and JAD automatically via <a download> links
+    // This avoids the browser's "Save As" dialog and the .zip suffix problem.
+    // The download attribute forces the exact filename; blob MIME is set correctly.
+    async function autoDownload(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName; // forces exact filename, no .zip/.txt suffix
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Release memory after a short delay
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
+    // Download the JAR first
+    await autoDownload(jarBlob, outName);
+
+    // If JAD was requested and successfully generated, download it too (slight delay so browser doesn't block)
+    if (typeof jadBlob !== 'undefined') {
+      await new Promise(r => setTimeout(r, 400));
+      await autoDownload(jadBlob, jadName);
+      showCloneStatus(completionText + '. Đang tải về "' + outName + '" và "' + jadName + '".', 'ok');
+    } else {
+      showCloneStatus(completionText + '. Đang tải về "' + outName + '".', 'ok');
+    }
+
+    // Also show clickable links as backup (in case auto-download is blocked by browser settings)
+    const url = URL.createObjectURL(jarBlob);
+    const a = document.createElement('a');
+    a.className = 'download-link';
+    a.href = url;
+    a.download = outName;
+    a.textContent = '⬇ Tải về ' + outName;
+    statusClone.insertAdjacentElement('afterend', a);
+
+    if (typeof jadBlob !== 'undefined') {
+      const jadUrl = URL.createObjectURL(jadBlob);
+      const jadA = document.createElement('a');
+      jadA.className = 'download-link jad';
+      jadA.href = jadUrl;
+      jadA.download = jadName;
+      jadA.textContent = '⬇ Tải về ' + jadName;
+      a.insertAdjacentElement('afterend', jadA);
+    }
+  } catch (err) {
+    showCloneStatus('Lỗi: ' + (err && err.message ? err.message : String(err)), 'err');
+    console.error(err);
+  } finally {
+    updateRunEnabled();
+  }
+});
+
+// ── JAD tab ──
+const dropJad = document.getElementById('dropJad');
+const fileInputJad = document.getElementById('fileInputJad');
+const fileInfoJad = document.getElementById('fileInfoJad');
+const fileNameJad = document.getElementById('fileNameJad');
+const convertBtn = document.getElementById('convertBtn');
+const statusJad = document.getElementById('statusJad');
+const previewCard = document.getElementById('previewCard');
+const preview = document.getElementById('preview');
+
+let jadCurrentFile = null;
+
+dropJad.addEventListener('click', () => fileInputJad.click());
+dropJad.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputJad.click(); }
+});
+dropJad.addEventListener('dragover', e => { e.preventDefault(); dropJad.classList.add('drag'); });
+dropJad.addEventListener('dragleave', () => dropJad.classList.remove('drag'));
+dropJad.addEventListener('drop', e => {
+  e.preventDefault(); dropJad.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleJadFile(e.dataTransfer.files[0]);
+});
+fileInputJad.addEventListener('change', e => { if (e.target.files.length) handleJadFile(e.target.files[0]); });
+
+function handleJadFile(f) {
+  jadCurrentFile = f;
+  fileNameJad.textContent = f.name;
+  fileInfoJad.style.display = 'flex';
+  convertBtn.disabled = false;
+  statusJad.classList.remove('show', 'ok', 'err');
+  previewCard.style.display = 'none';
+}
+
+function showJadStatus(msg, ok) {
+  statusJad.textContent = msg;
+  statusJad.classList.add('show');
+  statusJad.classList.toggle('ok', ok);
+  statusJad.classList.toggle('err', !ok);
+}
+
+convertBtn.addEventListener('click', async () => {
+  try {
+    convertBtn.disabled = true;
+    showJadStatus('Đang đọc file JAR...', true);
+
+    const result = await generateJadFromJar(jadCurrentFile);
+
+    if (!result.hasMidlet) {
+      showJadStatus('Manifest không có thuộc tính MIDlet-* nào — có thể đây không phải JAR của một J2ME MIDlet hợp lệ. Sẽ vẫn tạo JAD từ những gì tìm được.', true);
+    }
+
+    preview.textContent = result.content;
+    previewCard.style.display = 'block';
+
+    downloadBlob(result.blob, result.fileName);
+    showJadStatus('Đã tạo và tải về "' + result.fileName + '".', true);
+  } catch (err) {
+    showJadStatus('Lỗi: ' + (err && err.message ? err.message : String(err)), false);
+  } finally {
+    convertBtn.disabled = false;
+  }
+});
+
+</script>
+</body>
+</html>

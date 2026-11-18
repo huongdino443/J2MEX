@@ -11,6 +11,10 @@ for display, audio, storage, and input.
 
 The release page includes the latest APK and release notes.
 
+**JAR Tool:** Bạn muốn chạy nhiều MIDlet cùng lúc, hoặc nhân bản nhiều bản của một game
+Java nhưng chỉ dùng một JAR? Hãy thử [JAR Tool](https://huongdino443.github.io/J2MEX/tools/jar-tool/);
+công cụ chạy trên trình duyệt và xử lý JAR ngay trên thiết bị của bạn.
+
 
 ## Features
 
