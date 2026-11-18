@@ -20,10 +20,13 @@ public final class AndroidFontBridgeSmoke {
         ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
         AtomicInteger operations = new AtomicInteger();
         AtomicInteger renderedFace = new AtomicInteger(-1);
-        Thread endpoint = new Thread(() -> serve(server, operations, renderedFace), "FakeAndroidPaint");
+        Thread endpoint = new Thread(
+                () -> serve(server, operations, renderedFace, true), "FakeAndroidPaint");
         endpoint.setDaemon(true);
         endpoint.start();
         AndroidFontBridge.connect(server.getLocalPort(), "font-bridge-smoke");
+        require(AndroidFontBridge.usesSystemFontBackend(),
+                "font bridge handshake should expose the system font backend");
 
         Font.configureScreenSize(240, 320);
         Font font = Font.getFont(Font.FACE_MONOSPACE, Font.STYLE_PLAIN, Font.SIZE_MEDIUM);
@@ -40,12 +43,15 @@ public final class AndroidFontBridgeSmoke {
         graphics.setFont(font);
         graphics.drawString("Wi", 40, 20, Graphics.HCENTER | Graphics.BASELINE);
         BufferedImage pixels = image.getCanvas();
-        int minimumX = pixels.getWidth(), maximumX = -1, rendered = 0;
+        int minimumX = pixels.getWidth(), maximumX = -1, minimumY = pixels.getHeight();
+        int maximumY = -1, rendered = 0;
         for (int y = 0; y < pixels.getHeight(); y++) {
             for (int x = 0; x < pixels.getWidth(); x++) {
                 if ((pixels.getRGB(x, y) & 0xffffff) == 0x36a9e1) {
                     minimumX = Math.min(minimumX, x);
                     maximumX = Math.max(maximumX, x);
+                    minimumY = Math.min(minimumY, y);
+                    maximumY = Math.max(maximumY, y);
                     rendered++;
                 }
             }
@@ -53,6 +59,8 @@ public final class AndroidFontBridgeSmoke {
         require(rendered > 0, "Canvas raster returned by Android should composite into the framebuffer");
         require(Math.abs((minimumX + maximumX) / 2.0 - 40.0) <= 1.0,
                 "Android Paint advance should anchor the returned glyph raster");
+        require(minimumY == 12 && maximumY == 21,
+                "system-font BASELINE should use the requested y without ascent correction");
         require(renderedFace.get() == Font.FACE_MONOSPACE,
                 "Graphics.setFont must pass FACE_MONOSPACE through to Android Paint drawing");
         require(operations.get() >= 4, "metrics, measurement, and raster requests should reach Android");
@@ -60,11 +68,44 @@ public final class AndroidFontBridgeSmoke {
         AndroidFontBridge.close();
         server.close();
         endpoint.join(2000);
-        System.out.println("AndroidFontBridgeSmoke: Paint metrics, shaping width, glyph raster, "
-                + "color, and MIDP centering passed");
+
+        ServerSocket bitmapServer = new ServerSocket(
+                0, 1, InetAddress.getByName("127.0.0.1"));
+        AtomicInteger bitmapOperations = new AtomicInteger();
+        AtomicInteger bitmapRenderedFace = new AtomicInteger(-1);
+        Thread bitmapEndpoint = new Thread(
+                () -> serve(bitmapServer, bitmapOperations, bitmapRenderedFace, false),
+                "FakeBitmapFont");
+        bitmapEndpoint.setDaemon(true);
+        bitmapEndpoint.start();
+        AndroidFontBridge.connect(bitmapServer.getLocalPort(), "font-bridge-smoke");
+        require(!AndroidFontBridge.usesSystemFontBackend(),
+                "bitmap backend must not be identified as the system font backend");
+        require(firstPixelY(font) == 10,
+                "bitmap-font BASELINE should retain the existing ascent correction");
+        AndroidFontBridge.close();
+        bitmapServer.close();
+        bitmapEndpoint.join(2000);
+        System.out.println("AndroidFontBridgeSmoke: system and bitmap baseline routes passed");
     }
 
-    private static void serve(ServerSocket server, AtomicInteger operations, AtomicInteger renderedFace) {
+    private static int firstPixelY(Font font) {
+        PlatformImage image = new PlatformImage(80, 40);
+        PlatformGraphics graphics = image.getGraphics();
+        graphics.setColor(0x36a9e1);
+        graphics.setFont(font);
+        graphics.drawString("Wi", 40, 20, Graphics.HCENTER | Graphics.BASELINE);
+        BufferedImage pixels = image.getCanvas();
+        for (int y = 0; y < pixels.getHeight(); y++) {
+            for (int x = 0; x < pixels.getWidth(); x++) {
+                if ((pixels.getRGB(x, y) & 0xffffff) == 0x36a9e1) return y;
+            }
+        }
+        return -1;
+    }
+
+    private static void serve(ServerSocket server, AtomicInteger operations,
+            AtomicInteger renderedFace, boolean systemFontBackend) {
         try (Socket client = server.accept();
                 DataInputStream input = new DataInputStream(
                         new BufferedInputStream(client.getInputStream(), 32768));
@@ -72,6 +113,7 @@ public final class AndroidFontBridgeSmoke {
                         new BufferedOutputStream(client.getOutputStream(), 32768))) {
             require("font-bridge-smoke".equals(input.readUTF()), "font bridge token should authenticate");
             output.writeInt(HANDSHAKE);
+            output.writeBoolean(systemFontBackend);
             output.flush();
             while (true) {
                 int operation = input.readInt();

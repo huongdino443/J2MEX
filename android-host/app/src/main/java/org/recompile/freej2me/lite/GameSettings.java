@@ -18,10 +18,14 @@ final class GameSettings {
     static final int DEFAULT_HEIGHT = 320;
     static final int MIN_CANVAS_SIZE = 64;
     static final int MAX_CANVAS_SIZE = 2048;
+    static final int ORIENTATION_SYSTEM = 0;
+    static final int ORIENTATION_PORTRAIT = 1;
+    static final int ORIENTATION_LANDSCAPE = 2;
 
     int canvasWidth = DEFAULT_WIDTH;
     int canvasHeight = DEFAULT_HEIGHT;
     int canvasPosition;
+    int orientationMode = ORIENTATION_SYSTEM;
     int canvasScale = 100;
     boolean reserveGamepadArea = true;
     boolean canvasOutlineEnabled = true;
@@ -42,6 +46,8 @@ final class GameSettings {
                 DEFAULT_HEIGHT, MIN_CANVAS_SIZE, MAX_CANVAS_SIZE);
         settings.canvasPosition = positionIndex(
                 preferences.getProperty("canvas_position", "top"));
+        settings.orientationMode = orientationIndex(
+                preferences.getProperty("orientation_mode", "system"));
         settings.canvasScale = boundedInt(preferences.getProperty("canvas_scale", "100"),
                 100, 50, 100);
         settings.reserveGamepadArea = booleanProperty(
@@ -63,6 +69,8 @@ final class GameSettings {
         values.setProperty("canvas_width", Integer.toString(canvasWidth));
         values.setProperty("canvas_height", Integer.toString(canvasHeight));
         values.setProperty("canvas_position", positionName(canvasPosition));
+        values.setProperty("orientation_mode", orientationName(orientationMode));
+        values.remove("internal_resolution_scale");
         values.setProperty("canvas_scale", Integer.toString(canvasScale));
         values.setProperty("reserve_gamepad_area", Boolean.toString(reserveGamepadArea));
         values.setProperty("canvas_outline_enabled", Boolean.toString(canvasOutlineEnabled));
@@ -179,6 +187,20 @@ final class GameSettings {
             case 2: return "bottom";
             default: return "top";
         }
+    }
+
+    static String orientationName(int orientation) {
+        switch (orientation) {
+            case ORIENTATION_PORTRAIT: return "portrait";
+            case ORIENTATION_LANDSCAPE: return "landscape";
+            default: return "system";
+        }
+    }
+
+    private static int orientationIndex(String orientation) {
+        if ("portrait".equals(orientation)) return ORIENTATION_PORTRAIT;
+        if ("landscape".equals(orientation)) return ORIENTATION_LANDSCAPE;
+        return ORIENTATION_SYSTEM;
     }
 
     private static int positionIndex(String position) {

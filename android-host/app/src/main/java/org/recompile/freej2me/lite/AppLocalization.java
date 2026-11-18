@@ -255,9 +255,10 @@ public final class AppLocalization {
         add("Thanh trạng thái", "Status bar");
         add("Hiển thị thanh trạng thái trong lúc chơi game.",
                 "Show the status bar while playing.");
-        add("Giữ hướng xoay hiện tại", "Lock current orientation");
-        add("Khóa hướng màn hình theo chiều đang dùng khi mở game.",
-                "Lock the screen to its current orientation when a game starts.");
+        add("Hướng xoay", "Orientation");
+        add("Theo hệ thống", "Follow system");
+        add("Dọc", "Portrait");
+        add("Ngang", "Landscape");
         add("Ngôn ngữ", "Language");
         add("Chọn tiếng Việt, tiếng Anh hoặc theo thiết bị.",
                 "Choose Vietnamese, English, or follow the device.");
@@ -272,6 +273,7 @@ public final class AppLocalization {
         add("Đã có bản cập nhật mới", "A new update is available");
         add("Chưa kiểm tra phiên bản mới", "Update status has not been checked");
         add("Tải về", "Download");
+        add("Nhắc lại sau", "Remind me later");
         add("Trang phát hành", "Release page");
         add("Kiểm tra lại", "Check again");
         add("Đang kiểm tra cập nhật…", "Checking for updates…");

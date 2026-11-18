@@ -117,6 +117,7 @@ public final class GameFileManagerActivity extends LocalizedActivity {
         super.onCreate(state);
         getWindow().setStatusBarColor(COLOR_BACKGROUND);
         getWindow().setNavigationBarColor(COLOR_BACKGROUND);
+        CutoutSafeArea.configureWindow(getWindow());
         String rootPath = getIntent().getStringExtra(EXTRA_ROOT_PATH);
         if (rootPath == null || rootPath.trim().isEmpty()) {
             finish();
@@ -175,6 +176,7 @@ public final class GameFileManagerActivity extends LocalizedActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(COLOR_BACKGROUND);
         root.setPadding(dp(16), dp(8), dp(16), dp(12));
+        CutoutSafeArea.install(root);
 
         FrameLayout headerContainer = new FrameLayout(this);
         root.addView(headerContainer, new LinearLayout.LayoutParams(

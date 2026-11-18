@@ -60,9 +60,15 @@ import org.recompile.freej2me.lite.nativeui.NativeTextInputView;
 import org.recompile.freej2me.lite.nativeui.NativeOverlays;
 import org.recompile.freej2me.lite.audio.AndroidAudioController;
 
-public final class RuntimeActivity extends LocalizedActivity {
+public class RuntimeActivity extends LocalizedActivity {
     private static final int REQUEST_BACKGROUND_NOTIFICATIONS = 79;
     private static final int REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS = 80;
+    private static volatile Class<? extends RuntimeActivity> notificationReturnActivityClass =
+            RuntimeActivity.class;
+
+    static Class<? extends RuntimeActivity> notificationReturnActivityClass() {
+        return notificationReturnActivityClass;
+    }
 
     private static final int UI_BACKGROUND = Color.rgb(14, 24, 38);
     private static final int UI_SURFACE = Color.rgb(25, 36, 52);
@@ -210,6 +216,13 @@ public final class RuntimeActivity extends LocalizedActivity {
     private final ArrayList<ResponsiveDialog> responsiveDialogs = new ArrayList<>();
     private final ArrayDeque<BluetoothRequest> bluetoothQueue = new ArrayDeque<>();
     private final Handler backgroundServiceHandler = new Handler(Looper.getMainLooper());
+    private final Runnable memoryDiagnosticsRunnable = new Runnable() {
+        @Override public void run() {
+            if (isFinishing() || isDestroyed() || !debugLogsEnabled || !sessionLogStarted) return;
+            appendRuntimeMemorySnapshot("periodic");
+            backgroundServiceHandler.postDelayed(this, 60_000L);
+        }
+    };
     private final ExecutorService bluetoothWorkers = Executors.newCachedThreadPool();
     private final ConcurrentMap<Integer, BluetoothServerSocket> bluetoothServers = new ConcurrentHashMap<>();
     private final ConcurrentMap<Integer, BluetoothSocket> bluetoothSockets = new ConcurrentHashMap<>();
@@ -225,6 +238,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     private volatile String selectedMidletClass;
     private volatile String selectedMidletName;
     private boolean runtimeLaunchStarted;
+    private volatile boolean runtimeHostExited;
     private MemoryEditorDialog memoryEditorDialog;
     private boolean memoryEditorDisclaimerAccepted;
     private volatile boolean memoryEditorNetworkLockedForSession;
@@ -240,9 +254,12 @@ public final class RuntimeActivity extends LocalizedActivity {
     private Thread.UncaughtExceptionHandler previousUncaughtExceptionHandler;
     private Thread.UncaughtExceptionHandler diagnosticUncaughtExceptionHandler;
     private boolean statusBarVisible;
-    private boolean orientationLocked;
     private volatile int displayRefreshHz;
     private int statusBarInsetTop;
+    private int cutoutSafeInsetLeft;
+    private int cutoutSafeInsetTop;
+    private int cutoutSafeInsetRight;
+    private int cutoutSafeInsetBottom;
     private DisplayManager displayManager;
     private boolean displayListenerRegistered;
     private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
@@ -256,6 +273,7 @@ public final class RuntimeActivity extends LocalizedActivity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        notificationReturnActivityClass = getClass().asSubclass(RuntimeActivity.class);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
@@ -266,6 +284,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         getWindow().getDecorView().setBackgroundColor(UI_BACKGROUND);
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        configureDisplayCutoutWindow();
         if (Build.VERSION.SDK_INT >= 29) {
             getWindow().setStatusBarContrastEnforced(false);
             getWindow().setNavigationBarContrastEnforced(false);
@@ -281,16 +300,10 @@ public final class RuntimeActivity extends LocalizedActivity {
         installDiagnosticCrashHandler();
         statusBarVisible = getIntent().getBooleanExtra(
                 AppPreferences.EXTRA_STATUS_BAR, AppPreferences.statusBarVisible(this));
-        orientationLocked = getIntent().getBooleanExtra(
-                AppPreferences.EXTRA_LOCK_ORIENTATION, AppPreferences.orientationLocked(this));
         keepGameInBackground = getIntent().getBooleanExtra(
                 AppPreferences.EXTRA_KEEP_GAME_IN_BACKGROUND,
                 AppPreferences.keepGameInBackground(this));
-        if (orientationLocked) {
-            setRequestedOrientation(isLandscape()
-                    ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        }
+        applyRequestedOrientation();
         applyStatusBarPreference();
         gameSettings.gamepadLayoutId = GamepadTemplateLibrary.resolveId(
                 this, gameSettings.gamepadLayoutId);
@@ -368,6 +381,15 @@ public final class RuntimeActivity extends LocalizedActivity {
         });
         updateCanvasLayout();
         root.requestApplyInsets();
+        if (state != null && SessionLog.wasReplacedWithoutCleanEnd(
+                getFilesDir(), android.os.Process.myPid())) {
+            Toast.makeText(this,
+                    AppLocalization.text(this,
+                            "Android đã kết thúc tiến trình game; J2MEX không tự tải lại game."),
+                    Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
         requestBackgroundNotificationPermissionThenLaunch();
     }
 
@@ -389,15 +411,27 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
 
     private void applyStatusBarPreference() {
+        applyStatusBarPreference(getWindow());
+        for (ResponsiveDialog entry : new ArrayList<>(responsiveDialogs)) {
+            if (entry.dialog.isShowing()) applyStatusBarPreference(entry.dialog.getWindow());
+        }
+    }
+
+    private void applyStatusBarPreference(Window targetWindow) {
+        if (targetWindow == null) return;
         boolean editingTextInput = textInputPanel != null;
+        boolean hideStatusBar = !statusBarVisible && !editingTextInput;
         int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
         if (!editingTextInput) flags |= View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
-        if (!statusBarVisible && !editingTextInput) {
+        if (hideStatusBar) {
             flags |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            targetWindow.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        } else {
+            targetWindow.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         }
-        getWindow().getDecorView().setSystemUiVisibility(flags);
+        targetWindow.getDecorView().setSystemUiVisibility(flags);
         if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController controller = getWindow().getInsetsController();
+            WindowInsetsController controller = targetWindow.getInsetsController();
             if (controller != null) {
                 controller.setSystemBarsBehavior(
                         WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
@@ -410,24 +444,54 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
     }
 
+    private void showRuntimeDialog(Dialog dialog) {
+        Window window = dialog.getWindow();
+        applyStatusBarPreference(window);
+        dialog.setOnShowListener(ignored -> applyStatusBarPreference(dialog.getWindow()));
+        dialog.show();
+        applyStatusBarPreference(dialog.getWindow());
+    }
+
     private void applyRuntimeInsets(WindowInsets insets) {
         if (root == null || gamePane == null || controlsLayer == null) return;
+        int safeLeft = 0;
+        int safeTop = 0;
+        int safeRight = 0;
+        int safeBottom = 0;
+        int imeBottomInset = 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                && insets.isVisible(WindowInsets.Type.ime())) {
+            imeBottomInset = insets.getInsets(WindowInsets.Type.ime()).bottom;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.view.DisplayCutout cutout = insets.getDisplayCutout();
+            if (cutout != null) {
+                safeLeft = cutout.getSafeInsetLeft();
+                safeTop = cutout.getSafeInsetTop();
+                safeRight = cutout.getSafeInsetRight();
+                safeBottom = cutout.getSafeInsetBottom();
+            }
+        }
+        cutoutSafeInsetLeft = safeLeft;
+        cutoutSafeInsetTop = safeTop;
+        cutoutSafeInsetRight = safeRight;
+        cutoutSafeInsetBottom = safeBottom;
         boolean editingTextInput = textInputPanel != null;
         int topInset = !editingTextInput && statusBarVisible
                 ? insets.getStableInsetTop() : 0;
         if (!editingTextInput && statusBarVisible && topInset <= 0)
             topInset = insets.getSystemWindowInsetTop();
-        if (!editingTextInput && !statusBarVisible && Build.VERSION.SDK_INT >= 28) {
-            android.view.DisplayCutout cutout = insets.getDisplayCutout();
-            if (cutout != null) topInset = cutout.getSafeInsetTop();
-        }
+        if (!editingTextInput && !statusBarVisible)
+            topInset = Math.max(topInset, cutoutSafeInsetTop);
         statusBarInsetTop = Math.max(0, topInset);
         if (fpsOverlay != null) {
             FrameLayout.LayoutParams fpsParams =
                     (FrameLayout.LayoutParams) fpsOverlay.getLayoutParams();
-            int fpsTop = statusBarInsetTop + dp(8);
-            if (fpsParams.topMargin != fpsTop) {
+            int fpsTop = Math.max(statusBarInsetTop, cutoutSafeInsetTop) + dp(8);
+            int fpsRight = cutoutSafeInsetRight + dp(10);
+            if (fpsParams.topMargin != fpsTop || fpsParams.rightMargin != fpsRight) {
                 fpsParams.topMargin = fpsTop;
+                fpsParams.rightMargin = fpsRight;
                 fpsOverlay.setLayoutParams(fpsParams);
             }
         }
@@ -439,8 +503,18 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
         FrameLayout.LayoutParams nativeParams =
                 (FrameLayout.LayoutParams)nativeScreen.getLayoutParams();
-        if (nativeParams.topMargin != statusBarInsetTop) {
-            nativeParams.topMargin = statusBarInsetTop;
+        int nativeTopInset = Math.max(statusBarInsetTop, cutoutSafeInsetTop);
+        int nativeBottomInset = nativeVisible && textInputPanel == null
+                ? Math.max(cutoutSafeInsetBottom, imeBottomInset)
+                : cutoutSafeInsetBottom;
+        if (nativeParams.topMargin != nativeTopInset
+                || nativeParams.leftMargin != cutoutSafeInsetLeft
+                || nativeParams.rightMargin != cutoutSafeInsetRight
+                || nativeParams.bottomMargin != nativeBottomInset) {
+            nativeParams.topMargin = nativeTopInset;
+            nativeParams.leftMargin = cutoutSafeInsetLeft;
+            nativeParams.rightMargin = cutoutSafeInsetRight;
+            nativeParams.bottomMargin = nativeBottomInset;
             nativeScreen.setLayoutParams(nativeParams);
         }
         FrameLayout.LayoutParams controlsParams =
@@ -451,12 +525,24 @@ public final class RuntimeActivity extends LocalizedActivity {
             controlsLayer.setLayoutParams(controlsParams);
         }
         if (gamepadControls != null) gamepadControls.setCoordinateOriginTopInset(0);
-        if (edgeMenu != null) edgeMenu.setContentTopInset(statusBarInsetTop);
+        if (gamepadControls != null) gamepadControls.setCutoutSafeInsets(
+                cutoutSafeInsetLeft, cutoutSafeInsetTop,
+                cutoutSafeInsetRight, cutoutSafeInsetBottom);
+        if (edgeMenu != null) edgeMenu.setContentSafeInsets(cutoutSafeInsetLeft,
+                Math.max(statusBarInsetTop, cutoutSafeInsetTop),
+                cutoutSafeInsetRight, cutoutSafeInsetBottom);
         if (textInputPanel != null) {
             FrameLayout.LayoutParams inputParams =
                     (FrameLayout.LayoutParams)textInputPanel.getLayoutParams();
-            if (inputParams.topMargin != statusBarInsetTop) {
-                inputParams.topMargin = statusBarInsetTop;
+            int inputTop = Math.max(statusBarInsetTop, cutoutSafeInsetTop);
+            if (inputParams.topMargin != inputTop
+                    || inputParams.leftMargin != cutoutSafeInsetLeft
+                    || inputParams.rightMargin != cutoutSafeInsetRight
+                    || inputParams.bottomMargin != cutoutSafeInsetBottom) {
+                inputParams.topMargin = inputTop;
+                inputParams.leftMargin = cutoutSafeInsetLeft;
+                inputParams.rightMargin = cutoutSafeInsetRight;
+                inputParams.bottomMargin = cutoutSafeInsetBottom;
                 textInputPanel.setLayoutParams(inputParams);
             }
         }
@@ -466,6 +552,20 @@ public final class RuntimeActivity extends LocalizedActivity {
     private boolean isLandscape() {
         return getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE;
+    }
+
+    private void applyRequestedOrientation() {
+        switch (gameSettings.orientationMode) {
+            case GameSettings.ORIENTATION_PORTRAIT:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                break;
+            case GameSettings.ORIENTATION_LANDSCAPE:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+                break;
+            default:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                break;
+        }
     }
 
     private boolean isLandscapeViewport() {
@@ -512,10 +612,11 @@ public final class RuntimeActivity extends LocalizedActivity {
             }
         }
         int edgeInset = gameSettings.canvasOutlineEnabled ? dp(8) : 0;
-        int topMargin = edgeInset;
-        int bottomMargin = reservedBottom + edgeInset;
-        int leftMargin = reservedLeft + edgeInset;
-        int rightMargin = reservedRight + edgeInset;
+        int topMargin = Math.max(edgeInset,
+                Math.max(0, cutoutSafeInsetTop - statusBarInsetTop) + edgeInset);
+        int bottomMargin = Math.max(reservedBottom, cutoutSafeInsetBottom) + edgeInset;
+        int leftMargin = Math.max(reservedLeft, cutoutSafeInsetLeft) + edgeInset;
+        int rightMargin = Math.max(reservedRight, cutoutSafeInsetRight) + edgeInset;
         FrameLayout.LayoutParams params =
                 (FrameLayout.LayoutParams)screenView.getLayoutParams();
         if (params.width != FrameLayout.LayoutParams.MATCH_PARENT
@@ -558,6 +659,19 @@ public final class RuntimeActivity extends LocalizedActivity {
         canvasDecoration.setCanvasPresentation(canvasScale, canvasPosition);
         canvasDecoration.setOutlineEnabled(gameSettings.canvasOutlineEnabled);
     }
+
+    private void configureDisplayCutoutWindow() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
+        WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        int mode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        if (attributes.layoutInDisplayCutoutMode != mode) {
+            attributes.layoutInDisplayCutoutMode = mode;
+            getWindow().setAttributes(attributes);
+        }
+    }
+
     private int dp(float value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
@@ -741,7 +855,7 @@ public final class RuntimeActivity extends LocalizedActivity {
 
         dialog.setContentView(card);
         dialog.setCancelable(true);
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -924,7 +1038,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                 if (!closing) sendMemoryEditorRequest(4, "", 0, "", null);
                 if (memoryEditorDialog == this) memoryEditorDialog = null;
             };
-            dialog.show();
+            showRuntimeDialog(dialog);
             Window window = dialog.getWindow();
             if (window != null) {
                 window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1403,7 +1517,7 @@ public final class RuntimeActivity extends LocalizedActivity {
 
             editDialog.setContentView(card);
             editDialog.setCancelable(true);
-            editDialog.show();
+            showRuntimeDialog(editDialog);
             Window window = editDialog.getWindow();
             if (window != null) {
                 window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1527,7 +1641,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         dialog.setContentView(card);
         dialog.setCancelable(true);
         dialog.setOnCancelListener(ignored -> setEmulationSpeed(startingSpeed));
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1594,9 +1708,11 @@ public final class RuntimeActivity extends LocalizedActivity {
             DialogInterface.OnDismissListener onDismiss) {
         ResponsiveDialog entry = new ResponsiveDialog(dialog, resize);
         responsiveDialogs.add(entry);
+        applyStatusBarPreference(dialog.getWindow());
         dialog.setOnDismissListener(dismissed -> {
             responsiveDialogs.remove(entry);
             if (onDismiss != null) onDismiss.onDismiss(dismissed);
+            getWindow().getDecorView().post(this::applyStatusBarPreference);
         });
         resize.run();
     }
@@ -1653,7 +1769,6 @@ public final class RuntimeActivity extends LocalizedActivity {
         boolean[] draftSettings = {
                 fpsEnabled,
                 statusBarVisible,
-                orientationLocked,
                 keepGameInBackground
         };
         LinearLayout options = runtimeSettingsCard(content, "Tùy chọn");
@@ -1662,16 +1777,13 @@ public final class RuntimeActivity extends LocalizedActivity {
                 draftSettings[0], true, enabled -> draftSettings[0] = enabled);
         addRuntimeSettingsSwitch(options, "Hoạt động dưới nền",
                 "Duy trì chạy nền, giảm thiểu khả năng khởi động lại hoặc mất kết nối dữ liệu",
-                draftSettings[3], true, enabled -> draftSettings[3] = enabled);
+                draftSettings[2], true, enabled -> draftSettings[2] = enabled);
         addRuntimeSettingsSwitch(options, "Ghi log để gỡ lỗi",
                 "Chỉ áp dụng đầy đủ sau khi thoát rồi mở lại game.",
                 debugLogsEnabled, false, null);
         addRuntimeSettingsSwitch(options, "Thanh trạng thái",
                 "Hiển thị thanh trạng thái trong lúc chơi game.",
                 draftSettings[1], true, enabled -> draftSettings[1] = enabled);
-        addRuntimeSettingsSwitch(options, "Giữ hướng xoay hiện tại",
-                "Khóa hướng màn hình theo chiều đang dùng khi mở game.",
-                draftSettings[2], true, enabled -> draftSettings[2] = enabled);
         addRuntimeSettingsRow(options, "Ngôn ngữ",
                 "Chọn tiếng Việt, tiếng Anh hoặc theo thiết bị.",
                 runtimeLanguageChoiceLabel(), null);
@@ -1714,20 +1826,21 @@ public final class RuntimeActivity extends LocalizedActivity {
             applyStatusBarPreference();
             if (root != null) root.requestApplyInsets();
 
-            orientationLocked = draftSettings[2];
-            boolean requestBackgroundPermission = draftSettings[3]
+            boolean requestBackgroundPermission = draftSettings[2]
                     && !keepGameInBackground && Build.VERSION.SDK_INT >= 33
                     && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                             != PackageManager.PERMISSION_GRANTED;
-            keepGameInBackground = draftSettings[3];
+            keepGameInBackground = draftSettings[2];
             AppPreferences.syncRuntimeSettingsToMain(this, fpsEnabled, debugLogsEnabled,
-                    statusBarVisible, orientationLocked, keepGameInBackground);
+                    statusBarVisible, keepGameInBackground);
             dialog.dismiss();
-            setRequestedOrientation(orientationLocked
-                    ? (isLandscapeViewport()
-                            ? ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                            : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
-                    : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            if (keepGameInBackground) {
+                startBackgroundServiceIfEnabled();
+            } else {
+                backgroundTransitionPending = false;
+                cancelPendingBackgroundServiceStop();
+                BackgroundGameService.stop(this);
+            }
             if (requestBackgroundPermission) {
                 requestPermissions(new String[]{
                         android.Manifest.permission.POST_NOTIFICATIONS
@@ -1739,7 +1852,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         };
         dialog.setContentView(panel);
         dialog.setCancelable(true);
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1997,7 +2110,7 @@ public final class RuntimeActivity extends LocalizedActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         dialog.setContentView(panel);
         dialog.setCancelable(true);
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -2157,6 +2270,9 @@ public final class RuntimeActivity extends LocalizedActivity {
         private boolean open;
         private float downX;
         private int contentTopInset;
+        private int contentLeftInset;
+        private int contentRightInset;
+        private int contentBottomInset;
 
         EdgeSwipeMenu(Context context) {
             super(context);
@@ -2338,16 +2454,28 @@ public final class RuntimeActivity extends LocalizedActivity {
                     .start();
         }
 
-        void setContentTopInset(int inset) {
-            if (contentTopInset == inset) return;
-            contentTopInset = inset;
+        void setContentSafeInsets(int left, int top, int right, int bottom) {
+            int nextLeft = Math.max(0, left);
+            int nextTop = Math.max(0, top);
+            int nextRight = Math.max(0, right);
+            int nextBottom = Math.max(0, bottom);
+            if (contentLeftInset == nextLeft && contentTopInset == nextTop
+                    && contentRightInset == nextRight
+                    && contentBottomInset == nextBottom) return;
+            contentLeftInset = nextLeft;
+            contentTopInset = nextTop;
+            contentRightInset = nextRight;
+            contentBottomInset = nextBottom;
+            updatePanelWidth(getWidth());
             updatePosition(getHeight());
         }
 
         private void updatePanelWidth(int viewportWidth) {
             if (viewportWidth <= 0) return;
-            int widthLimit = Math.max(dp(1), viewportWidth - dp(24));
-            int preferredWidth = Math.min(dp(360), Math.round(viewportWidth * 0.90f));
+            int safeWidth = Math.max(dp(1),
+                    viewportWidth - contentLeftInset - contentRightInset);
+            int widthLimit = Math.max(dp(1), safeWidth - dp(24));
+            int preferredWidth = Math.min(dp(360), Math.round(safeWidth * 0.90f));
             int nextWidth = Math.min(preferredWidth, widthLimit);
             FrameLayout.LayoutParams panelParams =
                     (FrameLayout.LayoutParams) panel.getLayoutParams();
@@ -2379,22 +2507,22 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
 
         private void updatePosition(int height) {
-            int availableHeight = Math.max(0, height - contentTopInset);
+            int availableHeight = Math.max(0, height - contentTopInset - contentBottomInset);
             int panelHeight = panel.getMeasuredHeight() > 0
                     ? panel.getMeasuredHeight() : dp(176);
             int desiredTop = contentTopInset + Math.round(availableHeight * 0.15f);
             int maxTop = Math.max(contentTopInset + dp(8),
-                    height - panelHeight - dp(12));
+                    height - contentBottomInset - panelHeight - dp(12));
             int top = Math.max(contentTopInset + dp(8), Math.min(desiredTop, maxTop));
             FrameLayout.LayoutParams handleParams =
                     (FrameLayout.LayoutParams) handle.getLayoutParams();
             handleParams.topMargin = top;
-            handleParams.leftMargin = dp(1);
+            handleParams.leftMargin = contentLeftInset + dp(1);
             handle.setLayoutParams(handleParams);
             FrameLayout.LayoutParams panelParams =
                     (FrameLayout.LayoutParams) panel.getLayoutParams();
             panelParams.topMargin = top;
-            panelParams.leftMargin = dp(10);
+            panelParams.leftMargin = contentLeftInset + dp(10);
             panelParams.gravity = Gravity.TOP | Gravity.LEFT;
             panel.setLayoutParams(panelParams);
             if (open) {
@@ -2514,7 +2642,7 @@ public final class RuntimeActivity extends LocalizedActivity {
         dialog.setContentView(panel);
         dialog.setCancelable(true);
         dialog.setOnCancelListener(ignored -> finish());
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -2532,6 +2660,7 @@ public final class RuntimeActivity extends LocalizedActivity {
     private synchronized void startEngineThread() {
         if (runtimeLaunchStarted || isFinishing() || isDestroyed()) return;
         runtimeLaunchStarted = true;
+        startBackgroundServiceIfEnabled();
         new Thread(this::launchEngine, "RuntimeLauncher").start();
     }
 
@@ -2566,8 +2695,11 @@ public final class RuntimeActivity extends LocalizedActivity {
                                 ? "(manifest default)" : selectedMidletName + " [" + selectedMidletClass + "]")
                         + "\nRun stage=preparing runtime\n";
                 try {
-                    SessionLog.begin(getFilesDir(), work, header);
+                    SessionLog.begin(getFilesDir(), work, header, android.os.Process.myPid());
                     sessionLogStarted = true;
+                    recordRuntimeState("runtime-start");
+                    backgroundServiceHandler.removeCallbacks(memoryDiagnosticsRunnable);
+                    backgroundServiceHandler.postDelayed(memoryDiagnosticsRunnable, 60_000L);
                 } catch (IOException logError) {
                     android.util.Log.e("FreeJ2ME", "Cannot begin diagnostic session", logError);
                     update("Không thể khởi tạo log chẩn đoán: " + logError.getMessage());
@@ -2576,6 +2708,15 @@ public final class RuntimeActivity extends LocalizedActivity {
             if (jar == null) throw new IOException("Thiếu đường dẫn MIDlet JAR");
             if (!jar.isFile()) throw new IOException("Không tìm thấy MIDlet JAR");
             HostFiles.mkdir(work);
+            if (!debugLogsEnabled) {
+                try {
+                    SessionLog.beginRuntimeMarker(
+                            getFilesDir(), work, android.os.Process.myPid());
+                } catch (IOException markerError) {
+                    android.util.Log.w("FreeJ2ME", "Cannot persist runtime process marker",
+                            markerError);
+                }
+            }
             File audioCache = new File(getCacheDir(), "freej2me-audio");
             resetAudioCache(audioCache);
             File runtime = new File(getFilesDir(), "runtime");
@@ -2608,9 +2749,16 @@ public final class RuntimeActivity extends LocalizedActivity {
                     "--j2mex-ui-language=" + AppLocalization.languageTag(this)));
             if (selectedMidletClass != null)
                 launchArguments.add("--j2mex-midlet-class=" + selectedMidletClass);
+            if (debugLogsEnabled && sessionLogStarted)
+                launchArguments.add("--j2mex-render-profile=true");
+            if (debugLogsEnabled && sessionLogStarted)
+                launchArguments.add("--j2mex-memory-diagnostics=true");
             int result = NativeHost.launch(runtime.getAbsolutePath(), work.getAbsolutePath(),
                     getCacheDir().getAbsolutePath(), cp, nativeLogPath,
                     launchArguments.toArray(new String[0]));
+            runtimeHostExited = true;
+            SessionLog.markRuntimeEnded(getFilesDir(), android.os.Process.myPid(),
+                    "native-host-return-" + result);
             appendSessionLog("[runtime-exit] native host result=" + result);
             update(result == -21
                     ? "Heap native không tương thích với Java 8. Hãy xuất log để xem chi tiết."
@@ -2899,6 +3047,10 @@ public final class RuntimeActivity extends LocalizedActivity {
                 long readTotal = 0, readMax = 0, decodeTotal = 0, decodeMax = 0;
                 long bitmapTotal = 0, bitmapMax = 0;
                 long lastSlowFrameLogAt = 0;
+                long lastAndroidPerfLogAt = SystemClock.elapsedRealtime();
+                long lastProcessCpuTimeMs = android.os.Process.getElapsedCpuTime();
+                PowerManager performancePowerManager =
+                        (PowerManager) getSystemService(Context.POWER_SERVICE);
                 int sampleFrames = 0, longIntervals = 0;
                 int lastFrameWidth = 0, lastFrameHeight = 0;
                 while (!stopping) {
@@ -2982,6 +3134,36 @@ public final class RuntimeActivity extends LocalizedActivity {
                                 } catch (IOException error) {
                                     android.util.Log.w("FreeJ2ME", "Cannot append slow frame stats", error);
                                 }
+                            }
+                            long androidPerfNow = SystemClock.elapsedRealtime();
+                            if (debugLogsEnabled && sessionLogStarted
+                                    && androidPerfNow - lastAndroidPerfLogAt >= 10_000L) {
+                                long processCpuNowMs = android.os.Process.getElapsedCpuTime();
+                                long intervalMs = androidPerfNow - lastAndroidPerfLogAt;
+                                long processCpuDeltaMs = Math.max(0L,
+                                        processCpuNowMs - lastProcessCpuTimeMs);
+                                long cpuPermilleOneCore = intervalMs > 0
+                                        ? processCpuDeltaMs * 1000L / intervalMs : -1L;
+                                int thermalStatus = -1;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                                        && performancePowerManager != null) {
+                                    try {
+                                        thermalStatus =
+                                                performancePowerManager.getCurrentThermalStatus();
+                                    } catch (RuntimeException ignored) { }
+                                }
+                                try {
+                                    SessionLog.append(getFilesDir(), String.format(Locale.US,
+                                            "[android-perf] intervalMs=%d processCpuDeltaMs=%d " +
+                                            "cpuPermilleOneCore=%d thermalStatus=%d",
+                                            intervalMs, processCpuDeltaMs,
+                                            cpuPermilleOneCore, thermalStatus));
+                                } catch (IOException error) {
+                                    android.util.Log.w("FreeJ2ME",
+                                            "Cannot append Android performance stats", error);
+                                }
+                                lastAndroidPerfLogAt = androidPerfNow;
+                                lastProcessCpuTimeMs = processCpuNowMs;
                             }
                             intervalTotal = intervalMax = readTotal = readMax = 0;
                             decodeTotal = decodeMax = bitmapTotal = bitmapMax = 0;
@@ -3179,6 +3361,65 @@ public final class RuntimeActivity extends LocalizedActivity {
         } catch (IOException error) {
             android.util.Log.w("FreeJ2ME", "Cannot append runtime diagnostic log", error);
         }
+    }
+
+    private void recordRuntimeState(String event) {
+        if (!debugLogsEnabled || !sessionLogStarted) return;
+        boolean interactive = true;
+        PowerManager manager = (PowerManager) getSystemService(POWER_SERVICE);
+        if (manager != null) interactive = manager.isInteractive();
+        Socket engineSocket = socket;
+        boolean engineConnected = engineSocket != null
+                && engineSocket.isConnected() && !engineSocket.isClosed();
+        appendSessionLog("[runtime-state] event=" + event
+                + " pid=" + android.os.Process.myPid()
+                + " interactive=" + interactive
+                + " runtimeStarted=" + runtimeLaunchStarted
+                + " backgroundEnabled=" + keepGameInBackground
+                + " transitionPending=" + backgroundTransitionPending
+                + " engineTransport=" + (engineConnected ? "connected" : "disconnected")
+                + " " + BackgroundGameService.diagnosticState());
+        appendRuntimeMemorySnapshot(event);
+    }
+
+    private void appendRuntimeMemorySnapshot(String event) {
+        if (!debugLogsEnabled || !sessionLogStarted) return;
+        long androidHeapUsed = 0L;
+        long androidHeapCommitted = 0L;
+        long androidHeapMax = 0L;
+        java.lang.Runtime androidRuntime = java.lang.Runtime.getRuntime();
+        androidHeapCommitted = androidRuntime.totalMemory();
+        androidHeapUsed = androidHeapCommitted - androidRuntime.freeMemory();
+        androidHeapMax = androidRuntime.maxMemory();
+        long nativeHeapAllocated = android.os.Debug.getNativeHeapAllocatedSize();
+        int totalPss = -1;
+        int dalvikPss = -1;
+        int nativePss = -1;
+        int otherPss = -1;
+        try {
+            ActivityManager manager =
+                    (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            android.os.Debug.MemoryInfo[] infos = manager == null ? null
+                    : manager.getProcessMemoryInfo(
+                            new int[]{android.os.Process.myPid()});
+            if (infos != null && infos.length > 0) {
+                android.os.Debug.MemoryInfo info = infos[0];
+                totalPss = info.getTotalPss();
+                dalvikPss = info.dalvikPss;
+                nativePss = info.nativePss;
+                otherPss = info.otherPss;
+            }
+        } catch (RuntimeException error) {
+            appendSessionLog("[memory] event=" + event
+                    + " process-memory-query-failed=" + error.getClass().getSimpleName());
+        }
+        appendSessionLog(String.format(Locale.US,
+                "[memory] event=%s pid=%d androidHeapUsedKb=%d androidHeapCommittedKb=%d "
+                        + "androidHeapMaxKb=%d androidNativeHeapKb=%d totalPssKb=%d "
+                        + "dalvikPssKb=%d nativePssKb=%d otherPssKb=%d",
+                event, android.os.Process.myPid(), androidHeapUsed / 1024L,
+                androidHeapCommitted / 1024L, androidHeapMax / 1024L,
+                nativeHeapAllocated / 1024L, totalPss, dalvikPss, nativePss, otherPss));
     }
 
     private void appendError(Throwable error) {
@@ -3984,7 +4225,12 @@ public final class RuntimeActivity extends LocalizedActivity {
     @Override protected void onResume() {
         super.onResume();
         backgroundTransitionPending = false;
-        scheduleBackgroundServiceStop();
+        if (keepGameInBackground && !stopping) {
+            cancelPendingBackgroundServiceStop();
+            if (runtimeLaunchStarted) startBackgroundServiceIfEnabled();
+        } else {
+            scheduleBackgroundServiceStop();
+        }
         AppUpdateManager.resumePendingInstall(this);
         if (textInputPanel == null) hideGameKeyboard();
         if (screen instanceof ShaderFrameView) ((ShaderFrameView)screen).onResume();
@@ -3993,13 +4239,13 @@ public final class RuntimeActivity extends LocalizedActivity {
             displayListenerRegistered = true;
         }
         updateDisplayRefreshRate();
+        recordRuntimeState("onResume");
     }
     @Override protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         if (shouldKeepRuntimeInBackground()) {
             backgroundTransitionPending = true;
-            cancelPendingBackgroundServiceStop();
-            BackgroundGameService.start(this);
+            startBackgroundServiceIfEnabled();
         }
     }
     @Override public void onConfigurationChanged(Configuration configuration) {
@@ -4015,10 +4261,11 @@ public final class RuntimeActivity extends LocalizedActivity {
         }
     }
     @Override protected void onPause() {
+        recordRuntimeState("onPause");
         // Retry after the activity begins pausing: the first foreground-service request can
         // race the launcher/Recents transition on some Android builds.
         if (backgroundTransitionPending && shouldKeepRuntimeInBackground())
-            BackgroundGameService.start(this);
+            startBackgroundServiceIfEnabled();
         if (textInputPanel == null) hideGameKeyboard();
         if (screen instanceof ShaderFrameView) ((ShaderFrameView)screen).onPause();
         if (gamepadControls != null) gamepadControls.cancelActiveTouches();
@@ -4031,9 +4278,37 @@ public final class RuntimeActivity extends LocalizedActivity {
         super.onPause();
     }
 
+    @Override protected void onStop() {
+        recordRuntimeState("onStop");
+        super.onStop();
+    }
+
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        appendSessionLog("[memory-pressure] level=" + level);
+        if (level >= TRIM_MEMORY_RUNNING_LOW) recordRuntimeState("trim-memory-" + level);
+    }
+
+    @Override public void onLowMemory() {
+        super.onLowMemory();
+        recordRuntimeState("onLowMemory");
+    }
+
     private boolean shouldKeepRuntimeInBackground() {
         return keepGameInBackground && runtimeLaunchStarted && !stopping
                 && !isFinishing() && !isDestroyed();
+    }
+
+    private void startBackgroundServiceIfEnabled() {
+        if (!shouldKeepRuntimeInBackground()) return;
+        cancelPendingBackgroundServiceStop();
+        if (!BackgroundGameService.start(this)
+                && Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            android.util.Log.w("J2MEX",
+                    "Background mode is enabled, but notification permission is not granted.");
+        }
     }
 
     private void cancelPendingBackgroundServiceStop() {
@@ -4053,9 +4328,11 @@ public final class RuntimeActivity extends LocalizedActivity {
     }
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && keyboardInput != null && textInputPanel == null
-                && !keyboardRequested) {
-            hideGameKeyboard();
+        if (hasFocus) {
+            applyStatusBarPreference();
+            if (keyboardInput != null && textInputPanel == null && !keyboardRequested) {
+                hideGameKeyboard();
+            }
         }
     }
     private void confirmStopGame() {
@@ -4092,7 +4369,7 @@ public final class RuntimeActivity extends LocalizedActivity {
 
         dialog.setContentView(panel);
         dialog.setCancelable(true);
-        dialog.show();
+        showRuntimeDialog(dialog);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -4166,7 +4443,14 @@ public final class RuntimeActivity extends LocalizedActivity {
             chooseMidletThenLaunch();
             return;
         }
-        if (requestCode == REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS) return;
+        if (requestCode == REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS) {
+            if (keepGameInBackground
+                    && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                            == PackageManager.PERMISSION_GRANTED) {
+                startBackgroundServiceIfEnabled();
+            }
+            return;
+        }
         if (requestCode != REQUEST_BT_PERMISSIONS) return;
         boolean granted = grantResults.length > 0;
         for (int result : grantResults) granted &= result == PackageManager.PERMISSION_GRANTED;
@@ -4176,11 +4460,20 @@ public final class RuntimeActivity extends LocalizedActivity {
         else finishBluetoothRequest(false, "Bluetooth permission was declined");
     }
     @Override protected void onDestroy() {
+        backgroundServiceHandler.removeCallbacks(memoryDiagnosticsRunnable);
+        recordRuntimeState("onDestroy");
         restoreDiagnosticCrashHandler();
         super.onDestroy();
         if (overlays != null) overlays.clear();
         if (audio != null) audio.close();
         if (isFinishing()) {
+            if (!runtimeHostExited) {
+                SessionLog.markRuntimeEnded(getFilesDir(), android.os.Process.myPid(),
+                        "activity-finishing");
+            }
+            backgroundTransitionPending = false;
+            cancelPendingBackgroundServiceStop();
+            BackgroundGameService.stop(this);
             stopping = true; commands = null; sender.shutdownNow();
             unregisterBluetoothDiscoveryReceiver();
             unregisterBluetoothUuidReceiver();

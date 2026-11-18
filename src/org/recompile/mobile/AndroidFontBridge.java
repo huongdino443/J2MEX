@@ -50,6 +50,8 @@ public final class AndroidFontBridge {
     private static Socket socket;
     private static DataInputStream input;
     private static DataOutputStream output;
+    // True only when the Android endpoint is drawing with its system Typeface.
+    private static boolean systemFontBackend;
 
     private AndroidFontBridge() { }
 
@@ -70,14 +72,20 @@ public final class AndroidFontBridge {
             candidate.close();
             throw new IOException("Android font bridge handshake mismatch");
         }
+        boolean usesSystemFontBackend = incoming.readBoolean();
         socket = candidate;
         input = incoming;
         output = outgoing;
+        systemFontBackend = usesSystemFontBackend;
         System.out.println("Android Paint/Canvas font bridge connected");
     }
 
     public static synchronized boolean isConnected() {
         return socket != null && socket.isConnected() && !socket.isClosed();
+    }
+
+    public static synchronized boolean usesSystemFontBackend() {
+        return isConnected() && systemFontBackend;
     }
 
     public static synchronized void close() {
@@ -87,6 +95,7 @@ public final class AndroidFontBridge {
         socket = null;
         input = null;
         output = null;
+        systemFontBackend = false;
         measuredWidths.clear();
         fontMetrics.clear();
         renderedText.clear();

@@ -9,7 +9,6 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
-import android.os.Build;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -66,6 +65,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
     private Switch bitmapFontSwitch;
     private Switch crtFilterSwitch;
     private TextView positionButton;
+    private TextView orientationButton;
     private TextView scaleValue;
     private SeekBar scaleSeekBar;
     private LinearLayout positionRow;
@@ -81,10 +81,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         getWindow().setStatusBarColor(COLOR_BACKGROUND);
         getWindow().setNavigationBarColor(COLOR_BACKGROUND);
-        if (Build.VERSION.SDK_INT >= 29) {
-            getWindow().setStatusBarContrastEnforced(false);
-            getWindow().setNavigationBarContrastEnforced(false);
-        }
+        CutoutSafeArea.configureWindow(getWindow());
 
         String jarPath = getIntent().getStringExtra(EXTRA_JAR);
         if (jarPath == null || jarPath.isEmpty()) {
@@ -103,6 +100,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(COLOR_BACKGROUND);
+        CutoutSafeArea.install(root);
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
@@ -145,6 +143,14 @@ public final class GameSettingsActivity extends LocalizedActivity {
         LinearLayout displayCard = settingsCard(content);
         addSection(displayCard, "Hiển thị");
         addCanvasSizeControls(displayCard);
+
+        LinearLayout orientationRow = addValueRow(displayCard, "Hướng xoay");
+        orientationButton = plainValueButton(orientationLabel(settings.orientationMode));
+        orientationRow.addView(orientationButton,
+                new LinearLayout.LayoutParams(dp(VALUE_BUTTON_WIDTH_DP), dp(44)));
+        orientationButton.setOnClickListener(view -> showOrientationPicker());
+        orientationRow.setOnClickListener(view -> showOrientationPicker());
+
         reserveGamepadSwitch = addSwitch(displayCard, "Chừa chỗ cho gamepad",
                 settings.reserveGamepadArea);
         reserveGamepadSwitch.setContentDescription(
@@ -237,6 +243,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
         addKeyMappingRow(gamepadCard);
         updateTemplateActions();
         updateCanvasControlAvailability();
+
         if (state != null) {
             widthInput.setText(state.getString("game_settings.width_input",
                     widthInput.getText().toString()));
@@ -254,6 +261,10 @@ public final class GameSettingsActivity extends LocalizedActivity {
         if (state == null) return;
         settings.canvasPosition = Math.max(0, Math.min(POSITIONS.length - 1,
                 state.getInt("game_settings.canvas_position", settings.canvasPosition)));
+        settings.orientationMode = Math.max(GameSettings.ORIENTATION_SYSTEM,
+                Math.min(GameSettings.ORIENTATION_LANDSCAPE,
+                        state.getInt("game_settings.orientation_mode",
+                                settings.orientationMode)));
         settings.canvasScale = Math.max(50, Math.min(100,
                 state.getInt("game_settings.canvas_scale", settings.canvasScale)));
         settings.reserveGamepadArea = state.getBoolean(
@@ -283,6 +294,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
         outState.putString("game_settings.height_input", heightInput == null
                 ? Integer.toString(settings.canvasHeight) : heightInput.getText().toString());
         outState.putInt("game_settings.canvas_position", settings.canvasPosition);
+        outState.putInt("game_settings.orientation_mode", settings.orientationMode);
         outState.putInt("game_settings.canvas_scale", scaleSeekBar == null
                 ? settings.canvasScale : scaleSeekBar.getProgress() + 50);
         outState.putBoolean("game_settings.reserve_gamepad", reserveGamepadSwitch == null
@@ -602,6 +614,22 @@ public final class GameSettingsActivity extends LocalizedActivity {
             settings.canvasPosition = index;
             positionButton.setText(AppLocalization.text(this, POSITIONS[index]));
         });
+    }
+
+    private void showOrientationPicker() {
+        String[] modes = {"Theo hệ thống", "Dọc", "Ngang"};
+        showChoicePopup("Hướng xoay", modes, index -> {
+            settings.orientationMode = index;
+            orientationButton.setText(AppLocalization.text(this, modes[index]));
+        });
+    }
+
+    private String orientationLabel(int mode) {
+        switch (mode) {
+            case GameSettings.ORIENTATION_PORTRAIT: return "Dọc";
+            case GameSettings.ORIENTATION_LANDSCAPE: return "Ngang";
+            default: return "Theo hệ thống";
+        }
     }
 
     private interface ChoiceListener {

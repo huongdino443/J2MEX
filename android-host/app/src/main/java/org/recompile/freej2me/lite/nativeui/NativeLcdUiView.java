@@ -210,7 +210,10 @@ public final class NativeLcdUiView extends LinearLayout {
                 content.addView(form, new FrameLayout.LayoutParams(-1, -1));
             }
             form.update(screen.items, preserve);
-            if (focusedItem != screen.focusId) { form.focus(screen.focusId); focusedItem = screen.focusId; }
+            if (focusedItem != screen.focusId) {
+                form.focus(screen.focusId);
+                focusedItem = screen.focusId;
+            }
         }
         commands(screen.commands);
     }

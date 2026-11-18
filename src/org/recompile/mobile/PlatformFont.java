@@ -174,6 +174,9 @@ public class PlatformFont {
 	}
 
 	public boolean hasAndroidFontBridge() { return AndroidFontBridge.isConnected(); }
+	public boolean usesAndroidSystemFontBackend() {
+		return AndroidFontBridge.usesSystemFontBackend();
+	}
 	public boolean isMonospaceFace() { return face == Font.FACE_MONOSPACE; }
 
 	public AndroidFontBridge.RenderedText renderAndroidText(String text) {

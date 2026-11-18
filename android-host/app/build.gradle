@@ -1,10 +1,10 @@
 plugins { id 'com.android.application' }
 def fontScalePercent = (project.findProperty('fontScalePercent') ?: '85')
         .toString().toInteger()
-def fontBuildVersionCode = (project.findProperty('buildVersionCode') ?: '334')
+def appBuildVersionCode = (project.findProperty('buildVersionCode') ?: '407')
         .toString().toInteger()
-def fontBuildVersionName = (project.findProperty('buildVersionName')
-        ?: "0.1.2").toString()
+def appBuildVersionName = (project.findProperty('buildVersionName')
+        ?: "0.1.3").toString()
 def releaseKeystoreFile = file("$rootDir/keys/j2mex-release.p12")
 def releaseKeystorePassword = System.getenv("J2MEX_RELEASE_KEYSTORE_PASSWORD") ?: ""
 if (fontScalePercent < 1 || fontScalePercent > 200)
@@ -16,8 +16,8 @@ android {
         applicationId 'io.github.huongdino443.j2mex'
         minSdk 21
         targetSdk 34
-        versionCode fontBuildVersionCode
-        versionName fontBuildVersionName
+        versionCode appBuildVersionCode
+        versionName appBuildVersionName
         buildConfigField 'int', 'FONT_SCALE_PERCENT', "${fontScalePercent}"
         ndk { abiFilters 'arm64-v8a' }
     }

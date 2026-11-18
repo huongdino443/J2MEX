@@ -60,6 +60,16 @@
             android:process=":runtime"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeLandscapeActivity" android:exported="false"
+            android:process=":runtime"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimePortraitActivity" android:exported="false"
+            android:process=":runtime"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
         <service android:name=".BackgroundGameService"
             android:exported="false"
             android:process=":runtime"

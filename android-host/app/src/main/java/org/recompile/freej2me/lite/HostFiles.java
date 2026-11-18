@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 final class HostFiles {
     static final int EXPORT_LOG = 72;
     private static final String INSTALL_VERSION = "v6-runtime-trim-1";
-    private static final String HOST_ASSETS_VERSION = "v83-j2mex-0.1.2";
+    private static final String HOST_ASSETS_VERSION = "v108-j2mex-0.1.3";
     static File log(Activity activity) { return new File(activity.getFilesDir(), "latestlog.txt"); }
     private static boolean markerMatches(File marker, String expected) throws IOException {
         return marker.isFile() && new String(readFile(marker), StandardCharsets.UTF_8).equals(expected);

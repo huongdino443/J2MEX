@@ -168,7 +168,7 @@ private javax.microedition.lcdui.Command[] textInputCommands = new javax.microed
 		lcdWidth = width;
 		lcdHeight = height;
 
-		lcd = new PlatformImage(width, height);
+lcd = new PlatformImage(width, height);
 		gc = lcd.getGraphics();
 
 		Mobile.setGraphics3D(new Graphics3D());
@@ -187,7 +187,7 @@ private javax.microedition.lcdui.Command[] textInputCommands = new javax.microed
 		lcdWidth = width;
 		lcdHeight = height;
 
-		lcd = new PlatformImage(width, height);
+lcd = new PlatformImage(width, height);
 		gc = lcd.getGraphics();
 	}
 
@@ -198,7 +198,7 @@ private javax.microedition.lcdui.Command[] textInputCommands = new javax.microed
 
 	public synchronized void copyFrameTo(int[] pixels)
 	{
-		int required = lcdWidth * lcdHeight;
+int required = lcdWidth * lcdHeight;
 		if (pixels == null || pixels.length < required)
 			throw new IllegalArgumentException("Framebuffer destination is too small");
 BufferedImage frame=lcd.getCanvas();

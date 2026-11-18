@@ -37,9 +37,18 @@ final class SessionLog {
     }
 
     static void begin(File root, File work, String header) throws IOException {
+        begin(root, work, header, -1);
+    }
+
+    static synchronized void begin(File root, File work, String header, int processId)
+            throws IOException {
+        File marker = new File(root, "last-session.properties");
+        Properties previous = readSessionMarker(marker);
         Properties session = new Properties();
         session.setProperty("directory", work.getCanonicalPath());
         session.setProperty("startedAt", Long.toString(System.currentTimeMillis()));
+        session.setProperty("processId", Integer.toString(processId));
+        session.setProperty("runtimeEnded", "false");
         File[] existingReports = work.listFiles();
         if (existingReports != null) {
             int index = 0;
@@ -48,13 +57,83 @@ final class SessionLog {
                     session.setProperty("existingCrash." + index++, file.getName());
             }
         }
+        StringBuilder sessionHeader = new StringBuilder(header == null ? "" : header);
+        if ("false".equals(previous.getProperty("runtimeEnded", "true"))) {
+            String previousPid = previous.getProperty("processId", "");
+            if (!previousPid.isEmpty()
+                    && !Integer.toString(processId).equals(previousPid)) {
+                sessionHeader.append("[previous-session] process changed from pid=")
+                        .append(previousPid).append(" to pid=").append(processId)
+                        .append(" before a clean runtime end; check for an OS kill or JVM crash.\n");
+            } else {
+                sessionHeader.append("[previous-session] previous runtime had no clean end "
+                        + "marker; current process pid=").append(processId).append(".\n");
+            }
+        }
         try (FileOutputStream output = new FileOutputStream(new File(root, "latestlog.txt"))) {
-            output.write(header.getBytes(StandardCharsets.UTF_8));
+            output.write(sessionHeader.toString().getBytes(StandardCharsets.UTF_8));
             output.flush();
             output.getFD().sync();
         }
-        try (FileOutputStream output =
-                     new FileOutputStream(new File(root, "last-session.properties"))) {
+        try (FileOutputStream output = new FileOutputStream(marker)) {
+            session.store(output, "Last FreeJ2ME runtime session");
+            output.flush();
+            output.getFD().sync();
+        }
+    }
+
+    static synchronized void beginRuntimeMarker(File root, File work, int processId)
+            throws IOException {
+        File marker = new File(root, "last-session.properties");
+        Properties session = new Properties();
+        session.setProperty("directory", work.getCanonicalPath());
+        session.setProperty("startedAt", Long.toString(System.currentTimeMillis()));
+        session.setProperty("processId", Integer.toString(processId));
+        session.setProperty("runtimeEnded", "false");
+        writeSessionMarker(marker, session);
+    }
+
+    static synchronized boolean wasReplacedWithoutCleanEnd(File root, int currentProcessId) {
+        Properties session = readSessionMarker(new File(root, "last-session.properties"));
+        if (!"false".equals(session.getProperty("runtimeEnded", "true"))) return false;
+        String previousPid = session.getProperty("processId", "");
+        return !previousPid.isEmpty()
+                && !Integer.toString(currentProcessId).equals(previousPid);
+    }
+
+    static synchronized int activeRuntimeProcessId(File root) {
+        Properties session = readSessionMarker(new File(root, "last-session.properties"));
+        if (!"false".equals(session.getProperty("runtimeEnded", "true"))) return -1;
+        try {
+            int processId = Integer.parseInt(session.getProperty("processId", ""));
+            return processId > 0 ? processId : -1;
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
+    static synchronized void markRuntimeEnded(File root, int processId, String reason) {
+        File marker = new File(root, "last-session.properties");
+        if (!marker.isFile()) return;
+        Properties session = readSessionMarker(marker);
+        if (!Integer.toString(processId).equals(session.getProperty("processId", ""))) return;
+        session.setProperty("runtimeEnded", "true");
+        session.setProperty("endedAt", Long.toString(System.currentTimeMillis()));
+        session.setProperty("endReason", reason == null ? "unknown" : reason);
+        try { writeSessionMarker(marker, session); } catch (IOException ignored) { }
+    }
+
+    private static Properties readSessionMarker(File marker) {
+        Properties session = new Properties();
+        if (!marker.isFile()) return session;
+        try (InputStream input = new FileInputStream(marker)) {
+            session.load(input);
+        } catch (IOException ignored) { }
+        return session;
+    }
+
+    private static void writeSessionMarker(File marker, Properties session) throws IOException {
+        try (FileOutputStream output = new FileOutputStream(marker)) {
             session.store(output, "Last FreeJ2ME runtime session");
             output.flush();
             output.getFD().sync();

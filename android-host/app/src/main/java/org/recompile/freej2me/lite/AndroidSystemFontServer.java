@@ -53,6 +53,8 @@ final class AndroidSystemFontServer implements Runnable {
             if (!token.equals(input.readUTF()))
                 throw new IOException("Android font bridge authentication failed");
             output.writeInt(HANDSHAKE);
+            // The MIDP renderer applies its ascent correction only to system-font text.
+            output.writeBoolean(bitmapFont == null);
             output.flush();
             while (!server.isClosed() && !client.isClosed()) {
                 int operation = input.readInt();

@@ -96,7 +96,6 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	public void copyArea(int subx, int suby, int subw, int subh, int x, int y, int anchor)
 	{
 if (subw <= 0 || subh <= 0) return;
-
 // Snapshot before writing: a camera scroll often copies overlapping areas of
 // this same canvas. A getSubimage() view aliases the destination, so drawing it
 // back can smear one source pixel across the whole region.
@@ -207,7 +206,6 @@ else
 	{
 		gc.drawImage(image, x, y, null);
 	}
-
 	public void drawImage2Test(BufferedImage image, int x, int y)
 	{
 		// This Fixes some transparency issues with some images drawn 
@@ -250,7 +248,8 @@ else
 		// called by MobilePlatform.flushGraphics/repaint
 		try
 		{
-			BufferedImage sub = image.platformImage.getCanvas().getSubimage(x, y, width, height);
+			BufferedImage sub = image.platformImage.getCanvas()
+					.getSubimage(x, y, width, height);
 			gc.drawImage(sub, x, y, null);
 		}
 		catch (Exception e)
@@ -267,8 +266,8 @@ else
 			{
 				BufferedImage source = image.platformImage.getCanvas();
 				if (subx < 0 || suby < 0 || subw < 1 || subh < 1
-						|| (long) subx + subw > source.getWidth()
-						|| (long) suby + subh > source.getHeight()) return;
+	|| (long) subx + subw > source.getWidth()
+	|| (long) suby + subh > source.getHeight()) return;
 				x = AnchorX(x, subw, anchor);
 				y = AnchorY(y, subh, anchor);
 				gc.drawImage(source, x, y, x + subw, y + subh,
@@ -408,8 +407,10 @@ pixels[i] = (alpha << 24) | colorRgb;
 BufferedImage bitmap = new BufferedImage(text.width, text.height, BufferedImage.TYPE_INT_ARGB);
 bitmap.setRGB(0, 0, text.width, text.height, pixels, 0, text.width);
 float drawX = AnchorX((float)x, (int)text.advance, anchor);
+boolean preserveSystemFontBaseline = font.platformFont.usesAndroidSystemFontBackend();
 int baseline = androidStringBaseline(y, text.metrics.ascent,
-		text.metrics.height(), text.metrics.ascentOffset, anchor);
+		text.metrics.height(), text.metrics.ascentOffset, anchor,
+		preserveSystemFontBaseline);
 gc.drawImage(bitmap, AffineTransform.getTranslateInstance(
 		(double)drawX + text.left, (double)baseline + text.top), null);
 }
@@ -523,7 +524,15 @@ return AnchorY(y + ascent - 1, height, anchor);
 
 static int androidStringBaseline(int y, int ascent, int height, int ascentOffset, int anchor)
 {
-return stringBaseline(y, ascent + ascentOffset, height, anchor) - ascentOffset;
+return androidStringBaseline(y, ascent, height, ascentOffset, anchor, false);
+}
+
+static int androidStringBaseline(int y, int ascent, int height, int ascentOffset,
+		int anchor, boolean preserveBaselineAnchor)
+{
+int baseline = stringBaseline(y, ascent + ascentOffset, height, anchor) - ascentOffset;
+if (preserveBaselineAnchor && (anchor & BASELINE) != 0) baseline += ascentOffset;
+return baseline;
 }
 
 private static int AnchorY(int y, int height, int anchor)
@@ -727,7 +736,7 @@ private static int AnchorY(int y, int height, int anchor)
 		{
 			for (int col=0; col<width; col++)
 			{
-				pixels[i] = colorToShortPixel(canvas.getRGB(col+x, row+y), format);
+				pixels[i] = colorToShortPixel(canvas.getRGB(col + x, row + y), format);
 				i++;
 			}
 		}

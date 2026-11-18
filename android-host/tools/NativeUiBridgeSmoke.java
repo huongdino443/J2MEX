@@ -165,6 +165,7 @@ public final class NativeUiBridgeSmoke {
                 DataOutputStream output = new DataOutputStream(new BufferedOutputStream(client.getOutputStream()))) {
             if (!token.equals(input.readUTF())) throw new AssertionError("Invalid font bridge token");
             output.writeInt(FONT_HANDSHAKE);
+            output.writeBoolean(false);
             output.flush();
             while (true) {
                 int operation = input.readInt();

@@ -26,6 +26,7 @@ public class VertexArray extends Object3D
 	private final int componentCount;
 	private final int componentSize;
 	private final short[] values;
+	private long version;
 
 	public VertexArray(int numVertices, int numComponents, int componentSize)
 	{
@@ -62,6 +63,8 @@ public class VertexArray extends Object3D
 
 	public int getVertexCount() { return vertexCount; }
 
+	long getVersion() { return version; }
+
 	public void set(int firstVertex, int numVertices, byte[] source)
 	{
 		checkRange(firstVertex, numVertices);
@@ -69,6 +72,7 @@ public class VertexArray extends Object3D
 		if (source == null || source.length < count || componentSize != BYTE)
 			throw new IllegalArgumentException("Invalid byte source");
 		for (int i = 0; i < count; i++) values[firstVertex * componentCount + i] = source[i];
+		version++;
 	}
 
 	public void set(int firstVertex, int numVertices, short[] source)
@@ -78,6 +82,7 @@ public class VertexArray extends Object3D
 		if (source == null || source.length < count || componentSize != SHORT)
 			throw new IllegalArgumentException("Invalid short source");
 		System.arraycopy(source, 0, values, firstVertex * componentCount, count);
+		version++;
 	}
 
 	float component(int vertex, int component)

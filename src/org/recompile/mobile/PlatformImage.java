@@ -61,7 +61,7 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 		height = Height;
 mutable = true;
 
-		canvas = new BufferedImage(Width, Height, BufferedImage.TYPE_INT_ARGB);
+canvas = new BufferedImage(Width, Height, BufferedImage.TYPE_INT_ARGB);
 		createGraphics();
 
 		gc.setColor(0xFFFFFF);
@@ -140,7 +140,7 @@ mutable = true;
 		canvas = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		createGraphics();
 
-		gc.drawImage2(source.platformImage.getCanvas(), 0, 0);
+gc.drawImage2(source.platformImage.getCanvas(), 0, 0);
 
 		platformImage = this;
 	}
@@ -196,9 +196,9 @@ gc.drawRGB(rgb, 0, width, 0, 0, width, height, processAlpha);
 	public PlatformImage(Image image, int x, int y, int Width, int Height, int transform)
 	{
 		// Create Image From Sub-Image, Transformed //
-		BufferedImage sub = image.platformImage.canvas.getSubimage(x, y, Width, Height);
+BufferedImage sub = image.platformImage.canvas.getSubimage(x, y, Width, Height);
 
-		canvas = transformImage(sub, transform);
+canvas = transformImage(sub, transform);
 		createGraphics();
 
 		width = (int)canvas.getWidth();
@@ -209,19 +209,14 @@ gc.drawRGB(rgb, 0, width, 0, 0, width, height, processAlpha);
 
 	public void getRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height)
 	{
-		canvas.getRGB(x, y, width, height, rgbData, offset, scanlength);
-	}
-
-	public int getARGB(int x, int y)
-	{
-		return canvas.getRGB(x, y);
+			canvas.getRGB(x, y, width, height, rgbData, offset, scanlength);
 	}
 
 	public int getPixel(int x, int y)
 	{
-		int[] rgbData = { 0 };
-		canvas.getRGB(x, y, 1, 1, rgbData, 0, 1);
-		return rgbData[0];
+int[] rgbData = { 0 };
+canvas.getRGB(x, y, 1, 1, rgbData, 0, 1);
+return rgbData[0];
 	}
 
 	public void setPixel(int x, int y, int color)

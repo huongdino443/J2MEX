@@ -89,6 +89,10 @@ final class GamepadControlView extends View {
     private int lastLayoutWidth = -1;
     private int lastLayoutHeight = -1;
     private int coordinateOriginTopInset;
+    private int cutoutSafeInsetLeft;
+    private int cutoutSafeInsetTop;
+    private int cutoutSafeInsetRight;
+    private int cutoutSafeInsetBottom;
 
     GamepadControlView(Context context, GamepadTemplate template, KeySink sink) {
         super(context);
@@ -118,6 +122,24 @@ final class GamepadControlView extends View {
         int next = Math.max(0, inset);
         if (coordinateOriginTopInset == next) return;
         coordinateOriginTopInset = next;
+        lastLayoutWidth = -1;
+        lastLayoutHeight = -1;
+        rebuildLayout(getWidth(), getHeight());
+        invalidate();
+    }
+
+    void setCutoutSafeInsets(int left, int top, int right, int bottom) {
+        int nextLeft = Math.max(0, left);
+        int nextTop = Math.max(0, top);
+        int nextRight = Math.max(0, right);
+        int nextBottom = Math.max(0, bottom);
+        if (cutoutSafeInsetLeft == nextLeft && cutoutSafeInsetTop == nextTop
+                && cutoutSafeInsetRight == nextRight
+                && cutoutSafeInsetBottom == nextBottom) return;
+        cutoutSafeInsetLeft = nextLeft;
+        cutoutSafeInsetTop = nextTop;
+        cutoutSafeInsetRight = nextRight;
+        cutoutSafeInsetBottom = nextBottom;
         lastLayoutWidth = -1;
         lastLayoutHeight = -1;
         rebuildLayout(getWidth(), getHeight());
@@ -228,9 +250,40 @@ final class GamepadControlView extends View {
         resetJoystickGeometry();
         if (width <= 0 || height <= 0 || template == null) return;
         isLandscape = width > height;
-        if (template.builtinIndex >= 0) layoutBuiltin(width, height, template.builtinIndex);
-        else layoutCustom(width, height, template.layout(isLandscape));
+        int safeLeft = Math.min(cutoutSafeInsetLeft, Math.max(0, width - 1));
+        int safeTop = Math.min(cutoutSafeInsetTop, Math.max(0, height - 1));
+        int safeRight = Math.min(cutoutSafeInsetRight,
+                Math.max(0, width - safeLeft - 1));
+        int safeBottom = Math.min(cutoutSafeInsetBottom,
+                Math.max(0, height - safeTop - 1));
+        int safeWidth = Math.max(1, width - safeLeft - safeRight);
+        int safeHeight = Math.max(1, height - safeTop - safeBottom);
+        if (template.builtinIndex >= 0) {
+            layoutBuiltin(safeWidth, safeHeight, template.builtinIndex);
+            offsetPlacedKeys(safeLeft, safeTop);
+        } else {
+            layoutCustom(safeWidth, safeHeight, template.layout(isLandscape),
+                    safeLeft, safeTop);
+        }
         setupJoystick();
+    }
+
+    private void offsetPlacedKeys(float x, float y) {
+        if (x == 0f && y == 0f) return;
+        for (int index = 0; index < placedKeys.size(); index++) {
+            PlacedKey key = placedKeys.get(index);
+            placedKeys.set(index, new PlacedKey(key.key,
+                    key.bounds.left + x, key.bounds.top + y,
+                    key.bounds.width(), key.bounds.height(), key.circular, key.visible));
+        }
+        // Preset 3 draws and hit-tests its joystick separately from the key bounds.
+        if (joystickEnabled && template.builtinIndex == 3 && placedKeys.size() > 4) {
+            PlacedKey joystick = placedKeys.get(4);
+            joystickCenterX = joystick.bounds.centerX();
+            joystickCenterY = joystick.bounds.centerY();
+            joystickThumbX = joystickCenterX;
+            joystickThumbY = joystickCenterY;
+        }
     }
 
     private void layoutBuiltin(int width, int height, int mode) {
@@ -368,8 +421,14 @@ final class GamepadControlView extends View {
         boolean landscape = width > height;
         int columns = landscape ? portraitGrid[1] : portraitGrid[0];
         int rows = landscape ? portraitGrid[0] : portraitGrid[1];
-        int realWidth = landscape ? portraitHeight : portraitWidth;
-        int realHeight = landscape ? portraitWidth : portraitHeight;
+        int realWidth = landscape
+                ? portraitHeight - cutoutSafeInsetLeft - cutoutSafeInsetRight
+                : portraitWidth - cutoutSafeInsetLeft - cutoutSafeInsetRight;
+        int realHeight = landscape
+                ? portraitWidth - cutoutSafeInsetTop - cutoutSafeInsetBottom
+                : portraitHeight - cutoutSafeInsetTop - cutoutSafeInsetBottom;
+        realWidth = Math.max(1, realWidth);
+        realHeight = Math.max(1, realHeight);
         realWidth = Math.max(realWidth, width);
         realHeight = Math.max(realHeight, height);
         float cell = GamepadTemplateLibrary.gridCell(
@@ -407,18 +466,25 @@ final class GamepadControlView extends View {
         put(9, actionRightX, bottomRowY, keyWidth, keyHeight, false);
     }
 
-    private void layoutCustom(int width, int height, GamepadTemplate.Layout layout) {
+    private void layoutCustom(int width, int height, GamepadTemplate.Layout layout,
+            int safeOffsetX, int safeOffsetY) {
         if (layout == null || layout.keys.isEmpty()) return;
         int[] display = GamepadTemplateLibrary.displaySize(getContext());
         int realWidth;
         int realHeight;
         if (width <= height) {
-            realWidth = Math.min(display[0], display[1]);
-            realHeight = Math.max(display[0], display[1]);
+            realWidth = Math.min(display[0], display[1])
+                    - cutoutSafeInsetLeft - cutoutSafeInsetRight;
+            realHeight = Math.max(display[0], display[1])
+                    - cutoutSafeInsetTop - cutoutSafeInsetBottom;
         } else {
-            realWidth = Math.max(display[0], display[1]);
-            realHeight = Math.min(display[0], display[1]);
+            realWidth = Math.max(display[0], display[1])
+                    - cutoutSafeInsetLeft - cutoutSafeInsetRight;
+            realHeight = Math.min(display[0], display[1])
+                    - cutoutSafeInsetTop - cutoutSafeInsetBottom;
         }
+        realWidth = Math.max(1, realWidth);
+        realHeight = Math.max(1, realHeight);
         realWidth = Math.max(realWidth, width);
         realHeight = Math.max(realHeight, height);
         float cell = GamepadTemplateLibrary.gridCell(getContext(), realWidth, realHeight,
@@ -440,8 +506,8 @@ final class GamepadControlView extends View {
             }
         }
         location[1] -= coordinateOriginTopInset;
-        float gridX = (realWidth - layout.columns * cell) / 2f - location[0];
-        float gridY = (realHeight - layout.rows * cell) / 2f - location[1];
+        float gridX = (width - layout.columns * cell) / 2f + safeOffsetX - location[0];
+        float gridY = (height - layout.rows * cell) / 2f + safeOffsetY - location[1];
         for (GamepadTemplate.Key key : layout.keys) {
             float left = Math.round(gridX + key.x * cell) + Math.max(0, Math.round(gap / 2f));
             float top = Math.round(gridY + key.y * cell) + Math.max(0, Math.round(gap / 2f));

@@ -11,6 +11,9 @@ package javax.microedition.m3g;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.WeakHashMap;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import javax.microedition.lcdui.Graphics;
 
 /** Small framebuffer renderer for the M3G feature set used by the Android MVP. */
@@ -18,15 +21,45 @@ final class M3GSoftwareRenderer
 {
 // Emulate normalized 16-bit GLES depth units for M3G polygon offsets.
 	private static final float DEPTH_OFFSET_UNIT = 1f / 65535f;
+private static final boolean GPU_PROFILE_ENABLED =
+Boolean.getBoolean("j2mex.render.profile");
+// The first device trial produced incomplete terrain geometry; keep the
+// shader-transform path isolated until an exact GPU/CPU equivalence test passes.
+static final boolean GPU_SHADER_TRANSFORM_ENABLED = false;
+private static final boolean CPU_VERTEX_PREPACK_ENABLED = true;
+private static final int GPU_PROFILE_WINDOW_FRAMES = 120;
+private static final int GPU_INDEX_CACHE_MAX_ENTRIES = 512;
+private static final int GPU_INDEX_CACHE_MAX_INDICES = 2048;
+private static final int GPU_VERTEX_WORDS = 9;
+private final long[] gpuProfileNativeStats = GPU_PROFILE_ENABLED
+? new long[M3GNativeGpu.PROFILE_STAT_COUNT] : null;
 	private Graphics target;
 	private int viewportX, viewportY, width, height;
 	private int[] color;
 	private float[] depth;
 	private Vertex[] vertexCache = new Vertex[0];
 	private int[] indexCache = new int[0];
+private int[] gpuVertexData = new int[0];
+private short[] gpuTriangleIndices = new short[0];
+private final WeakHashMap<IndexBuffer,GpuIndexData> gpuIndexCache =
+new WeakHashMap<IndexBuffer,GpuIndexData>();
+private final float[] viewMatrixScratch = new float[16];
+private final Transform viewTransformScratch = new Transform();
+private final int[] gpuState = new int[M3GNativeGpu.STATE_INT_COUNT];
+private final float[] gpuParameters = new float[M3GNativeGpu.PARAMETER_FLOAT_COUNT];
+private final float[] gpuModelView = new float[16];
+private final float[] gpuMvp = new float[16];
+private final IdentityHashMap<Image2D,Integer> gpuTextureIds =
+new IdentityHashMap<Image2D,Integer>();
+private int nextGpuTextureId=1;
+private boolean gpuFrameActive;
+private boolean gpuFrameUnavailable;
 private final Vertex[] clipBufferA = createVertexBuffer(12);
 private final Vertex[] clipBufferB = createVertexBuffer(12);
 	private final Vertex spriteCenter = new Vertex();
+private final float[] modelMatrixScratch = new float[16];
+private final Transform projectionTransform = new Transform();
+private final Camera fallbackCamera = new Camera();
 	private final float[] spriteModelMatrix = new float[16];
 	private final float[] spriteViewMatrix = new float[16];
 	private final Transform spriteViewTransform = new Transform();
@@ -44,31 +77,115 @@ private int targetOriginX,targetOriginY;
 	private boolean theFightSkinnedTraceChecked;
 	private boolean theFightSkinnedTraceEnabled;
 	private int theFightSkinnedTraceCount;
+private long gpuProfileFrameStartedAt;
+private long gpuProfileSetupNanos;
+private long gpuProfileTransformNanos;
+private long gpuProfilePackNanos;
+private long gpuProfileSubmitNanos;
+private long gpuProfileMatrixNanos;
+private long gpuProfileReadbackNanos;
+private long gpuProfileRasterNanos;
+private long gpuProfilePublishNanos;
+private long gpuProfileMeshes;
+private long gpuProfileGpuMeshes;
+private long gpuProfileShaderMeshes;
+private long gpuProfileFallbackMeshes;
+private long gpuProfileScreenProjectionSkipped;
+private long gpuProfileVertices;
+private long gpuProfileTriangles;
+private int gpuProfileWindowFrames;
+private long gpuProfileWindowStartedAt;
+private long gpuProfileWindowGcCountAtStart=-1;
+private long gpuProfileWindowGcTimeAtStart=-1;
+private long gpuProfileWindowSetupNanos;
+private long gpuProfileWindowTransformNanos;
+private long gpuProfileWindowPackNanos;
+private long gpuProfileWindowSubmitNanos;
+private long gpuProfileWindowMatrixNanos;
+private long gpuProfileWindowReadbackNanos;
+private long gpuProfileWindowRasterNanos;
+private long gpuProfileWindowPublishNanos;
+private long gpuProfileWindowMeshes;
+private long gpuProfileWindowGpuMeshes;
+private long gpuProfileWindowShaderMeshes;
+private long gpuProfileWindowFallbackMeshes;
+private long gpuProfileWindowScreenProjectionSkipped;
+private long gpuProfileWindowVertices;
+private long gpuProfileWindowTriangles;
+private long gpuProfileIndexCacheHits;
+private long gpuProfileWindowIndexCacheHits;
+
+private static long[] readGarbageCollectorTotals()
+{
+long count=0;
+long timeMs=0;
+boolean hasCount=false;
+boolean hasTime=false;
+try {
+for (GarbageCollectorMXBean collector : ManagementFactory.getGarbageCollectorMXBeans()) {
+long collectorCount=collector.getCollectionCount();
+long collectorTime=collector.getCollectionTime();
+if (collectorCount>=0) {
+count+=collectorCount;
+hasCount=true;
+}
+if (collectorTime>=0) {
+timeMs+=collectorTime;
+hasTime=true;
+}
+}
+} catch (SecurityException ignored) {
+return new long[] {-1,-1};
+}
+return new long[] {hasCount?count:-1,hasTime?timeMs:-1};
+}
 
 	void bind(Object target, boolean depthBuffer)
 	{
 		if (!(target instanceof Graphics))
 			throw new IllegalArgumentException("M3G target must be an LCDUI Graphics instance");
 		this.target = (Graphics) target;
+if (GPU_PROFILE_ENABLED) {
+gpuProfileFrameStartedAt=System.nanoTime();
+gpuProfileSetupNanos=0;
+gpuProfileTransformNanos=0;
+gpuProfilePackNanos=0;
+gpuProfileSubmitNanos=0;
+gpuProfileMatrixNanos=0;
+gpuProfileReadbackNanos=0;
+gpuProfileRasterNanos=0;
+gpuProfilePublishNanos=0;
+gpuProfileMeshes=0;
+gpuProfileGpuMeshes=0;
+gpuProfileShaderMeshes=0;
+gpuProfileFallbackMeshes=0;
+gpuProfileScreenProjectionSkipped=0;
+gpuProfileVertices=0;
+gpuProfileTriangles=0;
+gpuProfileIndexCacheHits=0;
+}
 		this.depthBufferEnabled = depthBuffer;
-			viewportX = this.target.getClipX();
-			viewportY = this.target.getClipY();
-			width = Math.max(1, this.target.getClipWidth());
-			height = Math.max(1, this.target.getClipHeight());
+viewportX = this.target.getClipX();
+viewportY = this.target.getClipY();
+width = Math.max(1, this.target.getClipWidth());
+height = Math.max(1, this.target.getClipHeight());
 targetOriginX=this.target.getTranslateX();
 targetOriginY=this.target.getTranslateY();
 		ensureBuffers();
 contentsInitialized=false;
 // Depth storage belongs to this binding, not a previous target or frame.
 Arrays.fill(depth,0f);
+gpuFrameActive=false;
+gpuFrameUnavailable=false;
 	}
 
 	void setViewport(int x, int y, int width, int height)
 	{
 		if (width <= 0 || height <= 0) throw new IllegalArgumentException("Invalid M3G viewport");
 if(this.viewportX==x&&this.viewportY==y&&this.width==width&&this.height==height) return;
+if(gpuFrameActive) syncGpuToCpu();
 if(target!=null&&contentsInitialized) publish();
-		this.viewportX=x; this.viewportY=y; this.width=width; this.height=height;
+this.viewportX=x; this.viewportY=y; this.width=width; this.height=height;
 		ensureBuffers();
 contentsInitialized=false;
 	}
@@ -85,12 +202,13 @@ contentsInitialized=false;
 		lightSources=sources==null||sources.isEmpty()
 				?java.util.Collections.<LightSource>emptyList()
 				:new java.util.ArrayList<LightSource>(sources);
-		float[] viewMatrix=new float[16];
-		Transform view=new Transform(cameraWorld);
-		try { view.invert(); }
-		catch (ArithmeticException singular) { view.setIdentity(); }
-		view.getColumnMajor(viewMatrix);
-		preparedLights=prepareLights(viewMatrix);
+float[] viewMatrix=viewMatrixScratch;
+Transform view=viewTransformScratch;
+view.set(cameraWorld);
+try { view.invert(); }
+catch (ArithmeticException singular) { view.setIdentity(); }
+view.getColumnMajor(viewMatrix);
+preparedLights=prepareLights(viewMatrix);
 	}
 
 	void setDepthWriteSuppressed(boolean suppressed)
@@ -109,6 +227,8 @@ contentsInitialized=false;
 	void clear(Background background)
 	{
 		if (target == null) throw new IllegalStateException("No M3G target is bound");
+if (gpuFrameActive && background != null && background.getImage() != null)
+syncGpuToCpu();
 		ensureBuffers();
 		if (background == null || background.isColorClearEnabled()) {
 int clearColor = background == null ? 0xff000000 : 0xff000000|background.getColor();
@@ -119,16 +239,191 @@ contentsInitialized=true;
 } else importTargetContents();
 		if (depthBufferEnabled && (background == null || background.isDepthClearEnabled()))
 			Arrays.fill(depth, 0f);
+if (!gpuFrameUnavailable && (background == null || background.getImage() == null)) {
+boolean clearColor = background == null || background.isColorClearEnabled();
+int clearValue = background == null ? 0xff000000 : 0xff000000|background.getColor();
+if (!gpuFrameActive) {
+int[] initial = clearColor ? null : color;
+if (M3GNativeGpu.isAvailable())
+gpuFrameActive=M3GNativeGpu.beginFrame(width,height,initial);
+if (!gpuFrameActive) gpuFrameUnavailable=true;
+}
+if (gpuFrameActive && !M3GNativeGpu.clear(clearValue,clearColor,
+depthBufferEnabled&&(background==null||background.isDepthClearEnabled()))) {
+syncGpuToCpu();
+gpuFrameUnavailable=true;
+}
+}
 	}
 
 	void release()
 	{
 		if (target == null) throw new IllegalStateException("No M3G target is bound");
+if (gpuFrameActive) syncGpuToCpu();
 importTargetContents();
+long publishStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
 publish();
+if (GPU_PROFILE_ENABLED) {
+gpuProfilePublishNanos+=System.nanoTime()-publishStarted;
+recordGpuProfileFrame();
+}
 		target = null;
 contentsInitialized=false;
 	}
+
+private void syncGpuToCpu()
+{
+if (!gpuFrameActive) return;
+long started=GPU_PROFILE_ENABLED?System.nanoTime():0;
+if (!M3GNativeGpu.readFrame(color))
+throw new IllegalStateException("M3G GLES framebuffer readback failed");
+if (GPU_PROFILE_ENABLED) gpuProfileReadbackNanos+=System.nanoTime()-started;
+M3GNativeGpu.endFrame();
+gpuFrameActive=false;
+contentsInitialized=true;
+}
+
+private void recordGpuProfileFrame()
+{
+long now=System.nanoTime();
+if (gpuProfileWindowFrames==0) {
+gpuProfileWindowStartedAt=gpuProfileFrameStartedAt;
+long[] gcTotals=readGarbageCollectorTotals();
+gpuProfileWindowGcCountAtStart=gcTotals[0];
+gpuProfileWindowGcTimeAtStart=gcTotals[1];
+}
+gpuProfileWindowFrames++;
+gpuProfileWindowSetupNanos+=gpuProfileSetupNanos;
+gpuProfileWindowTransformNanos+=gpuProfileTransformNanos;
+gpuProfileWindowPackNanos+=gpuProfilePackNanos;
+gpuProfileWindowSubmitNanos+=gpuProfileSubmitNanos;
+gpuProfileWindowMatrixNanos+=gpuProfileMatrixNanos;
+gpuProfileWindowReadbackNanos+=gpuProfileReadbackNanos;
+gpuProfileWindowRasterNanos+=gpuProfileRasterNanos;
+gpuProfileWindowPublishNanos+=gpuProfilePublishNanos;
+gpuProfileWindowMeshes+=gpuProfileMeshes;
+gpuProfileWindowGpuMeshes+=gpuProfileGpuMeshes;
+gpuProfileWindowShaderMeshes+=gpuProfileShaderMeshes;
+gpuProfileWindowFallbackMeshes+=gpuProfileFallbackMeshes;
+gpuProfileWindowScreenProjectionSkipped+=gpuProfileScreenProjectionSkipped;
+gpuProfileWindowVertices+=gpuProfileVertices;
+gpuProfileWindowTriangles+=gpuProfileTriangles;
+gpuProfileWindowIndexCacheHits+=gpuProfileIndexCacheHits;
+if (gpuProfileWindowFrames<GPU_PROFILE_WINDOW_FRAMES) return;
+
+double frames=gpuProfileWindowFrames;
+double elapsedMs=Math.max(0L,now-gpuProfileWindowStartedAt)/1_000_000.0;
+double fps=elapsedMs>0?frames*1000.0/elapsedMs:0;
+long[] gcTotals=readGarbageCollectorTotals();
+long gcCount=gcTotals[0]<0||gpuProfileWindowGcCountAtStart<0
+? -1 : gcTotals[0]-gpuProfileWindowGcCountAtStart;
+long gcTimeMs=gcTotals[1]<0||gpuProfileWindowGcTimeAtStart<0
+? -1 : gcTotals[1]-gpuProfileWindowGcTimeAtStart;
+if (!M3GNativeGpu.takeProfileStats(gpuProfileNativeStats))
+Arrays.fill(gpuProfileNativeStats,0L);
+System.out.println(String.format(java.util.Locale.US,
+ "[m3g-profile] frames=%d fps=%.1f meshes/frame=%.1f gpuDraws/frame=%.1f " +
+"shaderTransforms/frame=%.1f " +
+"fallbacks/frame=%.1f screenProjectionSkipped/frame=%.1f vertices/frame=%.0f gpuTriangles/frame=%.0f " +
+"setup=%.2fms transform=%.2fms matrix=%.2fms pack=%.2fms submit=%.2fms readback=%.2fms " +
+"nativeJniAcquire=%.2fms nativeTexture=%.2fms nativeVbo=%.2fms nativeIndexCheck=%.2fms " +
+"nativeIbo=%.2fms nativeStateUniform=%.2fms nativeDrawCpu=%.2fms nativeJniRelease=%.2fms " +
+"nativeContextCheck=%.2fms nativeValidate=%.2fms nativeGlError=%.2fms nativeTotal=%.2fms " +
+"submitBridgeGap=%.2fms " +
+"nativeCalls/frame=%.1f glDraws/frame=%.1f vertexUpload=%.1fKB/frame indexUpload=%.1fKB/frame " +
+"nativeEglBinds/frame=%.1f nativeContextSkips/frame=%.1f " +
+"nativeReadContext=%.2fms nativeReadAlloc=%.2fms nativeReadPixels=%.2fms " +
+"nativeReadConvert=%.2fms nativeReadCopy=%.2fms nativeReadTotal=%.2fms " +
+"nativeReadFrames/frame=%.2f nativeEndContext=%.2fms nativeEndFinish=%.2fms " +
+"raster=%.2fms publish=%.2fms indexCacheHits/frame=%.1f gcCount=%d gcTime=%dms",
+gpuProfileWindowFrames,fps,
+gpuProfileWindowMeshes/frames,gpuProfileWindowGpuMeshes/frames,
+gpuProfileWindowShaderMeshes/frames,
+gpuProfileWindowFallbackMeshes/frames,gpuProfileWindowScreenProjectionSkipped/frames,
+gpuProfileWindowVertices/frames,
+gpuProfileWindowTriangles/frames,
+gpuProfileWindowSetupNanos/(frames*1_000_000.0),
+gpuProfileWindowTransformNanos/(frames*1_000_000.0),
+gpuProfileWindowMatrixNanos/(frames*1_000_000.0),
+gpuProfileWindowPackNanos/(frames*1_000_000.0),
+gpuProfileWindowSubmitNanos/(frames*1_000_000.0),
+gpuProfileWindowReadbackNanos/(frames*1_000_000.0),
+profileStatMs(0,frames),profileStatMs(1,frames),
+profileStatMs(2,frames),profileStatMs(3,frames),
+profileStatMs(4,frames),profileStatMs(5,frames),
+profileStatMs(6,frames),profileStatMs(7,frames),
+profileStatMs(12,frames),profileStatMs(13,frames),
+profileStatMs(14,frames),profileStatMs(15,frames),
+gpuProfileWindowSubmitNanos/(frames*1_000_000.0)-profileStatMs(15,frames),
+				profileStatCountPerFrame(8,frames),profileStatCountPerFrame(9,frames),
+				profileStatCountPerFrame(10,frames,1024.0),profileStatCountPerFrame(11,frames,1024.0),
+				profileStatCountPerFrame(16,frames),profileStatCountPerFrame(17,frames),
+profileStatMs(18,frames),profileStatMs(19,frames),profileStatMs(20,frames),
+profileStatMs(21,frames),profileStatMs(22,frames),profileStatMs(23,frames),
+				profileStatCountPerFrame(24,frames),profileStatMs(25,frames),profileStatMs(26,frames),
+gpuProfileWindowRasterNanos/(frames*1_000_000.0),
+gpuProfileWindowPublishNanos/(frames*1_000_000.0),
+gpuProfileWindowIndexCacheHits/frames,
+gcCount,gcTimeMs));
+
+gpuProfileWindowFrames=0;
+gpuProfileWindowStartedAt=0;
+gpuProfileWindowGcCountAtStart=-1;
+gpuProfileWindowGcTimeAtStart=-1;
+gpuProfileWindowSetupNanos=0;
+gpuProfileWindowTransformNanos=0;
+gpuProfileWindowPackNanos=0;
+gpuProfileWindowSubmitNanos=0;
+gpuProfileWindowMatrixNanos=0;
+gpuProfileWindowReadbackNanos=0;
+gpuProfileWindowRasterNanos=0;
+gpuProfileWindowPublishNanos=0;
+gpuProfileWindowMeshes=0;
+gpuProfileWindowGpuMeshes=0;
+gpuProfileWindowShaderMeshes=0;
+gpuProfileWindowFallbackMeshes=0;
+gpuProfileWindowScreenProjectionSkipped=0;
+gpuProfileWindowVertices=0;
+gpuProfileWindowTriangles=0;
+gpuProfileWindowIndexCacheHits=0;
+}
+
+private double profileStatMs(int index,double frames)
+{
+	return gpuProfileNativeStats==null||index<0||index>=gpuProfileNativeStats.length
+			?0:gpuProfileNativeStats[index]/(frames*1_000_000.0);
+}
+
+private double profileStatCountPerFrame(int index,double frames)
+{
+	return profileStatCountPerFrame(index,frames,1.0);
+}
+
+private double profileStatCountPerFrame(int index,double frames,double divisor)
+{
+	return gpuProfileNativeStats==null||index<0||index>=gpuProfileNativeStats.length
+			?0:gpuProfileNativeStats[index]/(frames*divisor);
+}
+
+private boolean beginGpuFrameIfNeeded()
+{
+if (gpuFrameActive) return true;
+if (gpuFrameUnavailable) return false;
+if (!M3GNativeGpu.isAvailable()) {
+gpuFrameUnavailable=true;
+return false;
+}
+importTargetContents();
+gpuFrameActive=M3GNativeGpu.beginFrame(width,height,color);
+if (!gpuFrameActive) gpuFrameUnavailable=true;
+return gpuFrameActive;
+}
+
+private void disableGpuForCurrentFrame()
+{
+if (gpuFrameActive) syncGpuToCpu();
+gpuFrameUnavailable=true;
+}
 
 private void publish()
 {
@@ -179,36 +474,44 @@ MorphingMesh morph, SkinnedMesh skinned)
 		if (target == null) throw new IllegalStateException("No M3G target is bound");
 		if (vertices == null || triangles == null) throw new NullPointerException();
 		if (vertices.getVertexCount() == 0 || triangles.getIndexCount() < 3) return;
+if (GPU_PROFILE_ENABLED) gpuProfileMeshes++;
 		ensureBuffers();
 importTargetContents();
 
+long setupStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
 		int vertexCount = vertices.getVertexCount();
+if (GPU_PROFILE_ENABLED) gpuProfileVertices+=vertexCount;
 		ensureVertexCache(vertexCount);
 		Vertex[] transformed = vertexCache;
 		float[] skinnedPositions = skinned == null ? null : skinned.positionsForRendering();
 		boolean traceSkinned = skinned != null && shouldTraceTheFightSkinnedMesh(skinned);
-		float[] modelMatrix = new float[16];
-		float[] viewMatrix = new float[16];
-if (model == null) identity(modelMatrix); else model.getColumnMajor(modelMatrix);
-		Transform view = new Transform(cameraWorld);
-		try { view.invert(); }
-		catch (ArithmeticException singular) { view.setIdentity(); }
+float[] modelMatrix = modelMatrixScratch;
+if (model == null) {
+Arrays.fill(modelMatrix,0f);
+identity(modelMatrix);
+} else model.getColumnMajor(modelMatrix);
+		float[] viewMatrix = viewMatrixScratch;
+		Transform view = viewTransformScratch;
+		view.set(cameraWorld);
+try { view.invert(); }
+catch (ArithmeticException singular) { view.setIdentity(); }
 view.getColumnMajor(viewMatrix);
 
 Camera activeCamera=camera;
-if(activeCamera==null) { activeCamera=new Camera(); activeCamera.setPerspective(45,width/(float)height,0.1f,10000); }
-		Transform projectionTransform=new Transform();
+if(activeCamera==null) {
+activeCamera=fallbackCamera;
+activeCamera.setPerspective(45,width/(float)height,0.1f,10000);
+}
 activeCamera.getProjection(projectionTransform);
 float[] projection=projectionTransform.values();
 		float near = camera == null ? 0.1f : camera.nearPlane();
 		float far = camera == null ? 10000f : camera.farPlane();
 		if (far <= near) far = near + 1f;
-		float[] scaleBias = new float[4];
-		VertexArray positions = vertices.getPositions(scaleBias);
+VertexArray positions = vertices.getPositions(null);
 		if (positions == null) return;
 		VertexArray normals = vertices.getNormals();
 		VertexArray colors = vertices.getColors();
-		VertexArray textureCoords = vertices.getTexCoords(0, scaleBias);
+VertexArray textureCoords = vertices.getTexCoords(0, null);
 		Texture2D texture = appearance == null ? null : appearance.getTexture(0);
 		int defaultColor = vertices.getDefaultColor();
 Material material=appearance==null?null:appearance.getMaterial();
@@ -223,12 +526,45 @@ if(colors==null || colors.getComponentCount()<3) {
 	}
 }
 
+if (indexCache.length < triangles.getIndexCount()) indexCache = new int[triangles.getIndexCount()];
+int[] indices = indexCache;
+triangles.getIndices(indices);
+int[] strips = triangles instanceof TriangleStripArray
+? ((TriangleStripArray)triangles).stripLengths()
+: new int[]{triangles.getIndexCount()};
+PolygonMode polygon = appearance == null ? null : appearance.getPolygonMode();
+CompositingMode compositing = appearance == null ? null : appearance.getCompositingMode();
+Fog fog = appearance == null ? null : appearance.getFog();
+TextureData tex = texture == null ? null : new TextureData(texture, vertices);
+if (GPU_PROFILE_ENABLED) gpuProfileSetupNanos+=System.nanoTime()-setupStarted;
+
+if (GPU_SHADER_TRANSFORM_ENABLED && beginGpuFrameIfNeeded()
+&& gpuCompatible(vertices,triangles,polygon,compositing,fog,tex,vertexCount)
+&& morph==null && skinned==null && normalMatrix==null
+&& isAffineMatrix(modelMatrix) && isAffineMatrix(viewMatrix)) {
+long matrixStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
+multiplyColumnMajor(gpuModelView,viewMatrix,modelMatrix);
+multiplyColumnMajor(gpuMvp,projection,gpuModelView);
+if (GPU_PROFILE_ENABLED) gpuProfileMatrixNanos+=System.nanoTime()-matrixStarted;
+if (drawGpuMeshWithShaderTransform(vertices,triangles,positions,textureCoords,colors,vertexCount,
+indices,strips,polygon,compositing,fog,tex,defaultColor,gpuModelView,gpuMvp)) return;
+if (GPU_PROFILE_ENABLED) gpuProfileFallbackMeshes++;
+disableGpuForCurrentFrame();
+}
+
+boolean gpuClipOnly=morph==null&&skinned==null&&normalMatrix==null
+&&!gpuFrameUnavailable
+&&gpuCompatible(vertices,triangles,polygon,compositing,fog,tex,vertexCount)
+&&(gpuFrameActive||M3GNativeGpu.isAvailable());
+boolean gpuVerticesPrepared=CPU_VERTEX_PREPACK_ENABLED&&gpuClipOnly&&gpuFrameActive;
+if (gpuVerticesPrepared) ensureGpuVertexCapacity(vertexCount);
 		float traceMinX=Float.POSITIVE_INFINITY, traceMinY=Float.POSITIVE_INFINITY,
 				traceMinZ=Float.POSITIVE_INFINITY, traceMaxX=Float.NEGATIVE_INFINITY,
 				traceMaxY=Float.NEGATIVE_INFINITY, traceMaxZ=Float.NEGATIVE_INFINITY;
 		float traceScreenMinX=Float.POSITIVE_INFINITY, traceScreenMinY=Float.POSITIVE_INFINITY,
 				traceScreenMaxX=Float.NEGATIVE_INFINITY, traceScreenMaxY=Float.NEGATIVE_INFINITY;
 		int traceVisibleVertices=0;
+long transformStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
 		for (int i = 0; i < vertexCount; i++) {
 float x=morph!=null?morph.positionForRendering(i,0):skinnedPositions!=null?skinnedPositions[i*3]:vertices.position(i,0);
 float y=morph!=null?morph.positionForRendering(i,1):skinnedPositions!=null?skinnedPositions[i*3+1]:vertices.position(i,1);
@@ -262,8 +598,19 @@ float z=morph!=null?morph.positionForRendering(i,2):skinnedPositions!=null?skinn
 							cx,cy,cz,vertices,colors,i,material,preparedLights);
 				}
 			}
-if (!project(transformed[i],cx,cy,cz,u,v,projection))
-				transformed[i].valid=false;
+if (!project(transformed[i],cx,cy,cz,u,v,projection,!gpuClipOnly)) {
+	transformed[i].valid=false;
+}
+if (gpuVerticesPrepared) {
+	Vertex vertex=transformed[i];
+	if (!Float.isFinite(vertex.clipX)||!Float.isFinite(vertex.clipY)
+			||!Float.isFinite(vertex.clipZ)||!Float.isFinite(vertex.clipW)
+			||!Float.isFinite(vertex.u)||!Float.isFinite(vertex.v)) {
+		gpuVerticesPrepared=false;
+	} else {
+		packGpuVertex(i,vertex,tex);
+	}
+}
 			if (traceSkinned && transformed[i].valid) {
 				traceVisibleVertices++;
 				traceScreenMinX=Math.min(traceScreenMinX,transformed[i].x);
@@ -272,20 +619,32 @@ if (!project(transformed[i],cx,cy,cz,u,v,projection))
 				traceScreenMaxY=Math.max(traceScreenMaxY,transformed[i].y);
 			}
 		}
+if (GPU_PROFILE_ENABLED) gpuProfileTransformNanos+=System.nanoTime()-transformStarted;
 		if (traceSkinned) traceTheFightSkinnedMesh(skinned,modelMatrix,vertexCount,
 				traceMinX,traceMinY,traceMinZ,traceMaxX,traceMaxY,traceMaxZ,
 				traceVisibleVertices,traceScreenMinX,traceScreenMinY,traceScreenMaxX,traceScreenMaxY);
 
-		if (indexCache.length < triangles.getIndexCount()) indexCache = new int[triangles.getIndexCount()];
-		int[] indices = indexCache;
-		triangles.getIndices(indices);
-		int[] strips = triangles instanceof TriangleStripArray
-				? ((TriangleStripArray)triangles).stripLengths() : new int[]{indices.length};
-		PolygonMode polygon = appearance == null ? null : appearance.getPolygonMode();
-		CompositingMode compositing = appearance == null ? null : appearance.getCompositingMode();
-		Fog fog = appearance == null ? null : appearance.getFog();
-TextureData tex = texture == null ? null : new TextureData(texture, vertices);
+if (gpuClipOnly) {
+if (beginGpuFrameIfNeeded()
+&& drawGpuMesh(triangles,transformed,vertexCount,indices,strips,polygon,compositing,fog,tex,
+		gpuVerticesPrepared)) {
+if (GPU_PROFILE_ENABLED) gpuProfileScreenProjectionSkipped++;
+return;
+}
+if (gpuFrameActive) {
+if (GPU_PROFILE_ENABLED) gpuProfileFallbackMeshes++;
+disableGpuForCurrentFrame();
+}
+restoreScreenProjection(transformed,vertexCount);
+} else if (beginGpuFrameIfNeeded()) {
+if (gpuCompatible(vertices,triangles,polygon,compositing,fog,tex,vertexCount)
+&& drawGpuMesh(triangles,transformed,vertexCount,indices,strips,polygon,compositing,fog,tex,
+		false)) return;
+if (GPU_PROFILE_ENABLED) gpuProfileFallbackMeshes++;
+disableGpuForCurrentFrame();
+}
 
+long rasterStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
 		int offset=0;
 		for (int stripLength : strips) {
 			for (int j=0;j+2<stripLength;j++) {
@@ -300,7 +659,314 @@ rasterizeClipped(a,b,c,polygon,compositing,fog,tex,defaultColor,near,far);
 			}
 			offset += stripLength;
 		}
+if (GPU_PROFILE_ENABLED) gpuProfileRasterNanos+=System.nanoTime()-rasterStarted;
 	}
+
+private boolean gpuCompatible(VertexBuffer vertices,IndexBuffer triangles,PolygonMode polygon,
+CompositingMode compositing,Fog fog,TextureData texture,int vertexCount)
+{
+if (!(target instanceof org.recompile.mobile.PlatformGraphics)
+|| vertexCount>65535) return false;
+if (polygon!=null&&(polygon.getCulling()!=PolygonMode.CULL_BACK
+&&polygon.getCulling()!=PolygonMode.CULL_FRONT
+&&polygon.getCulling()!=PolygonMode.CULL_NONE)) return false;
+if (polygon!=null&&polygon.getWinding()!=PolygonMode.WINDING_CCW
+&&polygon.getWinding()!=PolygonMode.WINDING_CW) return false;
+if (compositing!=null&&compositing.getBlending()!=CompositingMode.ALPHA
+&&compositing.getBlending()!=CompositingMode.ALPHA_ADD
+&&compositing.getBlending()!=CompositingMode.MODULATE
+&&compositing.getBlending()!=CompositingMode.MODULATE_X2
+&&compositing.getBlending()!=CompositingMode.REPLACE) return false;
+if (fog!=null&&fog.getMode()!=Fog.LINEAR&&fog.getMode()!=Fog.EXPONENTIAL) return false;
+if (fog!=null&&camera!=null&&camera.projectionType()!=Camera.PERSPECTIVE
+&&camera.projectionType()!=Camera.PARALLEL) return false;
+if (texture!=null&&(texture.image==null||texture.pixels==null||texture.image.isMutable()
+||texture.mipmapped||texture.width<=0||texture.height<=0
+||(texture.filter!=Texture2D.FILTER_LINEAR&&texture.filter!=Texture2D.FILTER_NEAREST)
+||(texture.blending!=Texture2D.FUNC_ADD&&texture.blending!=Texture2D.FUNC_BLEND
+&&texture.blending!=Texture2D.FUNC_DECAL&&texture.blending!=Texture2D.FUNC_MODULATE
+&&texture.blending!=Texture2D.FUNC_REPLACE))) return false;
+return true;
+}
+
+private static boolean isAffineMatrix(float[] matrix)
+{
+return Math.abs(matrix[3])<0.000001f&&Math.abs(matrix[7])<0.000001f
+&&Math.abs(matrix[11])<0.000001f&&Math.abs(matrix[15]-1f)<0.000001f;
+}
+
+static void multiplyColumnMajor(float[] result,float[] left,float[] right)
+{
+for (int column=0;column<4;column++) {
+int columnOffset=column*4;
+for (int row=0;row<4;row++) {
+result[columnOffset+row]=left[row]*right[columnOffset]
++left[4+row]*right[columnOffset+1]
++left[8+row]*right[columnOffset+2]
++left[12+row]*right[columnOffset+3];
+}
+}
+}
+
+private boolean drawGpuMeshWithShaderTransform(VertexBuffer vertices,IndexBuffer triangleBuffer,
+VertexArray positions,
+VertexArray textureCoords,VertexArray colors,int vertexCount,int[] indices,int[] strips,
+PolygonMode polygon,CompositingMode compositing,Fog fog,TextureData texture,int defaultColor,
+float[] modelView,float[] mvp)
+{
+long packStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
+int requiredWords=vertexCount*GPU_VERTEX_WORDS;
+if (gpuVertexData.length<requiredWords) gpuVertexData=new int[requiredWords];
+for (int i=0;i<vertexCount;i++) {
+float x=vertices.position(i,0),y=vertices.position(i,1),z=vertices.position(i,2);
+float u=textureCoords==null?0:vertices.texCoord(0,i,0);
+float v=textureCoords==null||textureCoords.getComponentCount()<2?0:vertices.texCoord(0,i,1);
+if (!Float.isFinite(x)||!Float.isFinite(y)||!Float.isFinite(z)
+||!Float.isFinite(u)||!Float.isFinite(v)) return false;
+if (texture!=null&&!texture.identityTransform) {
+float tu=texture.transform[0]*u+texture.transform[4]*v+texture.transform[12];
+float tv=texture.transform[1]*u+texture.transform[5]*v+texture.transform[13];
+float tw=texture.transform[3]*u+texture.transform[7]*v+texture.transform[15];
+if (Math.abs(tw)>0.000001f&&Math.abs(tw-1f)>0.000001f) {
+tu/=tw; tv/=tw;
+}
+u=tu; v=tv;
+}
+Vertex color=vertexCache[i];
+setVertexColor(color,vertices,i,colors,defaultColor);
+packGpuVertexWords(gpuVertexData,i,x,y,z,1f,u,v,
+color.r,color.g,color.b,color.a,0f);
+}
+
+GpuIndexData cachedIndices=cachedGpuTriangleIndices(
+triangleBuffer,vertexCount,indices,strips);
+int outputCount=cachedIndices==null
+? packGpuTriangleIndices(vertexCount,indices,strips)
+: cachedIndices.indexCount;
+short[] drawIndices=cachedIndices==null?gpuTriangleIndices:cachedIndices.indices;
+if (outputCount==0) return true;
+if (GPU_PROFILE_ENABLED) gpuProfileTriangles+=outputCount/3;
+fillGpuDrawState(polygon,compositing,fog,texture,true,modelView,mvp);
+int textureId=gpuTextureId(texture);
+if (GPU_PROFILE_ENABLED) gpuProfilePackNanos+=System.nanoTime()-packStarted;
+long submitStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
+boolean drawn=M3GNativeGpu.draw(gpuVertexData,requiredWords,drawIndices,outputCount,
+ textureId,texture==null?null:texture.pixels,gpuState,gpuParameters,GPU_PROFILE_ENABLED);
+if (GPU_PROFILE_ENABLED) {
+gpuProfileSubmitNanos+=System.nanoTime()-submitStarted;
+if (drawn) {
+gpuProfileGpuMeshes++;
+gpuProfileShaderMeshes++;
+}
+}
+return drawn;
+}
+
+private void ensureGpuVertexCapacity(int vertexCount)
+{
+int requiredWords=vertexCount*GPU_VERTEX_WORDS;
+if (gpuVertexData.length<requiredWords) gpuVertexData=new int[requiredWords];
+}
+
+private void packGpuVertex(int index,Vertex vertex,TextureData texture)
+{
+float u=vertex.u,v=vertex.v;
+if (texture!=null&&!texture.identityTransform) {
+float tu=texture.transform[0]*u+texture.transform[4]*v+texture.transform[12];
+float tv=texture.transform[1]*u+texture.transform[5]*v+texture.transform[13];
+float tw=texture.transform[3]*u+texture.transform[7]*v+texture.transform[15];
+if (Math.abs(tw)>0.000001f&&Math.abs(tw-1f)>0.000001f) {
+tu/=tw; tv/=tw;
+}
+u=tu; v=tv;
+}
+packGpuVertexWords(gpuVertexData,index,vertex.clipX,vertex.clipY,vertex.clipZ,
+vertex.clipW,u,v,vertex.r,vertex.g,vertex.b,vertex.a,vertex.distance);
+}
+
+static void packGpuVertexWords(int[] output,int vertexIndex,
+float x,float y,float z,float w,float u,float v,
+float red,float green,float blue,float alpha,float distance)
+{
+int at=vertexIndex*GPU_VERTEX_WORDS;
+output[at]=Float.floatToRawIntBits(x);
+output[at+1]=Float.floatToRawIntBits(y);
+output[at+2]=Float.floatToRawIntBits(z);
+output[at+3]=Float.floatToRawIntBits(w);
+output[at+4]=Float.floatToRawIntBits(u);
+output[at+5]=Float.floatToRawIntBits(v);
+output[at+6]=packNormalizedColorPair(red,green);
+output[at+7]=packNormalizedColorPair(blue,alpha);
+output[at+8]=Float.floatToRawIntBits(distance);
+}
+
+static int packNormalizedColorPair(float first,float second)
+{
+return normalizedColor16(first)|(normalizedColor16(second)<<16);
+}
+
+private static int normalizedColor16(float value)
+{
+if (!Float.isFinite(value)||value<=0f) return 0;
+if (value>=1f) return 65535;
+return Math.round(value*65535f);
+}
+
+private boolean drawGpuMesh(IndexBuffer triangleBuffer,Vertex[] transformed,int vertexCount,
+int[] indices,int[] strips,
+PolygonMode polygon,CompositingMode compositing,Fog fog,TextureData texture,
+boolean verticesPrepared)
+{
+long packStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
+int requiredWords=vertexCount*GPU_VERTEX_WORDS;
+if (!verticesPrepared) {
+ensureGpuVertexCapacity(vertexCount);
+for (int i=0;i<vertexCount;i++) {
+Vertex vertex=transformed[i];
+if (!Float.isFinite(vertex.clipX)||!Float.isFinite(vertex.clipY)
+||!Float.isFinite(vertex.clipZ)||!Float.isFinite(vertex.clipW)
+||!Float.isFinite(vertex.u)||!Float.isFinite(vertex.v)) return false;
+packGpuVertex(i,vertex,texture);
+}
+}
+
+GpuIndexData cachedIndices=cachedGpuTriangleIndices(
+triangleBuffer,vertexCount,indices,strips);
+int outputCount=cachedIndices==null
+? packGpuTriangleIndices(vertexCount,indices,strips)
+: cachedIndices.indexCount;
+short[] drawIndices=cachedIndices==null?gpuTriangleIndices:cachedIndices.indices;
+if (outputCount==0) return true;
+if (GPU_PROFILE_ENABLED) gpuProfileTriangles+=outputCount/3;
+fillGpuDrawState(polygon,compositing,fog,texture,false,null,null);
+int textureId=gpuTextureId(texture);
+if (GPU_PROFILE_ENABLED) gpuProfilePackNanos+=System.nanoTime()-packStarted;
+long submitStarted=GPU_PROFILE_ENABLED?System.nanoTime():0;
+boolean drawn=M3GNativeGpu.draw(gpuVertexData,requiredWords,drawIndices,outputCount,
+ textureId,texture==null?null:texture.pixels,gpuState,gpuParameters,GPU_PROFILE_ENABLED);
+if (GPU_PROFILE_ENABLED) {
+gpuProfileSubmitNanos+=System.nanoTime()-submitStarted;
+if (drawn) gpuProfileGpuMeshes++;
+}
+return drawn;
+}
+
+GpuIndexData cachedGpuTriangleIndices(IndexBuffer triangleBuffer,int vertexCount,
+int[] indices,int[] strips)
+{
+if (triangleBuffer == null || triangleBuffer.getClass() != TriangleStripArray.class)
+return null;
+GpuIndexData cached=gpuIndexCache.get(triangleBuffer);
+if (cached != null && cached.vertexCount == vertexCount) {
+if (GPU_PROFILE_ENABLED) gpuProfileIndexCacheHits++;
+return cached;
+}
+int required=0;
+for (int stripLength:strips) required+=Math.max(0,stripLength-2)*3;
+if (required > GPU_INDEX_CACHE_MAX_INDICES) return null;
+if (gpuIndexCache.size() >= GPU_INDEX_CACHE_MAX_ENTRIES) gpuIndexCache.clear();
+short[] packed=new short[required];
+int count=packTriangleIndices(vertexCount,indices,strips,packed);
+GpuIndexData created=new GpuIndexData(vertexCount,packed,count);
+gpuIndexCache.put(triangleBuffer,created);
+return created;
+}
+
+private int packGpuTriangleIndices(int vertexCount,int[] indices,int[] strips)
+{
+int required=0;
+for (int stripLength:strips) required+=Math.max(0,stripLength-2)*3;
+if (gpuTriangleIndices.length<required) gpuTriangleIndices=new short[required];
+return packTriangleIndices(vertexCount,indices,strips,gpuTriangleIndices);
+}
+
+static int packTriangleIndices(int vertexCount,int[] indices,int[] strips,short[] output)
+{
+int required=0;
+for (int stripLength:strips) required+=Math.max(0,stripLength-2)*3;
+if (output.length<required) throw new IllegalArgumentException("Index output buffer is too small");
+int outputCount=0,offset=0;
+for (int stripLength:strips) {
+for (int j=0;j+2<stripLength;j++) {
+int i0=indices[offset+j],i1=indices[offset+j+1],i2=indices[offset+j+2];
+if ((j&1)!=0) { int swap=i0; i0=i1; i1=swap; }
+if (i0<0||i1<0||i2<0||i0>=vertexCount||i1>=vertexCount||i2>=vertexCount)
+continue;
+output[outputCount++]=(short)i0;
+output[outputCount++]=(short)i1;
+output[outputCount++]=(short)i2;
+}
+offset+=stripLength;
+}
+return outputCount;
+}
+
+static final class GpuIndexData
+{
+final int vertexCount;
+final short[] indices;
+final int indexCount;
+
+GpuIndexData(int vertexCount,short[] indices,int indexCount)
+{
+this.vertexCount=vertexCount;
+this.indices=indices;
+this.indexCount=indexCount;
+}
+}
+
+private int gpuTextureId(TextureData texture)
+{
+if (texture==null) return 0;
+Integer cached=gpuTextureIds.get(texture.image);
+if (cached==null) {
+cached=Integer.valueOf(nextGpuTextureId++);
+gpuTextureIds.put(texture.image,cached);
+}
+return cached.intValue();
+}
+
+private void fillGpuDrawState(PolygonMode polygon,CompositingMode compositing,Fog fog,
+TextureData texture,boolean shaderTransform,float[] modelView,float[] mvp)
+{
+gpuState[0]=texture!=null&&texture.filter==Texture2D.FILTER_LINEAR?1:0;
+gpuState[1]=texture!=null&&texture.repeatS?1:0;
+gpuState[2]=texture!=null&&texture.repeatT?1:0;
+gpuState[3]=texture==null?Texture2D.FUNC_MODULATE:texture.blending;
+gpuState[4]=polygon==null?PolygonMode.CULL_NONE:polygon.getCulling();
+gpuState[5]=polygon==null?PolygonMode.WINDING_CCW:polygon.getWinding();
+gpuState[6]=depthBufferEnabled&&(compositing==null||compositing.isDepthTestEnabled())?1:0;
+gpuState[7]=depthBufferEnabled&&(compositing==null||compositing.isDepthWriteEnabled())
+&&(compositing==null||compositing.getBlending()!=CompositingMode.ALPHA_ADD)?1:0;
+gpuState[8]=compositing==null||compositing.isColorWriteEnabled()?1:0;
+gpuState[9]=compositing==null?CompositingMode.ALPHA:compositing.getBlending();
+gpuState[10]=compositing==null||compositing.isAlphaWriteEnabled()?1:0;
+gpuState[11]=fog==null?0:fog.getMode();
+gpuState[12]=texture==null?0:texture.width;
+gpuState[13]=texture==null?0:texture.height;
+gpuState[14]=camera==null?Camera.PERSPECTIVE:camera.projectionType();
+gpuState[15]=depthWriteSuppressed?1:0;
+gpuState[16]=shaderTransform?1:0;
+gpuParameters[0]=compositing==null?0f:Math.min(0.99f,compositing.getAlphaThreshold());
+gpuParameters[1]=texture==null?0:texture.blendR/255f;
+gpuParameters[2]=texture==null?0:texture.blendG/255f;
+gpuParameters[3]=texture==null?0:texture.blendB/255f;
+int fogColor=fog==null?0:fog.getColor();
+gpuParameters[4]=((fogColor>>>16)&255)/255f;
+gpuParameters[5]=((fogColor>>>8)&255)/255f;
+gpuParameters[6]=(fogColor&255)/255f;
+gpuParameters[7]=fog==null?0f:fog.getNearDistance();
+gpuParameters[8]=fog==null?1f:fog.getFarDistance();
+gpuParameters[9]=fog==null?0f:fog.getDensity();
+gpuParameters[10]=compositing==null?0f:compositing.getDepthOffsetFactor();
+gpuParameters[11]=compositing==null?0f:compositing.getDepthOffsetUnits();
+gpuParameters[12]=camera==null?0.1f:camera.nearPlane();
+gpuParameters[13]=camera==null?10000f:camera.farPlane();
+if (shaderTransform) {
+System.arraycopy(modelView,0,gpuParameters,14,16);
+System.arraycopy(mvp,0,gpuParameters,30,16);
+}
+}
 
 	private synchronized boolean shouldTraceTheFightSkinnedMesh(SkinnedMesh mesh)
 	{
@@ -355,6 +1021,7 @@ rasterizeClipped(a,b,c,polygon,compositing,fog,tex,defaultColor,near,far);
 	{
 		if (target == null) throw new IllegalStateException("No M3G target is bound");
 		if (sprite == null) throw new NullPointerException("sprite");
+if (gpuFrameActive) disableGpuForCurrentFrame();
 		Image2D image=sprite.getImage();
 		if (image==null) return;
 		Appearance appearance=sprite.getAppearance();
@@ -448,14 +1115,32 @@ int src=shade(u,v,1f,1f,1f,1f,texture,0f,fog,
 
 private boolean project(Vertex out,float x,float y,float z,float u,float v,float[] m)
 	{
+return project(out,x,y,z,u,v,m,true);
+}
+
+private boolean project(Vertex out,float x,float y,float z,float u,float v,float[] m,
+boolean screenProjection)
+{
 float cx=m[0]*x+m[4]*y+m[8]*z+m[12];
 float cy=m[1]*x+m[5]*y+m[9]*z+m[13];
 float cz=m[2]*x+m[6]*y+m[10]*z+m[14];
 float cw=m[3]*x+m[7]*y+m[11]*z+m[15];
 out.clipX=cx; out.clipY=cy; out.clipZ=cz; out.clipW=cw;
 out.distance=-z; out.u=u; out.v=v;
-out.valid=insideClipVolume(out);
-return out.valid&&projectToScreen(out);
+// The GPU clips these vertices when screenProjection is false. Rechecking
+// every clip plane on the CPU is only needed if we later fall back to software;
+// restoreScreenProjection performs that validation in that case.
+out.valid=!screenProjection||insideClipVolume(out);
+return out.valid&&(!screenProjection||projectToScreen(out));
+}
+
+private void restoreScreenProjection(Vertex[] transformed,int vertexCount)
+{
+for(int i=0;i<vertexCount;i++) {
+Vertex vertex=transformed[i];
+vertex.valid=insideClipVolume(vertex);
+if(vertex.valid&&!projectToScreen(vertex)) vertex.valid=false;
+}
 }
 
 private boolean insideClipVolume(Vertex vertex)
@@ -704,6 +1389,7 @@ if (Math.abs(area)<0.0001f) return;
 		// affine interpolation. Hardware GL still perspective-corrects these
 		// textured terrain triangles, so keep the software path perspective-correct.
 		boolean perspective=true;
+boolean textureLodNeeded=texture!=null&&texture.usesMipmaps();
 		boolean depthTest=depthBufferEnabled&&(mode==null||mode.isDepthTestEnabled());
 		boolean depthWrite=depthBufferEnabled&&(mode==null||mode.isDepthWriteEnabled());
 		boolean colorWrite=mode==null||mode.isColorWriteEnabled();
@@ -720,14 +1406,33 @@ if (Math.abs(area)<0.0001f) return;
 					+mode.getDepthOffsetUnits()*DEPTH_OFFSET_UNIT;
 		}
 		float invZDx=dwaDx*a.invZ+dwbDx*b.invZ+dwcDx*c.invZ;
-		float invZDy=dwaDy*a.invZ+dwbDy*b.invZ+dwcDy*c.invZ;
+float invZDy=textureLodNeeded?dwaDy*a.invZ+dwbDy*b.invZ+dwcDy*c.invZ:0f;
+float uNumeratorDx=textureLodNeeded
+?dwaDx*a.u*a.invZ+dwbDx*b.u*b.invZ+dwcDx*c.u*c.invZ:0f;
+float vNumeratorDx=textureLodNeeded
+?dwaDx*a.v*a.invZ+dwbDx*b.v*b.invZ+dwcDx*c.v*c.invZ:0f;
+float uNumeratorDy=textureLodNeeded
+?dwaDy*a.u*a.invZ+dwbDy*b.u*b.invZ+dwcDy*c.u*c.invZ:0f;
+float vNumeratorDy=textureLodNeeded
+?dwaDy*a.v*a.invZ+dwbDy*b.v*b.invZ+dwcDy*c.v*c.invZ:0f;
 		for (int py=minY;py<=maxY;py++) {
 			float y=py+0.5f;
+float waRow=0f,wbRow=0f;
 			for (int px=minX;px<=maxX;px++) {
-				float x=px+0.5f;
-				float wa=edge(b.x,b.y,c.x,c.y,x,y)*invArea;
-				float wb=edge(c.x,c.y,a.x,a.y,x,y)*invArea;
-				float wc=1f-wa-wb;
+float x=px+0.5f;
+if (px==minX||((px-minX)&1)==0) {
+waRow=edge(b.x,b.y,c.x,c.y,x,y)*invArea;
+wbRow=edge(c.x,c.y,a.x,a.y,x,y)*invArea;
+}
+float wa=waRow,wb=wbRow,wc=1f-wa-wb;
+waRow+=dwaDx;
+wbRow+=dwbDx;
+// Preserve exact edge coverage and interpolation where rounding matters.
+if (wa<0.02f||wb<0.02f||wc<0.02f) {
+wa=edge(b.x,b.y,c.x,c.y,x,y)*invArea;
+wb=edge(c.x,c.y,a.x,a.y,x,y)*invArea;
+wc=1f-wa-wb;
+}
 				if (wa<0||wb<0||wc<0) continue;
 				float invZ=wa*a.invZ+wb*b.invZ+wc*c.invZ;
 				if (invZ<=0) continue;
@@ -741,34 +1446,34 @@ if (depthTest&&fragmentDepth<depth[pos]) continue;
 				// evaluating the fog equation; it is not a perspective-correct
 				// varying like texture coordinates.
 				float fogDistance=wa*a.distance+wb*b.distance+wc*c.distance;
-				float u,v,red,green,blue,alpha,duDx,dvDx,duDy,dvDy;
+float u,v,red,green,blue,alpha,duDx=0f,dvDx=0f,duDy=0f,dvDy=0f;
 				if (perspective) {
 					float uNumerator=wa*a.u*a.invZ+wb*b.u*b.invZ+wc*c.u*c.invZ;
 					float vNumerator=wa*a.v*a.invZ+wb*b.v*b.invZ+wc*c.v*c.invZ;
 					u=uNumerator/invZ;
 					v=vNumerator/invZ;
-					float uNumeratorDx=dwaDx*a.u*a.invZ+dwbDx*b.u*b.invZ+dwcDx*c.u*c.invZ;
-					float vNumeratorDx=dwaDx*a.v*a.invZ+dwbDx*b.v*b.invZ+dwcDx*c.v*c.invZ;
-					float uNumeratorDy=dwaDy*a.u*a.invZ+dwbDy*b.u*b.invZ+dwcDy*c.u*c.invZ;
-					float vNumeratorDy=dwaDy*a.v*a.invZ+dwbDy*b.v*b.invZ+dwcDy*c.v*c.invZ;
+if (textureLodNeeded) {
 					duDx=(uNumeratorDx-u*invZDx)/invZ;
 					dvDx=(vNumeratorDx-v*invZDx)/invZ;
 					duDy=(uNumeratorDy-u*invZDy)/invZ;
 					dvDy=(vNumeratorDy-v*invZDy)/invZ;
+}
 					red=(wa*a.r*a.invZ+wb*b.r*b.invZ+wc*c.r*c.invZ)/invZ;
 					green=(wa*a.g*a.invZ+wb*b.g*b.invZ+wc*c.g*c.invZ)/invZ;
 					blue=(wa*a.b*a.invZ+wb*b.b*b.invZ+wc*c.b*c.invZ)/invZ;
 					alpha=(wa*a.a*a.invZ+wb*b.a*b.invZ+wc*c.a*c.invZ)/invZ;
 				} else {
 					u=wa*a.u+wb*b.u+wc*c.u; v=wa*a.v+wb*b.v+wc*c.v;
+if (textureLodNeeded) {
 					duDx=dwaDx*a.u+dwbDx*b.u+dwcDx*c.u;
 					dvDx=dwaDx*a.v+dwbDx*b.v+dwcDx*c.v;
 					duDy=dwaDy*a.u+dwbDy*b.u+dwcDy*c.u;
 					dvDy=dwaDy*a.v+dwbDy*b.v+dwcDy*c.v;
+}
 					red=wa*a.r+wb*b.r+wc*c.r; green=wa*a.g+wb*b.g+wc*c.g;
 					blue=wa*a.b+wb*b.b+wc*c.b; alpha=wa*a.a+wb*b.a+wc*c.a;
 				}
-float textureLod=texture==null?0f:texture.estimateLod(u,v,duDx,dvDx,duDy,dvDy);
+float textureLod=textureLodNeeded?texture.estimateLod(u,v,duDx,dvDx,duDy,dvDy):0f;
 int src=shade(u,v,red,green,blue,alpha,texture,textureLod,fog,fogDistance,near,far);
 				int sourceAlpha=(src>>>24)&255;
 if (!passesAlphaThreshold(sourceAlpha,threshold)) continue;
@@ -920,7 +1625,7 @@ int sample=tex.sample(u,v,textureLod);
 		return v<0?0:v>=size?size-1:v;
 	}
 
-	private static final class Vertex
+static final class Vertex
 	{
 float x,y,invZ,depth,distance,u,v,r,g,b,a,clipX,clipY,clipZ,clipW;
 		boolean valid;
@@ -975,6 +1680,7 @@ final Image2D image;
 final Image2D.Mipmaps mipmaps;
 final float[] transform=new float[16];
 final boolean inferredRepeatS,inferredRepeatT;
+final boolean repeatS,repeatT,identityTransform,mipmapped;
 		TextureData(Texture2D texture, VertexBuffer vertices)
 		{
 			Image2D image=texture.getImage();
@@ -984,6 +1690,7 @@ width=image==null?0:image.getWidth(); height=image==null?0:image.getHeight();
 			blending=texture.getBlending(); wrapS=texture.getWrappingS(); wrapT=texture.getWrappingT();
 filter=texture.getImageFilter(); levelFilter=texture.getLevelFilter();
 mipmaps=image!=null&&levelFilter!=Texture2D.FILTER_BASE_LEVEL?image.mipmaps():null;
+mipmapped=mipmaps!=null&&mipmaps.pixels.length>1;
 if (image!=null) {
 Transform textureTransform=new Transform();
 texture.getCompositeTransform(textureTransform);
@@ -996,6 +1703,9 @@ textureTransform.getColumnMajor(transform);
 					&&image.hasSeamlessHorizontalEdges()&&extendsPastUnitRange(vertices,0);
 			inferredRepeatT=wrapT==Texture2D.WRAP_CLAMP&&image!=null
 					&&image.hasSeamlessVerticalEdges()&&extendsPastUnitRange(vertices,1);
+repeatS=wrapS==Texture2D.WRAP_REPEAT||inferredRepeatS;
+repeatT=wrapT==Texture2D.WRAP_REPEAT||inferredRepeatT;
+identityTransform=isIdentity(transform);
 			int c=texture.getBlendColor(); blendR=(c>>>16)&255; blendG=(c>>>8)&255; blendB=c&255;
 		}
 		private boolean extendsPastUnitRange(VertexBuffer vertices,int axis)
@@ -1023,10 +1733,19 @@ this.image=image;
 			filter=Texture2D.FILTER_NEAREST;
 levelFilter=Texture2D.FILTER_BASE_LEVEL;
 mipmaps=null;
+mipmapped=false;
 identity(transform);
+identityTransform=true;
+repeatS=repeatT=false;
 			blendR=blendG=blendB=0;
 		}
-boolean usesMipmaps() { return mipmaps!=null&&mipmaps.pixels.length>1; }
+boolean usesMipmaps() { return mipmapped; }
+private static boolean isIdentity(float[] matrix)
+{
+for (int i=0;i<matrix.length;i++)
+if (matrix[i]!=(i%5==0?1f:0f)) return false;
+return true;
+}
 		float estimateLod(float u,float v,float duDx,float dvDx,float duDy,float dvDy)
 		{
 			if (!usesMipmaps()) return 0f;
@@ -1062,6 +1781,10 @@ float rhoY=(float)Math.sqrt(duDy*duDy*width*width+dvDy*dvDy*height*height);
 		}
 		int sample(float u,float v,float lod)
 		{
+if (identityTransform) {
+if (!mipmapped||lod<=0f) return sampleLevel(0,u,v);
+return sampleTransformed(u,v,lod);
+}
 			float transformedU=transform[0]*u+transform[4]*v+transform[12];
 			float transformedV=transform[1]*u+transform[5]*v+transform[13];
 			float transformedW=transform[3]*u+transform[7]*v+transform[15];
@@ -1073,8 +1796,8 @@ float rhoY=(float)Math.sqrt(duDy*duDy*width*width+dvDy*dvDy*height*height);
 		}
 		private int sampleTransformed(float u,float v,float lod)
 		{
-int levels=usesMipmaps()?mipmaps.pixels.length:1;
-if (!usesMipmaps()||lod<=0f) return sampleLevel(0,u,v);
+if (!mipmapped||lod<=0f) return sampleLevel(0,u,v);
+int levels=mipmaps.pixels.length;
 float selectedLevel=Math.min(levels-1,lod);
 if (levelFilter==Texture2D.FILTER_NEAREST)
 return sampleLevel(Math.min(levels-1,Math.max(0,Math.round(selectedLevel))),u,v);
@@ -1088,15 +1811,27 @@ private int sampleLevel(int level,float u,float v)
 int[] source=mipmaps==null?pixels:mipmaps.pixels[level];
 int levelWidth=mipmaps==null?width:mipmaps.widths[level];
 int levelHeight=mipmaps==null?height:mipmaps.heights[level];
- boolean repeatS=wrapS==Texture2D.WRAP_REPEAT||inferredRepeatS;
- boolean repeatT=wrapT==Texture2D.WRAP_REPEAT||inferredRepeatT;
-float tx=repeatS?u-(float)Math.floor(u):clamp(u);
-float ty=repeatT?v-(float)Math.floor(v):clamp(v);
+boolean repeatS=this.repeatS,repeatT=this.repeatT;
 // Image2D scanlines and M3G texture coordinates both start at the top.
 // Normalized coordinates address texel centers, not stretched image endpoints.
-			if (filter==Texture2D.FILTER_NEAREST)
-return source[wrap((int)Math.floor(ty*levelHeight),levelHeight,repeatT)*levelWidth
-+wrap((int)Math.floor(tx*levelWidth),levelWidth,repeatS)];
+if (filter==Texture2D.FILTER_NEAREST) {
+int sampleX,sampleY;
+if (repeatS&&u>=0f&&u<1f) sampleX=(int)Math.floor(u*levelWidth);
+else {
+float tx=repeatS?u-(float)Math.floor(u):clamp(u);
+sampleX=(int)Math.floor(tx*levelWidth);
+if (!repeatS) sampleX=wrap(sampleX,levelWidth,false);
+}
+if (repeatT&&v>=0f&&v<1f) sampleY=(int)Math.floor(v*levelHeight);
+else {
+float ty=repeatT?v-(float)Math.floor(v):clamp(v);
+sampleY=(int)Math.floor(ty*levelHeight);
+if (!repeatT) sampleY=wrap(sampleY,levelHeight,false);
+}
+return source[sampleY*levelWidth+sampleX];
+}
+float tx=repeatS?u-(float)Math.floor(u):clamp(u);
+float ty=repeatT?v-(float)Math.floor(v):clamp(v);
 float fx=tx*levelWidth-0.5f, fy=ty*levelHeight-0.5f;
 int x0=(int)Math.floor(fx),y0=(int)Math.floor(fy);
 			float dx=fx-x0,dy=fy-y0;

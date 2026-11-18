@@ -97,7 +97,7 @@ protected Canvas()
 
 		System.out.println("Create Canvas:"+width+", "+height);
 
-		platformImage = new PlatformImage(width, height);
+platformImage = new PlatformImage(width, height);
 	}
 
 	public int getGameAction(int keyCode)

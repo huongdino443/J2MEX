@@ -14,6 +14,8 @@
 typedef jint (*create_vm_fn)(JavaVM **, void **, void *);
 typedef struct { char *home, *work, *cache, *classpath, *log; char **args; int argc; int result; } launch_t;
 
+jboolean freej2me_register_m3g_gpu(JNIEnv *env);
+
 static void *load_library(launch_t *job, const char *relative) {
     char path[4096];
     snprintf(path, sizeof(path), "%s/lib/aarch64/%s", job->home, relative);
@@ -82,6 +84,8 @@ static void *run_vm(void *pointer) {
     jint result = create_vm(&vm, (void **)&env, &init);
     fprintf(stdout, "JNI_CreateJavaVM result=%d\n", result);
     if (result != JNI_OK) { job->result = result; return NULL; }
+    fprintf(stdout, "M3G GLES JNI registration=%s\n",
+            freej2me_register_m3g_gpu(env) ? "available" : "unavailable");
     jclass entry = (*env)->FindClass(env, "org/recompile/android/HeadlessMain");
     jclass string_class = (*env)->FindClass(env, "java/lang/String");
     if (!entry || !string_class) { (*env)->ExceptionDescribe(env); job->result = -13; return NULL; }

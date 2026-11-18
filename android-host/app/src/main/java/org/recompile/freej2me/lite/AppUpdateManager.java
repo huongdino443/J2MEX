@@ -6,6 +6,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -34,6 +38,10 @@ final class AppUpdateManager {
             "https://api.github.com/repos/huongdino443/J2MEX/releases?per_page=20";
     private static final String PREFS = "app_update";
     private static final String PENDING_INSTALL = "pending_install_path";
+    private static final String AUTOMATIC_REMINDER_AT = "automatic_reminder_at";
+    private static final String AUTOMATIC_LAST_CHECK_AT = "automatic_last_check_at";
+    private static final long AUTOMATIC_REMINDER_INTERVAL_MS = 12L * 60L * 60L * 1000L;
+    private static final long AUTOMATIC_CHECK_COOLDOWN_MS = 2L * 60L * 60L * 1000L;
     private static final int CONNECT_TIMEOUT_MS = 15_000;
     private static final int READ_TIMEOUT_MS = 30_000;
     private static final long MAX_APK_BYTES = 256L * 1024L * 1024L;
@@ -86,6 +94,42 @@ final class AppUpdateManager {
             String finalError = error;
             MAIN.post(() -> callback.onComplete(finalRelease, finalError));
         });
+    }
+
+    static boolean shouldCheckAutomatically(Context context) {
+        long now = System.currentTimeMillis();
+        SharedPreferences prefs = preferences(context);
+        if (prefs.getLong(AUTOMATIC_REMINDER_AT, 0L) > now
+                || prefs.getLong(AUTOMATIC_LAST_CHECK_AT, 0L)
+                        + AUTOMATIC_CHECK_COOLDOWN_MS > now) {
+            return false;
+        }
+        ConnectivityManager manager = (ConnectivityManager)
+                context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (manager == null) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Network network = manager.getActiveNetwork();
+            if (network == null) return false;
+            NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+            return capabilities != null
+                    && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        }
+        NetworkInfo active = manager.getActiveNetworkInfo();
+        return active != null && active.isConnected();
+    }
+
+    static void recordAutomaticCheck(Context context) {
+        preferences(context).edit()
+                .putLong(AUTOMATIC_LAST_CHECK_AT, System.currentTimeMillis())
+                .apply();
+    }
+
+    static void remindAutomaticUpdateLater(Context context) {
+        preferences(context).edit()
+                .putLong(AUTOMATIC_REMINDER_AT,
+                        System.currentTimeMillis() + AUTOMATIC_REMINDER_INTERVAL_MS)
+                .apply();
     }
 
     private static Release fetchLatest(Context context) throws Exception {

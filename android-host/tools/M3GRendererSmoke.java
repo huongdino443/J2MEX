@@ -97,6 +97,8 @@ graphics.render(root,null);
 graphics.releaseTarget();
 if ((target.pixels[32*64+32]&0xffffff)!=0x00ff00)
 throw new AssertionError("Translated camera/scene-graph mesh did not render at the center");
+// These null-model texture draws follow a translated scene-graph draw and
+// verify that reused model-matrix scratch storage is fully reset to identity.
 checkTextureTile(graphics,target,camera,background,1,1,Texture2D.FILTER_NEAREST,0xff0000);
 checkTextureTile(graphics,target,camera,background,1,3,Texture2D.FILTER_NEAREST,0x0000ff);
 checkTextureTile(graphics,target,camera,background,5,1,Texture2D.FILTER_LINEAR,0xff0000);
@@ -108,8 +110,51 @@ checkPerspectiveSamplingWithFastestHint(graphics,target,background);
 checkParallelCamera(graphics,target,background);
 checkFogUsesInterpolatedEyeDepth(graphics,target,background);
 if (args.length>0&&!args[0].isEmpty()) checkMinecraftFrustum(args[0]);
+checkRasterPrecision(graphics,target,camera,background);
+if (args.length>1&&!args[1].isEmpty()) {
+java.awt.image.BufferedImage capture=new java.awt.image.BufferedImage(
+target.width,target.height,java.awt.image.BufferedImage.TYPE_INT_ARGB);
+capture.setRGB(0,0,target.width,target.height,target.pixels,0,target.width);
+javax.imageio.ImageIO.write(capture,"png",new java.io.File(args[1]));
+}
 		System.out.println("M3GRendererSmoke: texture transforms, default repeat wrapping, mipmapping, seamless UV wrapping, frustum clipping, atlas sampling, eye-space fog, depth, camera and scene graph passed");
 	}
+
+private static void checkRasterPrecision(Graphics3D graphics,CaptureGraphics target,
+Camera camera,Background background)
+{
+java.util.Random random=new java.util.Random(0x4d334752L);
+Appearance appearance=new Appearance();
+appearance.setPolygonMode(noCull());
+graphics.bindTarget(target,true,0);
+graphics.clear(background);
+graphics.setCamera(camera,new Transform());
+for (int i=0;i<400;i++) {
+short[] positions=new short[9];
+for (int vertex=0;vertex<3;vertex++) {
+positions[vertex*3]=(short)(random.nextInt(81)-40);
+positions[vertex*3+1]=(short)(random.nextInt(81)-40);
+positions[vertex*3+2]=(short)(-2-random.nextInt(16));
+}
+byte[] colors=new byte[12];
+for (int vertex=0;vertex<3;vertex++) {
+colors[vertex*4]=(byte)random.nextInt(256);
+colors[vertex*4+1]=(byte)random.nextInt(256);
+colors[vertex*4+2]=(byte)random.nextInt(256);
+colors[vertex*4+3]=(byte)255;
+}
+VertexArray positionArray=new VertexArray(3,3,VertexArray.SHORT);
+positionArray.set(0,3,positions);
+VertexArray colorArray=new VertexArray(3,4,VertexArray.BYTE);
+colorArray.set(0,3,colors);
+VertexBuffer vertices=new VertexBuffer();
+vertices.setPositions(positionArray,1f,null);
+vertices.setColors(colorArray);
+graphics.render(vertices,new TriangleStripArray(new int[]{0,1,2},new int[]{3}),
+appearance,new Transform());
+}
+graphics.releaseTarget();
+}
 
 private static void checkDefaultTextureWrapping(Graphics3D graphics,CaptureGraphics target,
 Camera camera,Background background)

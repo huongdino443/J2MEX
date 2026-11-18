@@ -38,6 +38,9 @@ public final class HeadlessMain {
     private static final String TOUCH_INPUT_ARGUMENT = "--j2mex-touch-input=";
     private static final String UI_LANGUAGE_ARGUMENT = "--j2mex-ui-language=";
     private static final String MIDLET_CLASS_ARGUMENT = "--j2mex-midlet-class=";
+    private static final String RENDER_PROFILE_ARGUMENT = "--j2mex-render-profile=";
+    private static final String MEMORY_DIAGNOSTICS_ARGUMENT =
+            "--j2mex-memory-diagnostics=";
 
     private static boolean parseTouchInputEnabled(String value) {
         if ("true".equalsIgnoreCase(value)) return true;
@@ -64,6 +67,31 @@ public final class HeadlessMain {
         if (output == null) return;
         try { output.writeInt(type); output.writeUTF(text); output.flush(); }
         catch (IOException e) { running = false; }
+    }
+
+    private static void reportHotSpotMemory(String phase) {
+        Runtime memory = Runtime.getRuntime();
+        long committed = memory.totalMemory();
+        long used = committed - memory.freeMemory();
+        status(2, String.format(Locale.US,
+                "[hotspot-memory] phase=%s usedKb=%d committedKb=%d maxKb=%d",
+                phase, used / 1024L, committed / 1024L, memory.maxMemory() / 1024L));
+    }
+
+    private static void startHotSpotMemoryReporter() {
+        Thread reporter = new Thread(() -> {
+            while (running) {
+                try {
+                    Thread.sleep(60_000L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (running) reportHotSpotMemory("periodic");
+            }
+        }, "HotSpotMemoryReporter");
+        reporter.setDaemon(true);
+        reporter.start();
     }
 
     private static void memoryReply(int requestId, int operation,
@@ -116,8 +144,23 @@ public final class HeadlessMain {
         // --j2mex-midlet-class= flags.
         int launchArgumentCount = args.length;
         boolean touchInputEnabled = true;
+        boolean renderProfileEnabled = false;
+        boolean memoryDiagnosticsEnabled = false;
         String uiLanguage = "en";
         String selectedMidletClass = null;
+        if (launchArgumentCount > 10
+                && args[launchArgumentCount - 1].startsWith(MEMORY_DIAGNOSTICS_ARGUMENT)) {
+            memoryDiagnosticsEnabled = Boolean.parseBoolean(
+                    args[launchArgumentCount - 1]
+                            .substring(MEMORY_DIAGNOSTICS_ARGUMENT.length()));
+            launchArgumentCount--;
+        }
+        if (launchArgumentCount > 10
+                && args[launchArgumentCount - 1].startsWith(RENDER_PROFILE_ARGUMENT)) {
+            renderProfileEnabled = Boolean.parseBoolean(
+                    args[launchArgumentCount - 1].substring(RENDER_PROFILE_ARGUMENT.length()));
+            launchArgumentCount--;
+        }
         if (launchArgumentCount > 10
                 && args[launchArgumentCount - 1].startsWith(MIDLET_CLASS_ARGUMENT)) {
             selectedMidletClass = args[launchArgumentCount - 1]
@@ -143,6 +186,7 @@ public final class HeadlessMain {
             throw new IllegalArgumentException("Expected ten to thirteen launch arguments, "
                     + "optionally followed by touch input, app language, and MIDlet selection flags");
         System.setProperty("j2mex.ui.language", "vi".equalsIgnoreCase(uiLanguage) ? "vi" : "en");
+        System.setProperty("j2mex.render.profile", Boolean.toString(renderProfileEnabled));
         Canvas.setPointerInputEnabled(touchInputEnabled);
         String deviceLocale = applyDeviceLocale(args.length >= 9
                 ? args[8] : Locale.getDefault().toLanguageTag());
@@ -427,6 +471,10 @@ public final class HeadlessMain {
             }
             ManagedMemoryEditor memoryEditor = new ManagedMemoryEditor(platform.loader);
             platform.loader.logNinjaSchoolStartupDiagnostics();
+            if (memoryDiagnosticsEnabled) {
+                reportHotSpotMemory("post-jar-load");
+                startHotSpotMemoryReporter();
+            }
             status(2, "JAR loaded; invoking MIDlet.startApp()");
             new Thread(platform::runJar, "MIDletStarter").start();
             DataInputStream input = new DataInputStream(socket.getInputStream());

@@ -53,6 +53,7 @@ private float far=1;
 	private Camera camera;
 	private final Transform cameraTransform = new Transform();
 	private final M3GSoftwareRenderer renderer = new M3GSoftwareRenderer();
+	private final M3GFrustumCulling frustumCulling = new M3GFrustumCulling();
 	private final List<Light> lights = new ArrayList<Light>();
 	private final List<Transform> lightTransforms = new ArrayList<Transform>();
 	private final IdentityHashMap<Image2D,Boolean> partialAlphaImageCache =
@@ -87,6 +88,7 @@ public void bindTarget(java.lang.Object target) { bindTarget(target, true, 0); }
 	{
 		if (this.target != null) throw new IllegalStateException("An M3G target is already bound");
 renderer.bind(target,depthBuffer);
+		frustumCulling.beginTarget();
 		deferredDirectDraws.clear();
 this.target=target;
 		this.depthBuffer=depthBuffer;
@@ -137,6 +139,7 @@ if (target instanceof javax.microedition.lcdui.Graphics) {
 	{
 		renderDeferredDirectDraws();
 		renderer.release();
+		frustumCulling.endTarget();
 		target=null;
 	}
 
@@ -164,6 +167,7 @@ traceCityBloxxNode(node,parent,false);
 	public void render(VertexBuffer vertices, IndexBuffer triangles, Appearance appearance, Transform transform, int scope)
 	{
 		if (target==null) throw new IllegalStateException("No M3G target is bound");
+		if (frustumCulling.shouldCull(vertices,transform,camera,cameraTransform,vieww,viewh)) return;
 		renderer.setLights(contextLightSources());
 		CompositingMode mode=appearance==null?null:appearance.getCompositingMode();
 		if (mode!=null&&!mode.isDepthWriteEnabled()
@@ -182,7 +186,9 @@ traceCityBloxxNode(node,parent,false);
 			renderer.setViewport(call.viewportX,call.viewportY,call.viewportWidth,call.viewportHeight);
 			renderer.setCamera(call.camera,call.cameraTransform);
 			renderer.setLights(call.lights);
-			renderer.render(call.vertices,call.triangles,call.appearance,call.transform);
+			if (!frustumCulling.shouldCull(call.vertices,call.transform,call.camera,
+					call.cameraTransform,call.viewportWidth,call.viewportHeight))
+				renderer.render(call.vertices,call.triangles,call.appearance,call.transform);
 		}
 		deferredDirectDraws.clear();
 		renderer.setViewport(viewx,viewy,vieww,viewh);
@@ -501,7 +507,8 @@ viewx=x; viewy=y; vieww=width; viewh=height;
 			renderer.render((SkinnedMesh)mesh,mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
 		else if (mesh instanceof MorphingMesh)
 			renderer.render((MorphingMesh)mesh,mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
-		else
+		else if (!frustumCulling.shouldCull(mesh.getVertexBuffer(),transform,camera,
+				cameraTransform,vieww,viewh))
 			renderer.render(mesh.getVertexBuffer(),mesh.getIndexBuffer(submesh),mesh.getAppearance(submesh),transform);
 	}
 

@@ -40,6 +40,10 @@ public class VertexBuffer extends Object3D
 	private final Map<Integer, TexCoords> texCoords = new HashMap<Integer, TexCoords>();
 	private float positionScale = 1f, positionBiasX, positionBiasY, positionBiasZ;
 	private int defaultColor = 0xffffffff;
+private VertexArray cachedBoundsArray;
+private long cachedBoundsArrayVersion = -1;
+private float cachedBoundsScale, cachedBoundsBiasX, cachedBoundsBiasY, cachedBoundsBiasZ;
+private final float[] cachedPositionBounds = new float[6];
 
 	public VertexBuffer() {  }
 
@@ -87,6 +91,7 @@ public class VertexBuffer extends Object3D
 		positionBiasX = bias != null && bias.length > 0 ? bias[0] : 0;
 		positionBiasY = bias != null && bias.length > 1 ? bias[1] : 0;
 		positionBiasZ = bias != null && bias.length > 2 ? bias[2] : 0;
+cachedBoundsArray = null;
 	}
 
 	public void setTexCoords(int index, VertexArray coords, float scale, float[] bias)
@@ -103,6 +108,35 @@ public class VertexBuffer extends Object3D
 		float bias = component == 0 ? positionBiasX : component == 1 ? positionBiasY : positionBiasZ;
 		return positions.component(vertex, component) * positionScale + bias;
 	}
+
+boolean getPositionBounds(float[] destination)
+{
+if (destination == null || destination.length < 6)
+throw new IllegalArgumentException("Position bounds need six values");
+VertexArray array = positions;
+if (array == null || array.getVertexCount() == 0) return false;
+long arrayVersion = array.getVersion();
+if (cachedBoundsArray != array || cachedBoundsArrayVersion != arrayVersion
+|| cachedBoundsScale != positionScale || cachedBoundsBiasX != positionBiasX
+|| cachedBoundsBiasY != positionBiasY || cachedBoundsBiasZ != positionBiasZ) {
+float minX = Float.POSITIVE_INFINITY, minY = Float.POSITIVE_INFINITY;
+float minZ = Float.POSITIVE_INFINITY, maxX = Float.NEGATIVE_INFINITY;
+float maxY = Float.NEGATIVE_INFINITY, maxZ = Float.NEGATIVE_INFINITY;
+for (int i = 0; i < array.getVertexCount(); i++) {
+float x = position(i, 0), y = position(i, 1), z = position(i, 2);
+minX = Math.min(minX, x); minY = Math.min(minY, y); minZ = Math.min(minZ, z);
+maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
+}
+cachedPositionBounds[0] = minX; cachedPositionBounds[1] = minY;
+cachedPositionBounds[2] = minZ; cachedPositionBounds[3] = maxX;
+cachedPositionBounds[4] = maxY; cachedPositionBounds[5] = maxZ;
+cachedBoundsArray = array; cachedBoundsArrayVersion = arrayVersion;
+cachedBoundsScale = positionScale; cachedBoundsBiasX = positionBiasX;
+cachedBoundsBiasY = positionBiasY; cachedBoundsBiasZ = positionBiasZ;
+}
+System.arraycopy(cachedPositionBounds, 0, destination, 0, 6);
+return true;
+}
 
 	float color(int vertex, int component)
 	{

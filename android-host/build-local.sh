@@ -5,6 +5,12 @@ cd "$(dirname "$0")"
 : "${ANDROID_HOME:?Set ANDROID_HOME to the existing Android SDK}"
 export PATH="$JAVA_HOME/bin:$PATH"
 NDK="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.2.13676358}"
+M3G_GPU_DEPTH_DIAGNOSTIC="${M3G_GPU_DEPTH_DIAGNOSTIC:-0}"
+if [ "$M3G_GPU_DEPTH_DIAGNOSTIC" != "0" ] \
+    && [ "$M3G_GPU_DEPTH_DIAGNOSTIC" != "1" ]; then
+    echo "M3G_GPU_DEPTH_DIAGNOSTIC must be 0 or 1" >&2
+    exit 2
+fi
 rm -rf build/engine build/bridge
 mkdir -p build/{engine,bridge,sample,network-test,fileconnection-test,lcdui-test,lcdui-sample,lcdui-matrix,native-input-test,clone-owner-test,clone-jar-test,canvas-visibility-test,audio-test,framebuffer-test,font-mask-test,frame-compat-test,m3g-test,micro3d-test,game-key-test} app/src/main/{assets,jniLibs/arm64-v8a}
 python3 tools/test_prepare_runtime.py
@@ -20,6 +26,38 @@ fi
 find ../src -name '*.java' | sort > build/engine-sources.txt
 javac --release 8 -encoding UTF-8 -d build/engine @build/engine-sources.txt
 jar cf app/src/main/assets/engine.jar -C build/engine . -C ../resources .
+native_draw_descriptor=$("$JAVA_HOME/bin/javap" -classpath app/src/main/assets/engine.jar \
+    -private -s javax.microedition.m3g.M3GNativeGpu \
+    | awk '/nativeDraw\(/ { getline; sub(/^[[:space:]]*descriptor: /, ""); print; exit }')
+if [ -z "$native_draw_descriptor" ] \
+    || ! grep -Fq "\"nativeDraw\", \"$native_draw_descriptor\"" native/m3g_gpu.c; then
+    echo "JNI nativeDraw descriptor in native/m3g_gpu.c does not match M3GNativeGpu" >&2
+    exit 1
+fi
+native_profile_descriptor=$("$JAVA_HOME/bin/javap" -classpath app/src/main/assets/engine.jar \
+    -private -s javax.microedition.m3g.M3GNativeGpu \
+    | awk '/nativeTakeProfileStats\(/ { getline; sub(/^[[:space:]]*descriptor: /, ""); print; exit }')
+if [ -z "$native_profile_descriptor" ] \
+    || ! grep -Fq "\"nativeTakeProfileStats\", \"$native_profile_descriptor\"" native/m3g_gpu.c; then
+    echo "JNI nativeTakeProfileStats descriptor in native/m3g_gpu.c does not match M3GNativeGpu" >&2
+    exit 1
+fi
+native_read_descriptor=$("$JAVA_HOME/bin/javap" -classpath app/src/main/assets/engine.jar \
+    -private -s javax.microedition.m3g.M3GNativeGpu \
+    | awk '/nativeReadFrame\(/ { getline; sub(/^[[:space:]]*descriptor: /, ""); print; exit }')
+if [ -z "$native_read_descriptor" ] \
+        || ! grep -Fq "\"nativeReadFrame\", \"$native_read_descriptor\"" native/m3g_gpu.c; then
+    echo "JNI nativeReadFrame descriptor in native/m3g_gpu.c does not match M3GNativeGpu" >&2
+    exit 1
+fi
+native_end_descriptor=$("$JAVA_HOME/bin/javap" -classpath app/src/main/assets/engine.jar \
+    -private -s javax.microedition.m3g.M3GNativeGpu \
+    | awk '/nativeEndFrame\(/ { getline; sub(/^[[:space:]]*descriptor: /, ""); print; exit }')
+if [ -z "$native_end_descriptor" ] \
+    || ! grep -Fq "\"nativeEndFrame\", \"$native_end_descriptor\"" native/m3g_gpu.c; then
+    echo "JNI nativeEndFrame descriptor in native/m3g_gpu.c does not match M3GNativeGpu" >&2
+    exit 1
+fi
 mkdir -p build/manifest-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/manifest-test tools/MIDletManifestPropertySmoke.java
@@ -114,11 +152,14 @@ if [ -n "${BLUETOOTH_TEST_JAR:-}" ]; then
         BluetoothJarLinkageSmoke "$BLUETOOTH_TEST_JAR"
 fi
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
-    -d build/m3g-test tools/M3GRendererSmoke.java tools/M3GCompositingSmoke.java \
+    -d build/m3g-test tools/M3GRendererSmoke.java \
+    tools/M3GCompositingSmoke.java \
     tools/M3GSprite3DSmoke.java tools/M3GTransformableSemanticsSmoke.java \
     tools/M3GSkinnedMeshSmoke.java tools/M3GSplineInterpolationSmoke.java \
     tools/FigureLayoutSmoke.java \
-    tools/M3GVertexBufferNullPositionsSmoke.java tools/M3GLightingSmoke.java
+    tools/M3GVertexBufferNullPositionsSmoke.java tools/M3GLightingSmoke.java \
+     tools/M3GGpuPayloadSmoke.java \
+     tools/M3GFrustumCullingSmoke.java
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test \
     com.mascotcapsule.micro3d.v3.FigureLayoutSmoke
 mkdir -p build/micro3d-test
@@ -140,6 +181,10 @@ if [ -n "${MICRO3D_TEST_JAR:-}" ]; then
         com.mascotcapsule.micro3d.v3.Micro3DTextureSmoke "$MICRO3D_TEST_JAR"
 fi
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GRendererSmoke "${M3G_TEST_JAR:-}"
+java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test \
+    javax.microedition.m3g.M3GGpuPayloadSmoke
+java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test \
+    javax.microedition.m3g.M3GFrustumCullingSmoke
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GVertexBufferNullPositionsSmoke
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GSprite3DSmoke
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/m3g-test M3GTransformableSemanticsSmoke
@@ -418,12 +463,34 @@ javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/bridge-test/classes tools/NativeUiBridgeSmoke.java
 java -cp app/src/main/assets/engine.jar:build/bridge-test/classes NativeUiBridgeSmoke "$JAVA_HOME/bin/java"
 "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang" \
-    -std=c11 -D_GNU_SOURCE -O2 -shared -fPIC -Wall -Wextra -Wno-unused-parameter \
-    -Wl,-z,max-page-size=16384 native/host.c -ldl \
+    -std=c11 -D_GNU_SOURCE -DM3G_GPU_DEPTH_DIAGNOSTIC="$M3G_GPU_DEPTH_DIAGNOSTIC" \
+    -O2 -shared -fPIC -Wall -Wextra -Wno-unused-parameter \
+    -Wl,-z,max-page-size=16384 native/host.c native/m3g_gpu.c -ldl -lEGL -lGLESv2 \
     -o app/src/main/jniLibs/arm64-v8a/libfreej2me_host.so
 if [ ! -f app/src/main/assets/runtime.tar.xz ] \
     || [ tools/prepare_runtime.py -nt app/src/main/assets/runtime.tar.xz ] \
     || [ -n "$(find build/runtime -type f -newer app/src/main/assets/runtime.tar.xz -print -quit)" ]; then
     python3 tools/prepare_runtime.py build/runtime app/src/main/assets/runtime.tar.xz
 fi
-./gradlew --no-daemon --rerun-tasks :app:assembleDebug
+gradle_version_args=()
+if [ -n "${BUILD_VERSION_CODE:-}" ]; then
+    gradle_version_args+=("-PbuildVersionCode=${BUILD_VERSION_CODE}")
+fi
+if [ -n "${BUILD_VERSION_NAME:-}" ]; then
+    gradle_version_args+=("-PbuildVersionName=${BUILD_VERSION_NAME}")
+fi
+./gradlew --no-daemon clean --rerun-tasks :app:assembleDebug "${gradle_version_args[@]}"
+PACKAGED_NATIVE="$(mktemp)"
+trap 'rm -f "$PACKAGED_NATIVE"' EXIT
+MERGED_NATIVE="app/build/intermediates/merged_jni_libs/debug/mergeDebugJniLibFolders/out/arm64-v8a/libfreej2me_host.so"
+STRIPPED_NATIVE="app/build/intermediates/stripped_native_libs/debug/stripDebugDebugSymbols/out/lib/arm64-v8a/libfreej2me_host.so"
+if ! cmp -s app/src/main/jniLibs/arm64-v8a/libfreej2me_host.so "$MERGED_NATIVE"; then
+    echo "Gradle merged a stale native renderer library" >&2
+    exit 1
+fi
+unzip -p app/build/outputs/apk/debug/app-debug.apk \
+    lib/arm64-v8a/libfreej2me_host.so > "$PACKAGED_NATIVE"
+if ! cmp -s "$STRIPPED_NATIVE" "$PACKAGED_NATIVE"; then
+    echo "Packaged native renderer differs from Gradle's stripped output" >&2
+    exit 1
+fi

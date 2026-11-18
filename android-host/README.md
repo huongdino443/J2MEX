@@ -76,8 +76,8 @@ this directory with an incremented version code and the release version name:
 
 ```sh
 ./gradlew :app:assembleRelease \
-  -PbuildVersionCode=263 \
-  -PbuildVersionName=0.1.0
+  -PbuildVersionCode=407 \
+  -PbuildVersionName=0.1.3
 ```
 
 The release keystore is not included in this repository. A release build must

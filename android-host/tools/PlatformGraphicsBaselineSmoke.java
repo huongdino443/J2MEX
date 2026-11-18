@@ -34,6 +34,19 @@ public final class PlatformGraphicsBaselineSmoke {
         require(PlatformGraphics.androidStringBaseline(y, ascent, height, ascentOffset,
                         Graphics.LEFT | Graphics.BASELINE) == y - ascentOffset,
                 "Android BASELINE anchor must retain Turbo's ascent correction");
-        System.out.println("PlatformGraphicsBaselineSmoke: Android ascent correction respects TOP, VCENTER and BASELINE");
+        require(PlatformGraphics.androidStringBaseline(y, ascent, height, ascentOffset,
+                        Graphics.LEFT | Graphics.BASELINE, true) == y,
+                "System-font BASELINE rendering must not subtract ascent offset");
+        require(PlatformGraphics.androidStringBaseline(y, ascent, height, ascentOffset,
+                        Graphics.LEFT | Graphics.TOP, true)
+                        == PlatformGraphics.stringBaseline(y, ascent, height,
+                                Graphics.LEFT | Graphics.TOP),
+                "System-font fix must leave TOP-anchored text unchanged");
+        require(PlatformGraphics.androidStringBaseline(y, ascent, height, ascentOffset,
+                        Graphics.LEFT | Graphics.VCENTER, true)
+                        == PlatformGraphics.stringBaseline(y, ascent, height,
+                                Graphics.LEFT | Graphics.VCENTER),
+                "System-font fix must leave VCENTER-anchored text unchanged");
+        System.out.println("PlatformGraphicsBaselineSmoke: Android font anchor calculations passed");
     }
 }

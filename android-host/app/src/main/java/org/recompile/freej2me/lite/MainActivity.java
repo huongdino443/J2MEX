@@ -1,6 +1,7 @@
 package org.recompile.freej2me.lite;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.Manifest;
 import android.content.Intent;
@@ -117,7 +118,10 @@ import java.util.concurrent.Executors;
     private TextView updateDescription;
     private TextView updateAction;
     private AppUpdateManager.Release availableUpdate;
+    private AppUpdateManager.Release pendingAutomaticUpdate;
     private boolean checkingForUpdate;
+    private boolean automaticUpdateCheckRunning;
+    private boolean activityResumed;
     private View addNavigationItem;
     private View navigationGlow;
     private ImageView navigationBackdrop;
@@ -159,6 +163,7 @@ import java.util.concurrent.Executors;
     private String restoredSearchQuery;
     private boolean headerOverlayMode;
     private Uri pendingExternalGameUri;
+    private boolean launcherRuntimeReturnPending;
 
     static int dp(Activity activity, int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
@@ -183,6 +188,7 @@ import java.util.concurrent.Executors;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        launcherRuntimeReturnPending = isLauncherIntent(getIntent());
         activeInstance = this;
         if (state != null) {
             int savedScreen = state.getInt("main.currentScreen", TAB_HOME);
@@ -203,6 +209,7 @@ import java.util.concurrent.Executors;
         window.setStatusBarColor(COLOR_BACKGROUND);
         window.setNavigationBarColor(COLOR_BACKGROUND);
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        CutoutSafeArea.configureWindow(window);
         if (hasStorageAccess()) {
             initializeApplicationInterface();
         } else {
@@ -256,8 +263,15 @@ import java.util.concurrent.Executors;
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        launcherRuntimeReturnPending = isLauncherIntent(intent);
         captureExternalGameOpen(intent);
         processPendingExternalGameOpen();
+    }
+
+    private static boolean isLauncherIntent(Intent intent) {
+        return intent != null
+                && Intent.ACTION_MAIN.equals(intent.getAction())
+                && intent.hasCategory(Intent.CATEGORY_LAUNCHER);
     }
 
     private void captureExternalGameOpen(Intent intent) {
@@ -300,6 +314,7 @@ import java.util.concurrent.Executors;
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(COLOR_BACKGROUND);
+        CutoutSafeArea.install(root);
 
         header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -904,11 +919,6 @@ import java.util.concurrent.Executors;
                 AppPreferences.statusBarVisible(this), AppPreferences::setStatusBarVisible);
 
         addMoreSwitch(preferencesCard,
-                vietnamese ? "Giữ hướng xoay hiện tại" : "Lock current orientation",
-                vietnamese ? "Khóa hướng màn hình theo chiều đang dùng khi mở game."
-                        : "Lock the screen to its current orientation when a game starts.",
-                AppPreferences.orientationLocked(this), AppPreferences::setOrientationLocked);
-        addMoreSwitch(preferencesCard,
                 vietnamese ? "Ghi log để gỡ lỗi" : "Diagnostic logging",
                 vietnamese ? "Cho phép ghi log runtime và bật chức năng lưu log trong menu cạnh."
                         : "Write runtime logs and enable log export in the edge menu.",
@@ -1463,6 +1473,11 @@ import java.util.concurrent.Executors;
     }
 
     private PopupWindow showModalPopup(View panel, boolean needsInputMethod) {
+        return showModalPopup(panel, needsInputMethod, true);
+    }
+
+    private PopupWindow showModalPopup(View panel, boolean needsInputMethod,
+            boolean dismissOnOutside) {
         if (activeStyledPopup != null) activeStyledPopup.dismiss();
         FrameLayout contentRoot = findViewById(android.R.id.content);
         View dim = new View(this);
@@ -1477,11 +1492,11 @@ import java.util.concurrent.Executors;
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setElevation(dp(this, 10));
-        popup.setOutsideTouchable(true);
+        popup.setOutsideTouchable(dismissOnOutside);
         popup.setInputMethodMode(needsInputMethod
                 ? PopupWindow.INPUT_METHOD_NEEDED : PopupWindow.INPUT_METHOD_NOT_NEEDED);
         popup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        dim.setOnClickListener(view -> popup.dismiss());
+        if (dismissOnOutside) dim.setOnClickListener(view -> popup.dismiss());
         activeStyledPopup = popup;
         activePopupDim = dim;
         popup.setOnDismissListener(() -> {
@@ -2268,6 +2283,7 @@ import java.util.concurrent.Executors;
 
     private void showInfoPopup(String title, String message, boolean scrollable) {
         LinearLayout panel = collectionModalPanel(title);
+        panel.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 8));
         TextView body = new TextView(this);
         body.setText(AppLocalization.text(this, message));
         body.setTextColor(COLOR_TEXT);
@@ -2285,12 +2301,14 @@ import java.util.concurrent.Executors;
             scroll.setVerticalScrollBarEnabled(false);
             scroll.addView(body, new ScrollView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            int scrollHeight = Math.min(dp(this, 360),
+                    getResources().getDisplayMetrics().heightPixels / 2);
             LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 360));
+                    ViewGroup.LayoutParams.MATCH_PARENT, scrollHeight);
             scrollParams.topMargin = dp(this, 12);
             panel.addView(scroll, scrollParams);
             if (currentScreen == TAB_MORE) {
-                ScrollCueOverlay.install(this, scroll, 8);
+                ScrollCueOverlay.install(this, scroll, 10);
             }
         } else {
             body.setPadding(0, dp(this, 12), 0, 0);
@@ -2300,11 +2318,14 @@ import java.util.concurrent.Executors;
         TextView close = styledActionButton(
                 "Tiếng Việt".equals(AppPreferences.automaticLanguage(this)) ? "Đóng" : "Close",
                 true);
+        close.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        close.setPadding(dp(this, 4), dp(this, 4), dp(this, 4), dp(this, 4));
+        close.setMinHeight(dp(this, 44));
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        closeParams.topMargin = dp(this, 16);
+        closeParams.topMargin = dp(this, 6);
         actions.addView(close, closeParams);
         panel.addView(actions, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2525,7 +2546,9 @@ import java.util.concurrent.Executors;
                 runOnUiThread(() -> {
                     setBusy(false);
                     if (isFinishing() || isDestroyed()) return;
-                    Intent intent = new Intent(this, RuntimeActivity.class);
+                    Class<? extends RuntimeActivity> runtimeActivity =
+                            runtimeActivityFor(selected);
+                    Intent intent = new Intent(this, runtimeActivity);
                     intent.putExtra("jar", selected.getAbsolutePath());
                     intent.putExtra("title", name);
                     AppPreferences.addRuntimeSnapshotExtras(this, intent);
@@ -2554,6 +2577,46 @@ import java.util.concurrent.Executors;
         } else {
             openGameSettings(game.jar, game.title, true);
         }
+    }
+
+    private Class<? extends RuntimeActivity> runtimeActivityFor(File jar) {
+        int orientationMode = GameSettings.load(this, jar).orientationMode;
+        if (orientationMode == GameSettings.ORIENTATION_LANDSCAPE)
+            return RuntimeLandscapeActivity.class;
+        if (orientationMode == GameSettings.ORIENTATION_PORTRAIT)
+            return RuntimePortraitActivity.class;
+        return RuntimeActivity.class;
+    }
+
+    private boolean returnToActiveRuntime() {
+        int runtimePid = SessionLog.activeRuntimeProcessId(getFilesDir());
+        if (runtimePid <= 0) return false;
+        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        if (manager == null) return false;
+        List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
+        if (processes == null) return false;
+        String expectedProcessName = getPackageName() + ":runtime";
+        boolean processAlive = false;
+        for (ActivityManager.RunningAppProcessInfo process : processes) {
+            if (process.pid == runtimePid && expectedProcessName.equals(process.processName)) {
+                processAlive = true;
+                break;
+            }
+        }
+        if (!processAlive) return false;
+
+        String recentPath = getPreferences(0).getString("recentPath", null);
+        if (recentPath == null) return false;
+        File jar = new File(recentPath);
+        if (!jar.isFile()) return false;
+        String title = getPreferences(0).getString("recentName", jar.getName());
+        Intent intent = new Intent(this, runtimeActivityFor(jar));
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("jar", jar.getAbsolutePath());
+        intent.putExtra("title", title);
+        AppPreferences.addRuntimeSnapshotExtras(this, intent);
+        startActivity(intent);
+        return true;
     }
 
     private void openGameSettings(File jar, String name, boolean launchAfterSave) {
@@ -2755,6 +2818,11 @@ import java.util.concurrent.Executors;
 
     @Override protected void onResume() {
         super.onResume();
+        activityResumed = true;
+        if (launcherRuntimeReturnPending) {
+            launcherRuntimeReturnPending = false;
+            if (returnToActiveRuntime()) return;
+        }
         AppUpdateManager.resumePendingInstall(this);
         completeStorageSettingsReturn();
         processPendingExternalGameOpen();
@@ -2762,6 +2830,47 @@ import java.util.concurrent.Executors;
             if (currentScreen == TAB_MORE) renderMore(contentScroll.getScrollY());
             refreshLibrary();
         }
+        if (pendingAutomaticUpdate != null && interfaceInitialized
+                && pendingExternalGameUri == null && !checkingForUpdate) {
+            AppUpdateManager.Release release = pendingAutomaticUpdate;
+            pendingAutomaticUpdate = null;
+            showAutomaticUpdatePrompt(release);
+        } else {
+            checkForAutomaticUpdateOnStartup();
+        }
+    }
+
+    @Override protected void onPause() {
+        activityResumed = false;
+        super.onPause();
+    }
+
+    private void checkForAutomaticUpdateOnStartup() {
+        if (automaticUpdateCheckRunning || !interfaceInitialized || pendingExternalGameUri != null
+                || checkingForUpdate) return;
+        if (!AppUpdateManager.shouldCheckAutomatically(this)) return;
+        automaticUpdateCheckRunning = true;
+        AppUpdateManager.check(this, (release, error) -> {
+            automaticUpdateCheckRunning = false;
+            if (error != null || isFinishing() || isDestroyed() || checkingForUpdate) return;
+            if (release == null) {
+                AppUpdateManager.recordAutomaticCheck(this);
+                return;
+            }
+            if (!activityResumed) {
+                pendingAutomaticUpdate = release;
+                return;
+            }
+            showAutomaticUpdatePrompt(release);
+        });
+    }
+
+    private void showAutomaticUpdatePrompt(AppUpdateManager.Release release) {
+        availableUpdate = release;
+        refreshUpdateRow();
+        refreshUpdateAction();
+        AppUpdateManager.recordAutomaticCheck(this);
+        AppUpdateUi.showAutomaticPrompt(this, release);
     }
 
     private void completeStorageSettingsReturn() {
