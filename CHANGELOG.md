@@ -2,15 +2,12 @@
 
 ## 0.1.3
 
-The latest update for the J2MEX app.
-
-### What changed
-
 #### Display and controls
 
 - Add a per-game orientation choice for system, portrait, or landscape and apply it before the game starts.
 - Respect display cutout safe areas across the launcher, settings, file manager, gamepad, and in-game overlays.
 - Improve virtual gamepad layout positioning and landscape LCDUI form behavior while the Android keyboard is open.
+- Keep launcher search navigation and file-manager actions visible above the Android keyboard.
 
 #### Runtime and graphics
 

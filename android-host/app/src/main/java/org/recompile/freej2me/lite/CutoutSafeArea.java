@@ -58,7 +58,20 @@ final class CutoutSafeArea {
             int left = baseLeft + safeLeft;
             int top = baseTop + contentTop;
             int right = baseRight + safeRight;
-            int bottom = baseBottom + safeBottom;
+            int imeBottom = 0;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (insets.isVisible(WindowInsets.Type.ime()))
+                    imeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+            } else {
+                int systemBottom = Math.max(0, insets.getSystemWindowInsetBottom());
+                int stableBottom = Math.max(0, insets.getStableInsetBottom());
+                int possibleImeBottom = systemBottom - stableBottom;
+                int minimumImeInset = Math.round(
+                        80f * contentRoot.getResources().getDisplayMetrics().density);
+                if (possibleImeBottom > minimumImeInset)
+                    imeBottom = possibleImeBottom;
+            }
+            int bottom = baseBottom + Math.max(safeBottom, imeBottom);
             if (view.getPaddingLeft() != left || view.getPaddingTop() != top
                     || view.getPaddingRight() != right || view.getPaddingBottom() != bottom) {
                 view.setPadding(left, top, right, bottom);

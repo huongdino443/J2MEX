@@ -76,7 +76,7 @@ this directory with an incremented version code and the release version name:
 
 ```sh
 ./gradlew :app:assembleRelease \
-  -PbuildVersionCode=407 \
+  -PbuildVersionCode=408 \
   -PbuildVersionName=0.1.3
 ```
 
