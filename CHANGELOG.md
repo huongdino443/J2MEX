@@ -4,22 +4,22 @@
 
 The latest update for the J2MEX app.
 
-What changed
+### What changed
 
-### Display and controls
+#### Display and controls
 
 - Add a per-game orientation choice for system, portrait, or landscape and apply it before the game starts.
 - Respect display cutout safe areas across the launcher, settings, file manager, gamepad, and in-game overlays.
 - Improve virtual gamepad layout positioning and landscape LCDUI form behavior while the Android keyboard is open.
 
-### Runtime and graphics
+#### Runtime and graphics
 
 - Improve returning to an active game from its foreground notification or the Android launcher.
 - Improve runtime logging and session lifecycle handling.
 - Add conservative M3G frustum culling and an optional GLES2 rendering path with the Java renderer as fallback.
 - Improve M3G rendering compatibility while retaining the validated Java rendering path.
 
-### Updates
+#### Updates
 
 - Check for new releases automatically when the app opens online, while retaining manual checks.
 - Style update prompts and progress screens to match J2MEX, with scrollable release notes and a two-hour automatic-check interval.
