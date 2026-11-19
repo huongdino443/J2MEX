@@ -9,8 +9,13 @@ import java.nio.charset.StandardCharsets;
 final class HostFiles {
     static final int EXPORT_LOG = 72;
     private static final String INSTALL_VERSION = "v6-runtime-trim-1";
-    private static final String HOST_ASSETS_VERSION = "v108-j2mex-0.1.3";
-    static File log(Activity activity) { return new File(activity.getFilesDir(), "latestlog.txt"); }
+    private static final String HOST_ASSETS_VERSION = "v110-j2mex-0.1.0-hotspot-heap";
+    static File log(Activity activity) {
+        RuntimeSessionStore.Session active = RuntimeSessionStore.foreground(activity);
+        File root = active == null ? activity.getFilesDir()
+                : SessionLog.sessionDirectory(activity.getFilesDir(), active.id);
+        return new File(root, "latestlog.txt");
+    }
     private static boolean markerMatches(File marker, String expected) throws IOException {
         return marker.isFile() && new String(readFile(marker), StandardCharsets.UTF_8).equals(expected);
     }
@@ -149,7 +154,9 @@ final class HostFiles {
             File gamesRoot = null;
             try { gamesRoot = GameStorage.gamesDirectory(activity); }
             catch (IOException ignored) { }
-            SessionLog.export(activity.getFilesDir(), gamesRoot, output);
+            File logRoot = log(activity).getParentFile();
+            SessionLog.export(logRoot == null ? activity.getFilesDir() : logRoot,
+                    gamesRoot, output);
         }
     }
     static String readAsset(Activity activity, String name) throws IOException {

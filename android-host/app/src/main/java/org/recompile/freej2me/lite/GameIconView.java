@@ -19,6 +19,7 @@ final class GameIconView extends View {
     private Bitmap bitmap;
     private String title = "MIDlet";
     private boolean fullBleedSquare;
+    private boolean sessionIconStyle;
     private int artworkSurface = SURFACE;
 
     GameIconView(Context context) {
@@ -36,11 +37,18 @@ final class GameIconView extends View {
         invalidate();
     }
 
+    void setSessionArtwork(Bitmap artwork, String gameTitle) {
+        sessionIconStyle = true;
+        setArtwork(artwork, gameTitle);
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float inset = dp(1);
         RectF bounds = new RectF(inset, inset, getWidth() - inset, getHeight() - inset);
-        float radius = dp(14);
+        float radius = sessionIconStyle
+                ? Math.min(bounds.width(), bounds.height()) * 0.22f
+                : dp(14);
         Path clip = new Path();
         clip.addRoundRect(bounds, radius, radius, Path.Direction.CW);
         canvas.save();
@@ -51,7 +59,10 @@ final class GameIconView extends View {
         canvas.drawRect(bounds, paint);
         if (bitmap != null && !bitmap.isRecycled()) {
             float scale;
-            if (fullBleedSquare) {
+            if (sessionIconStyle) {
+                scale = Math.max(bounds.width() / bitmap.getWidth(),
+                        bounds.height() / bitmap.getHeight());
+            } else if (fullBleedSquare) {
                 scale = Math.max(bounds.width() / bitmap.getWidth(),
                         bounds.height() / bitmap.getHeight());
             } else {

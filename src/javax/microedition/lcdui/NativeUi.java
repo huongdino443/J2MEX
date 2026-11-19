@@ -12,6 +12,7 @@ public final class NativeUi {
     public interface Presenter { void show(NativeScreen screen); }
     private static volatile Presenter presenter;
     private static volatile Displayable active;
+    private static volatile boolean presentationEnabled = true;
     private static volatile int epoch;
     private static int nextId;
     private static long revision, acknowledgedSequence;
@@ -20,6 +21,14 @@ public final class NativeUi {
 
     private NativeUi() { }
     public static void setPresenter(Presenter value) { presenter = value; }
+    public static synchronized void setPresentationEnabled(boolean enabled) {
+        if (presentationEnabled == enabled) return;
+        presentationEnabled = enabled;
+        if (!enabled || active == null || presenter == null) return;
+        Displayable current = active;
+        transition(current);
+        if (supports(current)) present(current);
+    }
     public static boolean usesNativeTextBox(Displayable screen) {
         return presenter != null && screen instanceof TextBox
                 && ((((TextBox)screen).getConstraints() & TextField.UNEDITABLE) == 0);
@@ -30,6 +39,7 @@ public final class NativeUi {
     public static synchronized void transition(Displayable next) {
         if (presenter == null) return;
         active = next; epoch++; ids.clear(); acknowledgedSequence = 0;
+        if (!presentationEnabled) return;
         if (!supports(next)) {
             NativeScreen screen = new NativeScreen();
             screen.epoch = epoch; screen.revision = ++revision;
@@ -38,6 +48,7 @@ public final class NativeUi {
     }
     public static synchronized boolean present(Displayable current) {
         if (!supports(current)) return false;
+        if (!presentationEnabled) return true;
         if (!current.isShown() || Boolean.TRUE.equals(applying.get())) return true;
         if (active != current) transition(current);
         NativeScreen screen = new NativeScreen();
@@ -97,6 +108,7 @@ public final class NativeUi {
     }
     public static synchronized boolean presentCommands(Displayable target) {
         if (presenter == null || !target.isShown()) return false;
+        if (!presentationEnabled) return true;
         if (active != target) transition(target);
         NativeScreen screen = new NativeScreen();
         screen.epoch = epoch; screen.revision = ++revision;
@@ -110,6 +122,7 @@ public final class NativeUi {
     }
     public static synchronized void closeCommands(Displayable target) {
         if (presenter == null || active != target) return;
+        if (!presentationEnabled) return;
         if (supports(target)) { present(target); return; }
         NativeScreen screen = new NativeScreen();
         screen.epoch = epoch; screen.revision = ++revision;

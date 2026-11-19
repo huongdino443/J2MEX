@@ -19,6 +19,7 @@ final class MidiToneSynth {
     private AudioTrack track;
     private Thread worker;
     private volatile boolean stopping;
+    private volatile boolean outputEnabled = true;
 
     synchronized void noteOn(int owner, int channel, int note, int velocity) {
         if (note < 0 || note > 127 || velocity <= 0) return;
@@ -46,9 +47,20 @@ final class MidiToneSynth {
         ownerVolumes.put(owner, Math.max(0.0f, Math.min(1.0f, volume)));
     }
 
+    synchronized void setOutputEnabled(boolean enabled) {
+        outputEnabled = enabled;
+        if (enabled) notifyAll();
+        else if (track != null) {
+            try { track.pause(); } catch (RuntimeException ignored) { }
+        }
+        if (enabled && !voices.isEmpty() && (worker == null || !worker.isAlive()))
+            startWorker();
+    }
+
     synchronized void close() {
         stopping = true;
         voices.clear();
+        notifyAll();
     }
 
     synchronized void stopOwner(int owner) {
@@ -106,6 +118,18 @@ final class MidiToneSynth {
             while (!stopping && outputTrack != null) {
                 int active;
                 synchronized (this) {
+                    while (!outputEnabled && !stopping) {
+                        try { wait(); }
+                        catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            stopping = true;
+                        }
+                    }
+                    if (stopping) break;
+                    try {
+                        if (outputTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING)
+                            outputTrack.play();
+                    } catch (RuntimeException ignored) { }
                     active = renderBlock(output);
                 }
                 if (active == 0) {

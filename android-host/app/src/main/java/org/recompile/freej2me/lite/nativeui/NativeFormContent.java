@@ -36,11 +36,14 @@ final class NativeFormContent extends ScrollView {
     private final List<Binding> bindings = new ArrayList<>();
     private final Runnable changed;
     private final ItemActions itemAction;
+    private final NativeLcdUiView.TextFieldFocusListener textFieldFocusListener;
     private boolean updating;
 
-    NativeFormContent(Context context, Runnable changed, ItemActions itemAction) {
+    NativeFormContent(Context context, Runnable changed, ItemActions itemAction,
+            NativeLcdUiView.TextFieldFocusListener textFieldFocusListener) {
         super(context);
         this.changed = changed; this.itemAction = itemAction;
+        this.textFieldFocusListener = textFieldFocusListener;
         layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(NativeUiStyle.dp(context, 12), NativeUiStyle.dp(context, 6),
@@ -312,6 +315,10 @@ final class NativeFormContent extends ScrollView {
                     editor.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                     editor.setPadding(NativeUiStyle.dp(getContext(), 12), 0,
                             NativeUiStyle.dp(getContext(), 12), 0);
+                    if (textFieldFocusListener != null) {
+                        editor.setOnFocusChangeListener((view, focused) ->
+                                textFieldFocusListener.onFocusChanged(focused));
+                    }
                     container.addView(editor, new LinearLayout.LayoutParams(-1,
                             NativeUiStyle.dp(getContext(), NativeUiStyle.COMMAND_BUTTON_HEIGHT_DP)));
                     editor.addTextChangedListener(new TextWatcher() {

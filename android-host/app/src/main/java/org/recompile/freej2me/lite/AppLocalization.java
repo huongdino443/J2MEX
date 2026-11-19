@@ -17,6 +17,37 @@ public final class AppLocalization {
         add("Thêm", "Add");
         add("Tìm kiếm", "Search");
         add("Khác", "More");
+        add("Tác vụ", "Tasks");
+        add("Không có tác vụ đang chạy", "No active tasks");
+        add("Đang khởi động", "Starting");
+        add("Đang hiển thị", "On screen");
+        add("Đang chạy nền", "Running in background");
+        add("Chưa có game đang chạy", "No games are running");
+        add("Ảnh xem trước không khả dụng", "Preview unavailable");
+        add("Về trang chủ J2MEX", "Return to J2MEX home");
+        add("Icon game", "Game icon");
+        add("Các game đang chạy sẽ xuất hiện tại đây.",
+                "Running games will appear here.");
+        add("Chạm vào một game để quay lại. Game ở nền vẫn giữ phiên chạy.",
+                "Tap a game to return. Background games keep running.");
+        add("Dừng lại", "Stop");
+        add("Dừng", "Stop");
+        add("Dừng game", "Stop game");
+        add("Dừng game này?", "Stop this game?");
+        add("Game đang khởi động.", "The game is starting.");
+        add("Game này không còn chạy. Hãy mở lại từ thư viện.",
+                "This game is no longer running. Reopen it from your library.");
+        add("Đang chạy tối đa 5 game. Hãy đóng một phiên trước khi mở game khác.",
+                "At most five games can run at once. Close a session before opening another.");
+        add("Phiên game không còn hoạt động.", "This game session is no longer active.");
+        add("Phiên game đã dừng; J2MEX không tự khởi động lại game.",
+                "The game session has ended; J2MEX will not restart it automatically.");
+        add("Game này đã chạy trong phiên khác.",
+                "This game is already running in another session.");
+        add("Phiên game sẽ bị đóng và kết nối hiện tại sẽ kết thúc.",
+                "This game session will close and its current connections will end.");
+        add("Không thể tạo phiên game mới.", "Could not create a new game session.");
+        add("Không thể lưu phiên game.", "Could not save the game session.");
         add("Tùy chọn", "Options");
         add("Thêm game", "Add games");
         add("Tìm ứng dụng...", "Search games...");

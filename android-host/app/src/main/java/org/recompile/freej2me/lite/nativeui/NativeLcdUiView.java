@@ -15,7 +15,9 @@ import org.recompile.freej2me.protocol.NativeScreen;
 /** Android-only screen controller; no MIDlet classes or Canvas rendering here. */
 public final class NativeLcdUiView extends LinearLayout {
     public interface Events { void send(NativeScreen.Event event); }
+    public interface TextFieldFocusListener { void onFocusChanged(boolean focused); }
     private final Events events;
+    private final TextFieldFocusListener textFieldFocusListener;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final TextView title, ticker;
     private final FrameLayout content;
@@ -45,9 +47,11 @@ public final class NativeLcdUiView extends LinearLayout {
         }
     }
 
-    public NativeLcdUiView(Context context, Events events) {
+    public NativeLcdUiView(Context context, Events events,
+            TextFieldFocusListener textFieldFocusListener) {
         super(new ContextThemeWrapper(context, R.style.NativeLcdUiTheme));
         this.events = events;
+        this.textFieldFocusListener = textFieldFocusListener;
         setOrientation(VERTICAL);
         setBackgroundColor(NativeUiStyle.GROUPED_BACKGROUND);
         title = new TextView(getContext());
@@ -113,6 +117,8 @@ public final class NativeLcdUiView extends LinearLayout {
         boolean preserve = same && (dirty || screen.acknowledgedSequence < sequence);
         ListViewportState restoreViewport = null;
         if (!same) {
+            if (form != null && textFieldFocusListener != null)
+                textFieldFocusListener.onFocusChanged(false);
             saveListViewport();
             if (screen.kind == NativeScreen.LIST) {
                 restoreViewport = savedListViewports.remove(listSignature(screen));
@@ -206,7 +212,7 @@ public final class NativeLcdUiView extends LinearLayout {
         } else {
             if (form == null) {
                 form = new NativeFormContent(getContext(), this::changed,
-                        id -> dispatch(NativeScreen.Event.ITEM, id));
+                        id -> dispatch(NativeScreen.Event.ITEM, id), textFieldFocusListener);
                 content.addView(form, new FrameLayout.LayoutParams(-1, -1));
             }
             form.update(screen.items, preserve);

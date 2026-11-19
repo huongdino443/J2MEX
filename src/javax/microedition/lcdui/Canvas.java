@@ -19,6 +19,7 @@ package javax.microedition.lcdui;
 import org.recompile.mobile.Mobile;
 import org.recompile.mobile.PlatformImage;
 import org.recompile.mobile.PlatformGraphics;
+import org.recompile.mobile.MobilePlatform;
 
 public abstract class Canvas extends Displayable
 {
@@ -262,6 +263,7 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 
 	public void repaint()
 	{
+ if (!isShown() || !MobilePlatform.isRenderingEnabled()) return;
 		if (!beginRepaint()) return;
 		limitFrameRate();
 		PlatformGraphics graphics;
@@ -285,6 +287,7 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 
 	public void repaint(int x, int y, int width, int height)
 	{
+ if (!isShown() || !MobilePlatform.isRenderingEnabled()) return;
 		if (!beginRepaint()) return;
 		limitFrameRate();
 		try

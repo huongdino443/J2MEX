@@ -7,6 +7,11 @@ import java.util.Properties;
 
 /** Export the last session's console and fatal JVM report, not another game's old crash. */
 final class SessionLog {
+    static File sessionDirectory(File appRoot, String sessionId) {
+        if (sessionId == null || sessionId.isEmpty()) return appRoot;
+        return new File(new File(appRoot, "runtime-sessions"), sessionId);
+    }
+
     static synchronized void append(File root, String line) throws IOException {
         String value = line == null ? "" : line;
         if (value.length() > 8192) value = value.substring(0, 8192);
@@ -173,6 +178,38 @@ final class SessionLog {
         try (InputStream report = new FileInputStream(latest)) {
             transfer(report, output, 1024 * 1024);
             if (report.read() != -1) output.write("\n[Crash report truncated at 1 MiB]\n".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    static void promote(File sessionRoot, File appRoot) throws IOException {
+        copyIfPresent(new File(sessionRoot, "latestlog.txt"),
+                new File(appRoot, "latestlog.txt"));
+        copyIfPresent(new File(sessionRoot, "last-session.properties"),
+                new File(appRoot, "last-session.properties"));
+    }
+
+    private static void copyIfPresent(File source, File destination) throws IOException {
+        if (!source.isFile()) return;
+        File parent = destination.getParentFile();
+        if (parent == null) throw new IOException("Missing runtime log destination folder");
+        File temporary = File.createTempFile("latestlog-", ".tmp", parent);
+        try (InputStream input = new FileInputStream(source);
+                FileOutputStream output = new FileOutputStream(temporary)) {
+            byte[] buffer = new byte[32768];
+            int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+            output.flush();
+            output.getFD().sync();
+        }
+        if (!temporary.renameTo(destination)) {
+            if (destination.exists() && !destination.delete()) {
+                temporary.delete();
+                throw new IOException("Cannot replace promoted runtime log");
+            }
+            if (!temporary.renameTo(destination)) {
+                temporary.delete();
+                throw new IOException("Cannot publish promoted runtime log");
+            }
         }
     }
 

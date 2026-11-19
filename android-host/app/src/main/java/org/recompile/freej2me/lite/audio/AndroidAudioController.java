@@ -53,6 +53,7 @@ public final class AndroidAudioController {
     private final Handler handler;
     private final HashMap<Integer, Entry> players = new HashMap<>();
     private final MidiToneSynth synthesizer = new MidiToneSynth();
+    private volatile boolean outputEnabled = true;
 
     public AndroidAudioController(File cacheDirectory, EventSink events) {
         if (cacheDirectory == null || events == null) throw new IllegalArgumentException("Audio host configuration is missing");
@@ -72,6 +73,16 @@ public final class AndroidAudioController {
                 Log.e(TAG, "Audio action failed: " + action, error);
                 send(AudioBridge.ERROR, playerId, 0L, error.toString());
             }
+        });
+    }
+
+    /** Silences the session without stopping its players or changing MIDlet state. */
+    public void setOutputEnabled(boolean enabled) {
+        handler.post(() -> {
+            if (outputEnabled == enabled) return;
+            outputEnabled = enabled;
+            synthesizer.setOutputEnabled(enabled);
+            for (Entry entry : players.values()) applyVolume(entry);
         });
     }
 
@@ -302,7 +313,8 @@ public final class AndroidAudioController {
 
     private void applyVolume(Entry entry) {
         if (entry.media == null) return;
-        float level = entry.muted ? 0.0f : entry.volume / 100.0f;
+        float level = !outputEnabled || entry.muted
+                ? 0.0f : entry.volume / 100.0f;
         try { entry.media.setVolume(level, level); }
         catch (RuntimeException error) { Log.w(TAG, "Cannot set media volume", error); }
     }

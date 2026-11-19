@@ -23,6 +23,7 @@ import javax.microedition.lcdui.Font;
 import javax.microedition.lcdui.NativeUi;
 import org.recompile.freej2me.protocol.NativeScreen;
 import org.recompile.freej2me.protocol.FramebufferProtocol;
+import org.recompile.freej2me.protocol.RuntimeHostProtocol;
 import org.recompile.freej2me.protocol.BluetoothProtocol;
 import org.recompile.freej2me.protocol.JarManifestReader;
 import org.recompile.mobile.BluetoothBridge;
@@ -76,6 +77,19 @@ public final class HeadlessMain {
         status(2, String.format(Locale.US,
                 "[hotspot-memory] phase=%s usedKb=%d committedKb=%d maxKb=%d",
                 phase, used / 1024L, committed / 1024L, memory.maxMemory() / 1024L));
+    }
+
+    private static void replyHotSpotMemory() throws IOException {
+        Runtime memory = Runtime.getRuntime();
+        long used = Math.max(0L, memory.totalMemory() - memory.freeMemory());
+        long maximum = memory.maxMemory();
+        synchronized (HeadlessMain.class) {
+            if (output == null || !running) return;
+            output.writeInt(RuntimeHostProtocol.HOTSPOT_MEMORY_RESPONSE);
+            output.writeLong(used);
+            output.writeLong(maximum);
+            output.flush();
+        }
     }
 
     private static void startHotSpotMemoryReporter() {
@@ -528,6 +542,19 @@ public final class HeadlessMain {
                     displayRefreshHz = input.readInt();
                     Canvas.setFrameRateLimit(Canvas.frameRateLimitForSpeed(
                             displayRefreshHz, RuntimeTiming.getSpeedPercent()));
+                } else if (command == RuntimeHostProtocol.SET_RENDERING_ENABLED) {
+                    boolean enabled = input.readInt() != 0;
+                    MobilePlatform.setRenderingEnabled(enabled);
+                    NativeUi.setPresentationEnabled(enabled);
+                    if (enabled) {
+                        javax.microedition.lcdui.Display display = Mobile.getDisplay();
+                        javax.microedition.lcdui.Displayable current =
+                                display == null ? null : display.getCurrent();
+                        if (current instanceof Canvas) ((Canvas) current).repaint();
+                        else if (current != null) NativeUi.present(current);
+                    }
+                } else if (command == RuntimeHostProtocol.REQUEST_HOTSPOT_MEMORY) {
+                    replyHotSpotMemory();
                 } else if (command == BluetoothProtocol.SET_SPEED) {
                     int speedPercent = input.readInt();
                     RuntimeTiming.setSpeedPercent(speedPercent);

@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.recompile.freej2me.protocol.NativeScreen;
+import org.recompile.freej2me.protocol.RuntimeHostProtocol;
 
 /** Real HeadlessMain process; emulates Android wire events, not Android Views. */
 public final class NativeUiBridgeSmoke {
@@ -18,6 +19,8 @@ public final class NativeUiBridgeSmoke {
         int[] inputCommandTypes;
         NativeScreen screen;
         byte[] pixels;
+        long heapUsed;
+        long heapMaximum;
     }
     private static Packet packet() throws Exception {
         Packet p = new Packet(); p.kind = in.readInt();
@@ -41,6 +44,9 @@ public final class NativeUiBridgeSmoke {
             p.inputCommandTypes = new int[typeCount];
             for (int i = 0; i < typeCount; i++) p.inputCommandTypes[i] = in.readInt();
             p.defaultCommand = in.readInt();
+        } else if (p.kind == RuntimeHostProtocol.HOTSPOT_MEMORY_RESPONSE) {
+            p.heapUsed = in.readLong();
+            p.heapMaximum = in.readLong();
         } else if (p.kind == 7) p.screen = NativeScreen.read(in);
         else if (p.kind != 6) throw new AssertionError("Unknown packet " + p.kind);
         return p;
@@ -131,6 +137,19 @@ public final class NativeUiBridgeSmoke {
                             && p.pixels[2] == 0x66 && p.pixels[3] == (byte)0x99) { canvas = true; break; }
                 }
                 if (!canvas || !nativeHidden) throw new AssertionError("Alert / Canvas mode switch failed");
+                out.writeByte(RuntimeHostProtocol.REQUEST_HOTSPOT_MEMORY);
+                out.flush();
+                Packet memory = null;
+                for (int i = 0; i < 100; i++) {
+                    Packet p = packet();
+                    if (p.kind == RuntimeHostProtocol.HOTSPOT_MEMORY_RESPONSE) {
+                        memory = p;
+                        break;
+                    }
+                }
+                if (memory == null || memory.heapUsed < 0
+                        || memory.heapMaximum <= 0 || memory.heapUsed > memory.heapMaximum)
+                    throw new AssertionError("HotSpot heap query returned invalid memory data");
                 out.writeByte(3); out.writeInt(11); out.writeInt(19);
                 out.writeByte(1); out.writeInt(77); out.flush();
                 out.writeByte(10); out.flush();
@@ -149,7 +168,7 @@ public final class NativeUiBridgeSmoke {
                 if (!output.contains("MIDlet pointer callback failed; input event ignored")
                         || !output.contains("PASS_POINTER_CALLBACK_SURVIVED"))
                     throw new AssertionError("Pointer exception stopped subsequent input processing:\n" + output);
-                System.out.println("PASS: TextBox submit, Form navigation and pointer-exception isolation");
+                System.out.println("PASS: TextBox submit, Form navigation, pointer isolation and HotSpot heap query");
             } finally {
                 if (process.isAlive()) process.destroyForcibly();
                 for (File file : data.listFiles() == null ? new File[0] : data.listFiles()) file.delete();

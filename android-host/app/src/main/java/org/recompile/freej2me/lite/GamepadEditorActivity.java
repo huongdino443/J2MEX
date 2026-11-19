@@ -1,12 +1,14 @@
 package org.recompile.freej2me.lite;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
@@ -16,8 +18,12 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 import java.util.List;
 
@@ -49,6 +55,8 @@ public final class GamepadEditorActivity extends LocalizedActivity {
     private Button gridTool;
     private Button saveTool;
     private ToolHub toolHub;
+    private PopupWindow visibilityPopup;
+    private View visibilityPopupDim;
     private boolean landscape;
     private boolean gridEnabled = true;
     private boolean toolMenuOpen;
@@ -84,6 +92,7 @@ public final class GamepadEditorActivity extends LocalizedActivity {
 
     @Override public void onConfigurationChanged(Configuration configuration) {
         super.onConfigurationChanged(configuration);
+        dismissVisibilityPopup();
         boolean nextLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE;
         if (nextLandscape != landscape) {
             landscape = nextLandscape;
@@ -92,6 +101,11 @@ public final class GamepadEditorActivity extends LocalizedActivity {
             buildFloatingTools();
             if (board != null) board.invalidate();
         }
+    }
+
+    @Override protected void onDestroy() {
+        dismissVisibilityPopup();
+        super.onDestroy();
     }
 
     private void buildFloatingTools() {
@@ -454,33 +468,118 @@ public final class GamepadEditorActivity extends LocalizedActivity {
     }
 
     private void showVisibilityPicker() {
-        boolean[] checked = new boolean[current.keys.size()];
+        dismissVisibilityPopup();
         String[] labels = new String[current.keys.size()];
         for (int i = 0; i < current.keys.size(); i++) {
             GamepadTemplate.Key key = current.keys.get(i);
             labels[i] = key.code == GamepadTemplate.JOYSTICK_CODE
                     ? "Joystick" : key.label;
-            checked[i] = key.visible;
         }
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(AppLocalization.text(this, "Các nút"))
-                .setMultiChoiceItems(labels, checked, (d, index, value) -> {
-                    if (!setKeyVisible(current, index, value)) {
-            Toast.makeText(this, AppLocalization.text(this,
-                    "Cần vùng trống 3×3 để hiện joystick."),
-                                Toast.LENGTH_SHORT).show();
-                    }
-                    for (int i = 0; i < current.keys.size(); i++)
-                        ((AlertDialog) d).getListView().setItemChecked(
-                                i, current.keys.get(i).visible);
-                    if (selected >= 0 && !current.keys.get(selected).visible) selected = -1;
-                    markUnsaved();
-                    board.invalidate();
-                })
-                .setPositiveButton(AppLocalization.text(this, "Xong"),
-                        (d, which) -> board.invalidate())
-                .create();
-        dialog.show();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(18), dp(20), dp(12));
+        panel.setBackground(drawable(TOOL_BG, TOOL_STROKE, dp(20)));
+        panel.setElevation(dp(8));
+
+        TextView title = new TextView(this);
+        title.setText(AppLocalization.text(this, "Các nút"));
+        title.setTextColor(TOOL_TEXT);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        title.setTypeface(android.graphics.Typeface.create(
+                "sans-serif-medium", android.graphics.Typeface.NORMAL));
+        panel.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(rows, new ScrollView.LayoutParams(-1, -2));
+        CheckBox[] checks = new CheckBox[current.keys.size()];
+        for (int i = 0; i < current.keys.size(); i++) {
+            final int index = i;
+            CheckBox check = new CheckBox(this);
+            check.setText(labels[i]);
+            check.setTextColor(TOOL_TEXT);
+            check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            check.setButtonTintList(new ColorStateList(
+                    new int[][]{{android.R.attr.state_checked}, {}},
+                    new int[]{TOOL_SELECTED, TOOL_STROKE}));
+            check.setMinHeight(dp(48));
+            check.setPadding(dp(4), 0, dp(6), 0);
+            check.setChecked(current.keys.get(i).visible);
+            check.setOnClickListener(view -> {
+                if (!setKeyVisible(current, index, check.isChecked())) {
+                    Toast.makeText(this, AppLocalization.text(this,
+                            "Cần vùng trống 3×3 để hiện joystick."),
+                            Toast.LENGTH_SHORT).show();
+                }
+                for (int keyIndex = 0; keyIndex < checks.length; keyIndex++)
+                    checks[keyIndex].setChecked(current.keys.get(keyIndex).visible);
+                if (selected >= 0 && !current.keys.get(selected).visible) selected = -1;
+                markUnsaved();
+                board.invalidate();
+            });
+            LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(-1, -2);
+            checkParams.bottomMargin = dp(2);
+            rows.addView(check, checkParams);
+            checks[i] = check;
+        }
+        int maxListHeight = Math.min(dp(360),
+                Math.max(dp(120), getResources().getDisplayMetrics().heightPixels / 2));
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, maxListHeight);
+        scrollParams.topMargin = dp(10);
+        panel.addView(scroll, scrollParams);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
+        actionsParams.topMargin = dp(8);
+        panel.addView(actions, actionsParams);
+        TextView done = new TextView(this);
+        done.setText(AppLocalization.text(this, "Xong"));
+        done.setTextColor(TOOL_SELECTED);
+        done.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        done.setTypeface(android.graphics.Typeface.create(
+                "sans-serif-medium", android.graphics.Typeface.NORMAL));
+        done.setGravity(Gravity.CENTER);
+        done.setMinWidth(dp(64));
+        done.setMinHeight(dp(48));
+        done.setPadding(dp(14), dp(8), dp(14), dp(8));
+        done.setClickable(true);
+        done.setFocusable(true);
+        actions.addView(done);
+
+        int popupWidth = Math.max(dp(1), Math.min(dp(400),
+                getResources().getDisplayMetrics().widthPixels - dp(32)));
+        PopupWindow popup = new PopupWindow(panel, popupWidth, -2, true);
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popup.setElevation(dp(10));
+        popup.setOutsideTouchable(true);
+        View rootContent = findViewById(android.R.id.content);
+        View dim = new View(this);
+        dim.setBackgroundColor(0x80000000);
+        dim.setClickable(true);
+        ((android.view.ViewGroup) rootContent).addView(dim,
+                new android.view.ViewGroup.LayoutParams(-1, -1));
+        dim.setOnClickListener(view -> popup.dismiss());
+        visibilityPopup = popup;
+        visibilityPopupDim = dim;
+        popup.setOnDismissListener(() -> {
+            if (dim.getParent() instanceof android.view.ViewGroup)
+                ((android.view.ViewGroup) dim.getParent()).removeView(dim);
+            if (visibilityPopup == popup) {
+                visibilityPopup = null;
+                visibilityPopupDim = null;
+            }
+        });
+        done.setOnClickListener(view -> {
+            board.invalidate();
+            popup.dismiss();
+        });
+        popup.showAtLocation(rootContent, Gravity.CENTER, 0, 0);
+    }
+
+    private void dismissVisibilityPopup() {
+        if (visibilityPopup != null) visibilityPopup.dismiss();
     }
 
     private boolean setKeyVisible(GamepadTemplate.Layout layout, int index, boolean visible) {

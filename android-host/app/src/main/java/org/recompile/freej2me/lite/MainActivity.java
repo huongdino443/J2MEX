@@ -2,7 +2,6 @@ package org.recompile.freej2me.lite;
 
 import android.app.Activity;
 import android.app.ActivityManager;
-import android.app.AlertDialog;
 import android.Manifest;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -71,8 +70,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -88,6 +89,9 @@ import java.util.concurrent.Executors;
             "main.pendingExternalGameUri";
     private static final String EXTRA_EXTERNAL_GAME_OPEN_HANDLED =
             "org.recompile.freej2me.lite.EXTRA_EXTERNAL_GAME_OPEN_HANDLED";
+    private static final String LAUNCHER_STATE_PREFS = "j2mex_launcher_state";
+    private static final String PREF_RETURN_HOME_AFTER_OVERVIEW =
+            "return_home_after_task_overview";
     private static final int TAB_HOME = 0;
     private static final int TAB_COLLECTION = 1;
     private static final int TAB_ADD = 2;
@@ -122,7 +126,8 @@ import java.util.concurrent.Executors;
     private boolean checkingForUpdate;
     private boolean automaticUpdateCheckRunning;
     private boolean activityResumed;
-    private View addNavigationItem;
+    private View multitaskHomeButton;
+    private TextView multitaskHomeBadge;
     private View navigationGlow;
     private ImageView navigationBackdrop;
     private Bitmap navigationBackdropBitmap;
@@ -164,6 +169,9 @@ import java.util.concurrent.Executors;
     private boolean headerOverlayMode;
     private Uri pendingExternalGameUri;
     private boolean launcherRuntimeReturnPending;
+    private boolean pendingSessionManagerOpen;
+    private String pendingRuntimeSessionId;
+    private boolean pendingHomeOpen;
 
     static int dp(Activity activity, int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
@@ -188,12 +196,25 @@ import java.util.concurrent.Executors;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        launcherRuntimeReturnPending = isLauncherIntent(getIntent());
+        boolean requestedHome = getIntent() != null
+                && getIntent().getBooleanExtra(SessionOverviewActivity.EXTRA_OPEN_HOME, false);
+        if (requestedHome) setLauncherHomePinned(this, true);
+        boolean openSessionManager = getIntent() != null
+                && getIntent().getBooleanExtra(
+                        RuntimeSessionStore.EXTRA_OPEN_SESSION_MANAGER, false);
+        pendingRuntimeSessionId = getIntent() == null ? null
+                : getIntent().getStringExtra(RuntimeSessionStore.EXTRA_RETURN_TO_SESSION);
+        pendingHomeOpen = requestedHome || (isLauncherIntent(getIntent())
+                && isLauncherHomePinned(this));
+        launcherRuntimeReturnPending = isLauncherIntent(getIntent())
+                && !openSessionManager && pendingRuntimeSessionId == null && !pendingHomeOpen;
+        pendingSessionManagerOpen = openSessionManager;
         activeInstance = this;
         if (state != null) {
             int savedScreen = state.getInt("main.currentScreen", TAB_HOME);
             currentScreen = savedScreen == TAB_COLLECTION || savedScreen == TAB_SEARCH
-                    || savedScreen == TAB_MORE ? savedScreen : TAB_HOME;
+                    || savedScreen == TAB_MORE
+                    ? savedScreen : TAB_HOME;
             homeScrollY = state.getInt("main.homeScrollY", 0);
             collectionScrollY = state.getInt("main.collectionScrollY", 0);
             searchScrollY = state.getInt("main.searchScrollY", 0);
@@ -203,6 +224,10 @@ import java.util.concurrent.Executors;
             if (pendingUri != null && !pendingUri.isEmpty()) {
                 pendingExternalGameUri = Uri.parse(pendingUri);
             }
+        }
+        if (openSessionManager) {
+            launcherRuntimeReturnPending = false;
+            pendingHomeOpen = false;
         }
         if (pendingExternalGameUri == null) captureExternalGameOpen(getIntent());
         Window window = getWindow();
@@ -263,15 +288,40 @@ import java.util.concurrent.Executors;
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        launcherRuntimeReturnPending = isLauncherIntent(intent);
+        boolean requestedHome = intent != null
+                && intent.getBooleanExtra(SessionOverviewActivity.EXTRA_OPEN_HOME, false);
+        if (requestedHome) setLauncherHomePinned(this, true);
+        pendingSessionManagerOpen = intent != null
+                && intent.getBooleanExtra(
+                        RuntimeSessionStore.EXTRA_OPEN_SESSION_MANAGER, false);
+        pendingRuntimeSessionId = intent == null ? null
+                : intent.getStringExtra(RuntimeSessionStore.EXTRA_RETURN_TO_SESSION);
+        pendingHomeOpen = requestedHome || (isLauncherIntent(intent)
+                && isLauncherHomePinned(this));
+        launcherRuntimeReturnPending = isLauncherIntent(intent)
+                && !pendingSessionManagerOpen && pendingRuntimeSessionId == null
+                && !pendingHomeOpen;
+        if (pendingSessionManagerOpen || pendingRuntimeSessionId != null || pendingHomeOpen)
+            launcherRuntimeReturnPending = false;
         captureExternalGameOpen(intent);
         processPendingExternalGameOpen();
+        if (activityResumed && interfaceInitialized) openPendingRuntimeSession();
     }
 
     private static boolean isLauncherIntent(Intent intent) {
         return intent != null
                 && Intent.ACTION_MAIN.equals(intent.getAction())
                 && intent.hasCategory(Intent.CATEGORY_LAUNCHER);
+    }
+
+    static boolean isLauncherHomePinned(Context context) {
+        return context.getSharedPreferences(LAUNCHER_STATE_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_RETURN_HOME_AFTER_OVERVIEW, false);
+    }
+
+    static void setLauncherHomePinned(Context context, boolean pinned) {
+        context.getSharedPreferences(LAUNCHER_STATE_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(PREF_RETURN_HOME_AFTER_OVERVIEW, pinned).apply();
     }
 
     private void captureExternalGameOpen(Intent intent) {
@@ -473,7 +523,9 @@ import java.util.concurrent.Executors;
         String[] labels = vietnamese
                 ? new String[]{"Trang chủ", "Bộ sưu tập", "Thêm", "Tìm kiếm", "Khác"}
                 : new String[]{"Home", "Collections", "Add", "Search", "More"};
-        int[] icons = {IconView.HOME, IconView.FOLDER, IconView.ADD, IconView.SEARCH, IconView.MORE};
+        int[] icons = {
+                IconView.HOME, IconView.FOLDER, IconView.ADD, IconView.SEARCH, IconView.MORE
+        };
         for (int i = 0; i < labels.length; i++) {
             final int tab = i;
             LinearLayout item = new LinearLayout(this);
@@ -501,10 +553,57 @@ import java.util.concurrent.Executors;
             itemParams.setMargins(dp(this, 2), 0, dp(this, 2), 0);
             row.addView(item, itemParams);
             navigationItems[i] = item;
-            if (i == TAB_ADD) addNavigationItem = item;
             item.setOnClickListener(v -> selectNavigation(tab));
         }
         return bar;
+    }
+
+    private View createHomeMultitaskButton() {
+        FrameLayout button = new FrameLayout(this);
+        button.setBackground(rounded(COLOR_SURFACE, 24, 0x463D4A5E));
+        button.setContentDescription(AppLocalization.text(this, "Tác vụ"));
+        button.setFocusable(true);
+        button.setClickable(true);
+        IconView icon = new IconView(this, IconView.MULTITASK);
+        button.addView(icon, new FrameLayout.LayoutParams(dp(this, 23), dp(this, 23),
+                Gravity.CENTER));
+        multitaskHomeBadge = new TextView(this);
+        multitaskHomeBadge.setTextColor(Color.WHITE);
+        multitaskHomeBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        multitaskHomeBadge.setTypeface(Typeface.create("sans-serif-bold", Typeface.NORMAL));
+        multitaskHomeBadge.setGravity(Gravity.CENTER);
+        multitaskHomeBadge.setMinWidth(dp(this, 18));
+        multitaskHomeBadge.setMinHeight(dp(this, 18));
+        multitaskHomeBadge.setPadding(dp(this, 4), 0, dp(this, 4), 0);
+        multitaskHomeBadge.setBackground(rounded(0xFFF44336, 10, 0));
+        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(this, 18),
+                Gravity.TOP | Gravity.RIGHT);
+        button.addView(multitaskHomeBadge, badgeParams);
+        button.setOnClickListener(view -> openSessionOverview());
+        return button;
+    }
+
+    private void updateHomeMultitaskBadge() {
+        if (multitaskHomeBadge == null || multitaskHomeButton == null) return;
+        int count = 0;
+        long now = System.currentTimeMillis();
+        for (RuntimeSessionStore.Session session : RuntimeSessionStore.list(this)) {
+            boolean launchPending = session.processId <= 0
+                    && now - session.startedAt < 120_000L;
+            if (launchPending || isRuntimeSessionProcessAlive(session)) count++;
+        }
+        multitaskHomeBadge.setText(count > 0 ? Integer.toString(count) : "");
+        multitaskHomeBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+        multitaskHomeBadge.setContentDescription(Integer.toString(count));
+        multitaskHomeButton.setContentDescription(
+                AppLocalization.text(this, "Tác vụ") + (count > 0 ? ", " + count : ""));
+    }
+
+    private void updateHomeMultitaskButtonVisibility() {
+        if (multitaskHomeButton != null)
+            multitaskHomeButton.setVisibility(
+                    currentScreen == TAB_HOME ? View.VISIBLE : View.GONE);
     }
 
     private void selectNavigation(int tab) {
@@ -567,6 +666,7 @@ import java.util.concurrent.Executors;
     private void renderHeader() {
         header.removeAllViews();
         sortButton = null;
+        multitaskHomeButton = null;
         if (currentScreen == TAB_SEARCH) {
             header.setPadding(dp(this, 6), 0, dp(this, 6), 0);
             FrameLayout searchFrame = new FrameLayout(this);
@@ -645,6 +745,15 @@ import java.util.concurrent.Executors;
             header.addView(homeTitle, new LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
+            if (currentScreen == TAB_HOME) {
+                multitaskHomeButton = createHomeMultitaskButton();
+                updateHomeMultitaskBadge();
+                LinearLayout.LayoutParams multitaskParams = new LinearLayout.LayoutParams(
+                        dp(this, 46), dp(this, 46));
+                multitaskParams.setMargins(0, 0, dp(this, 8), 0);
+                header.addView(multitaskHomeButton, multitaskParams);
+            }
+
             if (currentScreen != TAB_MORE) {
                 FrameLayout action = new FrameLayout(this);
                 action.setBackground(rounded(COLOR_SURFACE, 24, 0x463D4A5E));
@@ -705,6 +814,7 @@ import java.util.concurrent.Executors;
 
     private void applyScreenChange(int screen) {
         if (screen == currentScreen) return;
+        if (screen != TAB_HOME) setLauncherHomePinned(this, false);
         saveCurrentScroll();
         if (screen != TAB_SEARCH && searchField != null) {
             InputMethodManager input = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -723,7 +833,8 @@ import java.util.concurrent.Executors;
         boolean openingHome = screen == TAB_HOME;
         boolean openingCollections = screen == TAB_COLLECTION;
         boolean openingMore = screen == TAB_MORE;
-        boolean droppingHeader = openingSearch || openingHome || openingCollections || openingMore;
+        boolean droppingHeader = openingSearch || openingHome || openingCollections
+                || openingMore;
         header.setTranslationY(droppingHeader ? -dp(this, 24) : 0f);
         renderHeader();
         header.animate().alpha(1f).translationY(0f)
@@ -736,9 +847,10 @@ import java.util.concurrent.Executors;
                 : screen == TAB_MORE ? TAB_MORE : TAB_HOME;
         setActiveNavigation(active);
         setNavigationHidden(false, true);
+        updateHomeMultitaskButtonVisibility();
         int y = screen == TAB_HOME ? homeScrollY
                 : screen == TAB_COLLECTION ? collectionScrollY
-                : screen == TAB_MORE ? moreScrollY : searchScrollY;
+                : screen == TAB_MORE ? moreScrollY : 0;
         contentColumn.animate().cancel();
         contentColumn.setAlpha(0f);
         contentColumn.setTranslationY(dp(this, 12));
@@ -803,6 +915,8 @@ import java.util.concurrent.Executors;
                     right.jar.lastModified(), left.jar.lastModified());
         }
         Collections.sort(visible, comparator);
+        Set<String> runningSessionPaths = currentScreen == TAB_HOME
+                ? getRunningSessionJarPaths() : Collections.emptySet();
 
         if (visible.isEmpty()) {
             setContentColumnLayout(true);
@@ -819,8 +933,11 @@ import java.util.concurrent.Executors;
             int cellWidth = Math.max(dp(this, 54), contentWidth / columns);
             int iconSize = Math.min(dp(this, 124), Math.round(cellWidth * 0.92f));
             for (int i = 0; i < visible.size(); i++) {
-                gameGrid.addView(createGameCell(
-                        visible.get(i), iconSize, i / columns, i % columns),
+                GameLibrary.Game game = visible.get(i);
+                boolean runningInBackground = currentScreen == TAB_HOME
+                        && isGamePathRunning(game.jar, runningSessionPaths);
+                gameGrid.addView(createGameCell(game, iconSize, i / columns, i % columns,
+                                runningInBackground),
                         gridCellParams(i / columns, i % columns));
             }
             int filledCellCount = ((visible.size() + columns - 1) / columns) * columns;
@@ -833,6 +950,39 @@ import java.util.concurrent.Executors;
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         restoreContentScroll(restoreY);
+    }
+
+    private void pruneStaleRuntimeSessions() {
+        for (RuntimeSessionStore.Session session : RuntimeSessionStore.list(this)) {
+            if (isRuntimeSessionLaunchPending(session)) continue;
+            if (!isRuntimeSessionProcessAlive(session)
+                    || !new File(session.jarPath).isFile()) {
+                RuntimeSessionStore.remove(this, session.id);
+                BackgroundGameService.stop(this, session.slot);
+            }
+        }
+    }
+
+    private Set<String> getRunningSessionJarPaths() {
+        HashSet<String> paths = new HashSet<>();
+        long now = System.currentTimeMillis();
+        for (RuntimeSessionStore.Session session : RuntimeSessionStore.list(this)) {
+            boolean launchPending = session.processId <= 0
+                    && now - session.startedAt < 120_000L;
+            if (!launchPending && !isRuntimeSessionProcessAlive(session)) continue;
+            paths.add(session.jarPath);
+            paths.add(new File(session.jarPath).getAbsolutePath());
+        }
+        return paths;
+    }
+
+    private boolean isGamePathRunning(File jar, Set<String> runningPaths) {
+        if (runningPaths.contains(jar.getAbsolutePath())) return true;
+        try {
+            return runningPaths.contains(jar.getCanonicalPath());
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     private void renderCollections(int restoreY) {
@@ -902,6 +1052,7 @@ import java.util.concurrent.Executors;
                         : "Keep running in the background, reducing the chance of restarts or data connection loss.",
                 AppPreferences.keepGameInBackground(this), (context, enabled) -> {
                     AppPreferences.setKeepGameInBackground(context, enabled);
+                    BackgroundGameService.applyBackgroundActivitySetting(context, enabled);
                     if (enabled && Build.VERSION.SDK_INT >= 33
                             && checkSelfPermission(
                                     android.Manifest.permission.POST_NOTIFICATIONS)
@@ -1204,8 +1355,8 @@ import java.util.concurrent.Executors;
     private void updateNavigationLanguage() {
         boolean vietnamese = "Tiếng Việt".equals(AppPreferences.automaticLanguage(this));
         String[] labels = vietnamese
-                ? new String[]{"Trang chủ", "Bộ sưu tập", "Thêm", "Tìm kiếm", "Khác"}
-                : new String[]{"Home", "Collections", "Add", "Search", "More"};
+                ? new String[]{"Trang chủ", "Bộ sưu tập", "Tác vụ", "Tìm kiếm", "Khác"}
+                : new String[]{"Home", "Collections", "Tasks", "Search", "More"};
         for (int i = 0; i < navigationItems.length; i++) {
             if (navigationItems[i] == null) continue;
             NavigationState state = (NavigationState) navigationItems[i].getTag();
@@ -1896,21 +2047,35 @@ import java.util.concurrent.Executors;
         return params;
     }
 
-    private View createGameCell(GameLibrary.Game game, int iconSize, int row, int column) {
+    private View createGameCell(GameLibrary.Game game, int iconSize, int row, int column,
+            boolean runningInBackground) {
         LinearLayout cell = new LinearLayout(this);
         cell.setOrientation(LinearLayout.VERTICAL);
         cell.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         cell.setPadding(dp(this, 4), dp(this, 3), dp(this, 4), dp(this, 3));
         cell.setClickable(true);
         cell.setFocusable(true);
-        cell.setContentDescription(game.title + ", chạy game");
+        cell.setContentDescription(game.title + (runningInBackground
+                ? ", " + AppLocalization.text(this, "Đang chạy nền") : "") + ", chạy game");
 
         GameIconView icon = new GameIconView(this);
         icon.setArtwork(game.icon, game.title);
         icon.setContentDescription(game.title + " icon");
+        FrameLayout iconFrame = new FrameLayout(this);
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(iconSize, iconSize);
         iconParams.gravity = Gravity.CENTER_HORIZONTAL;
-        cell.addView(icon, iconParams);
+        iconFrame.addView(icon, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (runningInBackground) {
+            View badge = createBackgroundRunningTriangle();
+            badge.setContentDescription(AppLocalization.text(this, "Đang chạy nền"));
+            badge.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(
+                    dp(this, 25), dp(this, 28), Gravity.BOTTOM | Gravity.RIGHT);
+            badgeParams.setMargins(0, 0, dp(this, 2), dp(this, 2));
+            iconFrame.addView(badge, badgeParams);
+        }
+        cell.addView(iconFrame, iconParams);
 
         TextView title = new TextView(this);
         title.setText(game.title);
@@ -1943,6 +2108,26 @@ import java.util.concurrent.Executors;
             return true;
         });
         return cell;
+    }
+
+    private View createBackgroundRunningTriangle() {
+        return new View(this) {
+            private final Paint badgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+            @Override protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                float inset = dp(MainActivity.this, 2);
+                float side = getHeight() - inset * 2;
+                Path triangle = new Path();
+                triangle.moveTo(inset, inset);
+                triangle.lineTo(inset, getHeight() - inset);
+                triangle.lineTo(inset + side * 0.8660254f, getHeight() / 2f);
+                triangle.close();
+                badgePaint.setStyle(Paint.Style.FILL);
+                badgePaint.setColor(0xFF00E52E);
+                canvas.drawPath(triangle, badgePaint);
+            }
+        };
     }
 
     private String fitTitleWithLiteralDots(String value, TextPaint paint, int width) {
@@ -2065,11 +2250,23 @@ import java.util.concurrent.Executors;
     }
 
     private void showGameMenu(View anchor, GameLibrary.Game game) {
-        showStyledPopup(anchor, new String[]{
+        RuntimeSessionStore.Session runningSession = findRunningSessionForGame(game);
+        String[] menuItems = new String[]{
                 "Chạy game", "Thiết lập", "Thêm vào bộ sưu tập",
-                "Đặt lại dữ liệu", "Gỡ cài đặt game"},
+                "Đặt lại dữ liệu", "Gỡ cài đặt game"};
+        int stopPosition = -1;
+        if (runningSession != null) {
+            stopPosition = menuItems.length;
+            menuItems = java.util.Arrays.copyOf(menuItems, menuItems.length + 1);
+            menuItems[stopPosition] = "Dừng lại";
+        }
+        final int stopIndex = stopPosition;
+        final RuntimeSessionStore.Session sessionToStop = runningSession;
+        showStyledPopup(anchor, menuItems,
                 false, false, position -> {
-            if (position == 0) {
+            if (position == stopIndex && sessionToStop != null) {
+                confirmStopRunningGame(sessionToStop);
+            } else if (position == 0) {
                 openGame(game);
             } else if (position == 1) {
                 openGameSettings(game.jar, game.title, false);
@@ -2081,6 +2278,41 @@ import java.util.concurrent.Executors;
                 confirmUninstallGame(game);
             }
         });
+    }
+
+    private RuntimeSessionStore.Session findRunningSessionForGame(GameLibrary.Game game) {
+        if (game == null || game.jar == null) return null;
+        RuntimeSessionStore.Session session =
+                RuntimeSessionStore.findForJar(this, game.jar.getAbsolutePath());
+        return session != null && session.processId > 0
+                && isRuntimeSessionProcessAlive(session) ? session : null;
+    }
+
+    private void confirmStopRunningGame(RuntimeSessionStore.Session session) {
+        showStyledMessagePopup("Dừng game này?",
+                "Phiên game sẽ bị đóng và kết nối hiện tại sẽ kết thúc.",
+                "Dừng", "Hủy", () -> stopRunningSession(session));
+    }
+
+    private void stopRunningSession(RuntimeSessionStore.Session session) {
+        if (session == null) return;
+        if (!isRuntimeSessionProcessAlive(session)) {
+            RuntimeSessionStore.remove(this, session.id);
+            BackgroundGameService.stop(this, session.slot);
+            updateHomeMultitaskBadge();
+            renderGames(contentScroll == null ? 0 : contentScroll.getScrollY());
+            return;
+        }
+        File jar = new File(session.jarPath);
+        Intent intent = new Intent(this, runtimeActivityFor(jar, session.slot));
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        intent.putExtra("jar", jar.getAbsolutePath());
+        intent.putExtra("title", session.title);
+        intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
+        intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
+        intent.putExtra(RuntimeSessionStore.EXTRA_CLOSE_SESSION, true);
+        startActivity(intent);
     }
 
     private interface StyledPopupListener {
@@ -2347,7 +2579,6 @@ import java.util.concurrent.Executors;
                 itemSelected -> {
                     if (!itemSelected) setActiveNavigation(previousNavigationTab);
                 });
-        setActiveNavigation(TAB_ADD);
     }
 
     private void openGameFileManager(boolean folderPicker) {
@@ -2531,6 +2762,7 @@ import java.util.concurrent.Executors;
 
     private void prepareAndLaunch(File jar, String name) {
         if (busy) return;
+        setLauncherHomePinned(this, false);
         setBusy(true);
         worker.execute(() -> {
             try {
@@ -2546,15 +2778,52 @@ import java.util.concurrent.Executors;
                 runOnUiThread(() -> {
                     setBusy(false);
                     if (isFinishing() || isDestroyed()) return;
+                    pruneStaleRuntimeSessions();
+                    RuntimeSessionStore.Session existing =
+                            RuntimeSessionStore.findForJar(this, selected.getAbsolutePath());
+                    if (existing != null) {
+                        if (existing.processId > 0 && isRuntimeSessionProcessAlive(existing)) {
+                            openRuntimeSession(existing);
+                            return;
+                        }
+                        if (isRuntimeSessionLaunchPending(existing)) {
+                            Toast.makeText(this, AppLocalization.text(this,
+                                    "Game đang khởi động."), Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        RuntimeSessionStore.remove(this, existing.id);
+                        BackgroundGameService.stop(this, existing.slot);
+                    }
+                    RuntimeSessionStore.Session session;
+                    try {
+                        session = RuntimeSessionStore.reserve(
+                                this, selected.getAbsolutePath(), name);
+                    } catch (IOException error) {
+                        showError(error);
+                        return;
+                    }
+                    if (session == null) {
+                        showError(new IOException(
+                        "Đang chạy tối đa 5 game. Hãy đóng một phiên trước khi mở game khác."));
+                        return;
+                    }
                     Class<? extends RuntimeActivity> runtimeActivity =
-                            runtimeActivityFor(selected);
+                            runtimeActivityFor(selected, session.slot);
                     Intent intent = new Intent(this, runtimeActivity);
                     intent.putExtra("jar", selected.getAbsolutePath());
-                    intent.putExtra("title", name);
+                    intent.putExtra("title", session.title);
+                    intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
+                    intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
                     AppPreferences.addRuntimeSnapshotExtras(this, intent);
                     boolean launchStateSaved = jar == null
                             || GameSettings.markLaunched(this, selected);
-                    startActivity(intent);
+                    try {
+                        startActivity(intent);
+                    } catch (RuntimeException error) {
+                        RuntimeSessionStore.remove(this, session.id);
+                        showError(error);
+                        return;
+                    }
                     if (!launchStateSaved) {
                         Toast.makeText(this, AppLocalization.text(this,
                                 "Không thể lưu trạng thái cài đặt game."),
@@ -2572,6 +2841,7 @@ import java.util.concurrent.Executors;
 
     private void openGame(GameLibrary.Game game) {
         if (game == null || game.jar == null || !game.jar.isFile() || busy) return;
+        setLauncherHomePinned(this, false);
         if (GameSettings.hasLaunched(this, game.jar)) {
             prepareAndLaunch(game.jar, game.title);
         } else {
@@ -2579,43 +2849,104 @@ import java.util.concurrent.Executors;
         }
     }
 
-    private Class<? extends RuntimeActivity> runtimeActivityFor(File jar) {
-        int orientationMode = GameSettings.load(this, jar).orientationMode;
-        if (orientationMode == GameSettings.ORIENTATION_LANDSCAPE)
-            return RuntimeLandscapeActivity.class;
-        if (orientationMode == GameSettings.ORIENTATION_PORTRAIT)
-            return RuntimePortraitActivity.class;
-        return RuntimeActivity.class;
+    private Class<? extends RuntimeActivity> runtimeActivityFor(File jar, int slot) {
+        if (slot >= 2) {
+            switch (slot) {
+                case 2: return RuntimeThirdActivity.class;
+                case 3: return RuntimeFourthActivity.class;
+                case 4: return RuntimeFifthActivity.class;
+                default: throw new IllegalArgumentException("Unsupported runtime slot");
+            }
+        }
+        int orientation = GameSettings.load(this, jar).orientationMode;
+        if (slot == 0) {
+            if (orientation == GameSettings.ORIENTATION_LANDSCAPE)
+                return RuntimeLandscapeActivity.class;
+            if (orientation == GameSettings.ORIENTATION_PORTRAIT)
+                return RuntimePortraitActivity.class;
+            return RuntimeActivity.class;
+        }
+        if (orientation == GameSettings.ORIENTATION_LANDSCAPE)
+            return RuntimeSecondLandscapeActivity.class;
+        if (orientation == GameSettings.ORIENTATION_PORTRAIT)
+            return RuntimeSecondPortraitActivity.class;
+        return RuntimeSecondActivity.class;
     }
 
-    private boolean returnToActiveRuntime() {
-        int runtimePid = SessionLog.activeRuntimeProcessId(getFilesDir());
-        if (runtimePid <= 0) return false;
+    private boolean isRuntimeSessionProcessAlive(RuntimeSessionStore.Session session) {
+        if (session == null || session.processId <= 0) return false;
         ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
         if (manager == null) return false;
         List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
         if (processes == null) return false;
-        String expectedProcessName = getPackageName() + ":runtime";
-        boolean processAlive = false;
+        String expectedName = RuntimeSessionStore.processName(this, session.slot);
         for (ActivityManager.RunningAppProcessInfo process : processes) {
-            if (process.pid == runtimePid && expectedProcessName.equals(process.processName)) {
-                processAlive = true;
-                break;
-            }
+            if (process.pid == session.processId && expectedName.equals(process.processName))
+                return true;
         }
-        if (!processAlive) return false;
+        return false;
+    }
 
-        String recentPath = getPreferences(0).getString("recentPath", null);
-        if (recentPath == null) return false;
-        File jar = new File(recentPath);
-        if (!jar.isFile()) return false;
-        String title = getPreferences(0).getString("recentName", jar.getName());
-        Intent intent = new Intent(this, runtimeActivityFor(jar));
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    private void openRuntimeSession(RuntimeSessionStore.Session session) {
+        if (session == null) return;
+        if (isRuntimeSessionLaunchPending(session)) {
+            Toast.makeText(this, AppLocalization.text(this,
+                    "Game đang khởi động."), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        File jar = new File(session.jarPath);
+        if (!jar.isFile() || !isRuntimeSessionProcessAlive(session)) {
+            RuntimeSessionStore.remove(this, session.id);
+            BackgroundGameService.stop(this, session.slot);
+            renderGames(contentScroll == null ? 0 : contentScroll.getScrollY());
+            Toast.makeText(this, AppLocalization.text(this,
+                    "Game này không còn chạy. Hãy mở lại từ thư viện."),
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        setLauncherHomePinned(this, false);
+        try {
+            RuntimeSessionStore.setForeground(this, session.id);
+        } catch (IOException error) {
+            showError(error);
+            return;
+        }
+        Intent intent = new Intent(this, runtimeActivityFor(jar, session.slot));
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
-        intent.putExtra("title", title);
+        intent.putExtra("title", session.title);
+        intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
+        intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
         AppPreferences.addRuntimeSnapshotExtras(this, intent);
         startActivity(intent);
+    }
+
+    private void openSessionOverview() {
+        Intent intent = new Intent(this, SessionOverviewActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        RuntimeSessionStore.Session foreground = RuntimeSessionStore.foreground(this);
+        if (foreground != null)
+            intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, foreground.id);
+        startActivity(intent);
+    }
+
+    private boolean isRuntimeSessionLaunchPending(RuntimeSessionStore.Session session) {
+        return session != null && session.processId <= 0
+                && System.currentTimeMillis() - session.startedAt < 120_000L;
+    }
+
+    private boolean returnToActiveRuntime() {
+        RuntimeSessionStore.Session session = RuntimeSessionStore.foreground(this);
+        if (session == null) return false;
+        if (!isRuntimeSessionProcessAlive(session)
+                || !new File(session.jarPath).isFile()) {
+            RuntimeSessionStore.remove(this, session.id);
+            BackgroundGameService.stop(this, session.slot);
+            return false;
+        }
+        openRuntimeSession(session);
         return true;
     }
 
@@ -2801,7 +3132,9 @@ import java.util.concurrent.Executors;
         busy = value;
         progress.setVisibility(value ? View.VISIBLE : View.GONE);
         if (sortButton != null) sortButton.setEnabled(!value);
-        if (addNavigationItem != null) addNavigationItem.setEnabled(!value);
+        if (multitaskHomeButton != null) multitaskHomeButton.setEnabled(!value);
+        if (navigationItems[TAB_ADD] != null)
+            navigationItems[TAB_ADD].setEnabled(!value);
     }
 
     private void showError(Throwable error) {
@@ -2809,20 +3142,126 @@ import java.util.concurrent.Executors;
             String message = error == null ? null : error.getMessage();
             if (message == null || message.trim().isEmpty())
                 message = error == null ? "Không thể thực hiện." : error.toString();
-            new AlertDialog.Builder(this)
-                    .setTitle(AppLocalization.text(this, "Không thể thực hiện"))
-                    .setMessage(AppLocalization.text(this, message))
-                    .setPositiveButton(AppLocalization.text(this, "Đóng"), null).show();
+            showStyledMessagePopup("Không thể thực hiện", message,
+                    "Đóng", null, null);
+        }
+    }
+
+    private void showStyledMessagePopup(String title, String message,
+            String primaryLabel, String cancelLabel, Runnable primaryAction) {
+        LinearLayout panel = collectionModalPanel(title);
+        TextView body = new TextView(this);
+        body.setText(AppLocalization.text(this, message));
+        body.setTextColor(COLOR_MUTED);
+        body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bodyParams.topMargin = dp(this, 12);
+        panel.addView(body, bodyParams);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actionsParams.topMargin = dp(this, 14);
+        panel.addView(actions, actionsParams);
+
+        TextView cancel = null;
+        if (cancelLabel != null) {
+            cancel = styledActionButton(cancelLabel, false);
+            actions.addView(cancel, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        TextView primary = styledActionButton(primaryLabel, true);
+        LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        if (cancel != null) primaryParams.leftMargin = dp(this, 10);
+        actions.addView(primary, primaryParams);
+
+        PopupWindow popup = showModalPopup(panel, false);
+        if (cancel != null) cancel.setOnClickListener(view -> popup.dismiss());
+        primary.setOnClickListener(view -> {
+            popup.dismiss();
+            if (primaryAction != null) primaryAction.run();
+        });
+    }
+
+    private void showImportedGameSelectionPopup(List<GameLibrary.Game> candidates) {
+        LinearLayout panel = collectionModalPanel("Chọn game để mở");
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        LinearLayout options = new LinearLayout(this);
+        options.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(options, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ArrayList<TextView> optionViews = new ArrayList<>();
+        for (GameLibrary.Game game : candidates) {
+            TextView option = new TextView(this);
+            option.setText(game.title);
+            option.setTextColor(COLOR_TEXT);
+            option.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+            option.setGravity(Gravity.CENTER_VERTICAL);
+            option.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
+            option.setMinHeight(dp(this, 54));
+            option.setBackground(rounded(COLOR_SURFACE_SELECTED, 12, 0x463D4A5E));
+            option.setClickable(true);
+            option.setFocusable(true);
+            LinearLayout.LayoutParams optionParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            optionParams.bottomMargin = dp(this, 6);
+            options.addView(option, optionParams);
+            optionViews.add(option);
+        }
+        int maxListHeight = Math.min(dp(this, 360),
+                Math.max(dp(this, 120), getResources().getDisplayMetrics().heightPixels / 2));
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, maxListHeight);
+        scrollParams.topMargin = dp(this, 12);
+        panel.addView(scroll, scrollParams);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actionsParams.topMargin = dp(this, 8);
+        panel.addView(actions, actionsParams);
+        TextView close = styledActionButton("Đóng", true);
+        actions.addView(close, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        PopupWindow popup = showModalPopup(panel, false);
+        close.setOnClickListener(view -> popup.dismiss());
+        for (int index = 0; index < optionViews.size(); index++) {
+            final GameLibrary.Game game = candidates.get(index);
+            optionViews.get(index).setOnClickListener(view -> {
+                popup.dismiss();
+                openGame(game);
+            });
         }
     }
 
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
+        if (!AppPreferences.keepGameInBackground(this))
+            BackgroundGameService.applyBackgroundActivitySetting(this, false);
+        updateHomeMultitaskBadge();
+        if (pendingHomeOpen && interfaceInitialized) {
+            pendingHomeOpen = false;
+            if (currentScreen != TAB_HOME) changeScreen(TAB_HOME);
+        }
+        if (pendingSessionManagerOpen && interfaceInitialized) {
+            pendingSessionManagerOpen = false;
+            openSessionOverview();
+        }
+        if (openPendingRuntimeSession()) return;
         if (launcherRuntimeReturnPending) {
             launcherRuntimeReturnPending = false;
             if (returnToActiveRuntime()) return;
         }
+        RuntimeSessionStore.Session audioOwner = RuntimeSessionStore.foreground(this);
+        RuntimeSessionStore.publishAudioOwner(this,
+                audioOwner == null ? null : audioOwner.id);
         AppUpdateManager.resumePendingInstall(this);
         completeStorageSettingsReturn();
         processPendingExternalGameOpen();
@@ -2838,6 +3277,23 @@ import java.util.concurrent.Executors;
         } else {
             checkForAutomaticUpdateOnStartup();
         }
+    }
+
+    private boolean openPendingRuntimeSession() {
+        if (pendingRuntimeSessionId == null || !interfaceInitialized) return false;
+        String requestedSessionId = pendingRuntimeSessionId;
+        pendingRuntimeSessionId = null;
+        RuntimeSessionStore.Session requestedSession =
+                RuntimeSessionStore.find(this, requestedSessionId);
+        if (requestedSession != null) {
+            openRuntimeSession(requestedSession);
+        } else {
+            updateHomeMultitaskBadge();
+            Toast.makeText(this, AppLocalization.text(this,
+                    "Game này không còn chạy. Hãy mở lại từ thư viện."),
+                    Toast.LENGTH_LONG).show();
+        }
+        return true;
     }
 
     @Override protected void onPause() {
@@ -3073,10 +3529,8 @@ import java.util.concurrent.Executors;
                 } else if (finalResult.errors.isEmpty()) {
                     Toast.makeText(this, finalResult.summary(this), Toast.LENGTH_LONG).show();
                 } else {
-                    new AlertDialog.Builder(this)
-                            .setTitle(AppLocalization.text(this, "Hoàn tất thêm game"))
-                            .setMessage(finalResult.summary(this))
-                            .setPositiveButton(AppLocalization.text(this, "Đóng"), null).show();
+                    showStyledMessagePopup("Hoàn tất thêm game", finalResult.summary(this),
+                            "Đóng", null, null);
                 }
                 processPendingExternalGameOpen();
             });
@@ -3094,11 +3548,8 @@ import java.util.concurrent.Executors;
             }
         }
         if (candidates.isEmpty()) {
-            new AlertDialog.Builder(this)
-                    .setTitle(AppLocalization.text(this, "Không thể mở game"))
-                    .setMessage(result.summary(this))
-                    .setPositiveButton(AppLocalization.text(this, "Đóng"), null)
-                    .show();
+            showStyledMessagePopup("Không thể mở game", result.summary(this),
+                    "Đóng", null, null);
             return;
         }
         Runnable openSelection = () -> {
@@ -3106,26 +3557,13 @@ import java.util.concurrent.Executors;
                 openGame(candidates.get(0));
                 return;
             }
-            String[] titles = new String[candidates.size()];
-            for (int i = 0; i < candidates.size(); i++) {
-                titles[i] = candidates.get(i).title;
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle(AppLocalization.text(this, "Chọn game để mở"))
-                    .setItems(titles, (dialog, which) -> openGame(candidates.get(which)))
-                    .setNegativeButton(AppLocalization.text(this, "Đóng"), null)
-                    .show();
+            showImportedGameSelectionPopup(candidates);
         };
         if (result.errors.isEmpty()) {
             openSelection.run();
         } else {
-            new AlertDialog.Builder(this)
-                    .setTitle(AppLocalization.text(this, "Hoàn tất thêm game"))
-                    .setMessage(result.summary(this))
-                    .setPositiveButton(AppLocalization.text(this, "Tiếp tục"),
-                            (dialog, which) -> openSelection.run())
-                    .setNegativeButton(AppLocalization.text(this, "Đóng"), null)
-                    .show();
+            showStyledMessagePopup("Hoàn tất thêm game", result.summary(this),
+                    "Tiếp tục", "Đóng", openSelection);
         }
     }
 
@@ -3209,6 +3647,7 @@ import java.util.concurrent.Executors;
         static final int CLEAR = 7;
         static final int EDIT = 8;
         static final int CHEVRON = 9;
+        static final int MULTITASK = 10;
 
         private final int type;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -3255,6 +3694,22 @@ import java.util.concurrent.Executors;
                     path.close();
                     canvas.drawPath(path, paint);
                     canvas.drawLine(3.5f, 10.5f, 20.5f, 10.5f, paint);
+                    break;
+                case MULTITASK:
+                    paint.setStyle(Paint.Style.FILL);
+                    path.moveTo(12, 2); path.lineTo(2, 8); path.lineTo(12, 14);
+                    path.lineTo(22, 8); path.close();
+                    canvas.drawPath(path, paint);
+                    path.reset();
+                    path.moveTo(2, 12); path.lineTo(12, 18); path.lineTo(22, 12);
+                    path.lineTo(19.99f, 10.79f); path.lineTo(12, 15.59f);
+                    path.lineTo(3.99f, 10.79f); path.close();
+                    canvas.drawPath(path, paint);
+                    path.reset();
+                    path.moveTo(2, 16.5f); path.lineTo(12, 22.5f); path.lineTo(22, 16.5f);
+                    path.lineTo(19.99f, 15.29f); path.lineTo(12, 20.09f);
+                    path.lineTo(3.99f, 15.29f); path.close();
+                    canvas.drawPath(path, paint);
                     break;
                 case ADD:
                     canvas.drawLine(12, 4, 12, 20, paint);

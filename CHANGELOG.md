@@ -1,5 +1,28 @@
 # J2MEX Changelog
 
+## J2MEX 0.1.4
+
+#### Game sessions
+
+- Add the Tasks screen for up to five active games, with swipeable previews that preserve each game's orientation and session order.
+- Show the selected game's live Java heap usage and indicate active games in the launcher.
+- Keep game audio playing while viewing Tasks or returning to the launcher, and pause canvas drawing whenever a game is not visible.
+- Open a running game from its launcher icon, stop it from the launcher, and return to the correct screen from Android notifications.
+- Show separate ongoing notifications for background games only while background activity is enabled.
+
+#### Controls and interface
+
+- Redesign the edge-swipe menu as two swipeable pages, with log export on the second page and an updated Tasks label.
+- Use J2MEX-styled dialogs and place primary actions on the right.
+- Improve gamepad editor behavior when the Android keyboard opens, including on Android 10.
+
+#### Settings and compatibility
+
+- Default the status bar setting to off and background activity to on.
+- Improve session preview orientation, cutout handling, and lifecycle behavior when returning to J2MEX.
+
+**Install this update over 0.1.3 without uninstalling; existing app and game data will be retained.**
+
 ## 0.1.3
 
 #### Display and controls

@@ -18,6 +18,8 @@ final class AppPreferences {
     private static final String LANGUAGE = "language";
     static final String ACTION_RUNTIME_SETTINGS_CHANGED =
             "org.recompile.freej2me.lite.RUNTIME_SETTINGS_CHANGED";
+    static final String ACTION_BACKGROUND_ACTIVITY_CHANGED =
+            "org.recompile.freej2me.lite.BACKGROUND_ACTIVITY_CHANGED";
     static final String EXTRA_SHOW_FPS = "app_preferences.show_fps";
     static final String EXTRA_DEBUG_LOGS = "app_preferences.debug_logs";
     static final String EXTRA_STATUS_BAR = "app_preferences.status_bar";
@@ -52,11 +54,18 @@ final class AppPreferences {
         context.sendBroadcast(update);
     }
 
+    static void broadcastBackgroundActivityChanged(Context context, boolean enabled) {
+        Intent update = new Intent(ACTION_BACKGROUND_ACTIVITY_CHANGED)
+                .setPackage(context.getPackageName())
+                .putExtra(EXTRA_KEEP_GAME_IN_BACKGROUND, enabled);
+        context.sendBroadcast(update);
+    }
+
     static boolean persistRuntimeSnapshot(Context context, Intent update) {
         return preferences(context).edit()
                 .putBoolean(FPS, update.getBooleanExtra(EXTRA_SHOW_FPS, false))
                 .putBoolean(DEBUG_LOGS, update.getBooleanExtra(EXTRA_DEBUG_LOGS, false))
-                .putBoolean(STATUS_BAR, update.getBooleanExtra(EXTRA_STATUS_BAR, true))
+                .putBoolean(STATUS_BAR, update.getBooleanExtra(EXTRA_STATUS_BAR, false))
                 .putBoolean(KEEP_GAME_IN_BACKGROUND,
                         update.getBooleanExtra(EXTRA_KEEP_GAME_IN_BACKGROUND,
                                 keepGameInBackground(context)))
@@ -80,7 +89,7 @@ final class AppPreferences {
     }
 
     static boolean statusBarVisible(Context context) {
-        return preferences(context).getBoolean(STATUS_BAR, true);
+        return preferences(context).getBoolean(STATUS_BAR, false);
     }
 
     static void setStatusBarVisible(Context context, boolean visible) {
@@ -88,7 +97,7 @@ final class AppPreferences {
     }
 
     static boolean keepGameInBackground(Context context) {
-        return preferences(context).getBoolean(KEEP_GAME_IN_BACKGROUND, false);
+        return preferences(context).getBoolean(KEEP_GAME_IN_BACKGROUND, true);
     }
 
     static void setKeepGameInBackground(Context context, boolean enabled) {

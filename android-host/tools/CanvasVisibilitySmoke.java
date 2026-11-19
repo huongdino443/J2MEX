@@ -13,9 +13,10 @@ public final class CanvasVisibilitySmoke {
 
     private static final class CloneCanvas extends Canvas {
         final int color;
-        int keys, touches, drags, releases;
+        int paints, keys, touches, drags, releases;
         CloneCanvas(int color) { this.color = color; }
         protected void paint(Graphics graphics) {
+            paints++;
             graphics.setColor(color);
             graphics.fillRect(0, 0, getWidth(), getHeight());
         }
@@ -58,17 +59,23 @@ public final class CanvasVisibilitySmoke {
             CloneCanvas active = clones[selected];
             display.setCurrent(active);
             int before = frames.get();
+            int paintsBefore = active.paints;
             active.repaint();
             active.repaint(0, 0, 8, 8);
             active.serviceRepaints();
+            require(active.paints == paintsBefore + 2,
+                    "visible Canvas repaints still execute paint");
             require(frames.get() == before + 2,
                     "serviceRepaints does not republish completed synchronous repaints");
             for (CloneCanvas hidden : clones) {
                 if (hidden == active) continue;
                 before = frames.get();
+                paintsBefore = hidden.paints;
                 hidden.repaint();
                 hidden.repaint(0, 0, 8, 8);
                 require(frames.get() == before, "hidden repaint does not publish");
+                require(hidden.paints == paintsBefore,
+                        "hidden repaint skips game paint work");
                 hidden.serviceRepaints();
                 require(display.getCurrent() == active, "Display.current remains the selected clone");
                 require(frames.get() == before,
@@ -106,6 +113,8 @@ public final class CanvasVisibilitySmoke {
         display.setCurrent(clones[4]);
         int before = frames.get();
         Thread[] loops = new Thread[5];
+        int[] hiddenPaintsBefore = new int[clones.length];
+        for (int i = 0; i < clones.length; i++) hiddenPaintsBefore[i] = clones[i].paints;
         for (int i = 0; i < loops.length; i++) {
             final CloneCanvas clone = clones[i];
             loops[i] = new Thread(() -> {
@@ -122,7 +131,26 @@ public final class CanvasVisibilitySmoke {
         }
         require(frames.get() == before + 100,
                 "only active clone repaint publishes during concurrent loops");
+        require(clones[4].paints == hiddenPaintsBefore[4] + 100,
+                "active clone keeps its repaint work");
+        for (int i = 0; i < clones.length - 1; i++)
+            require(clones[i].paints == hiddenPaintsBefore[i],
+                    "hidden concurrent clone loops skip paint work");
         require(pixel(platform) == clones[4].color, "concurrent hidden loops cannot replace active image");
+
+        CloneCanvas foreground = clones[4];
+        before = frames.get();
+        int foregroundPaints = foreground.paints;
+        MobilePlatform.setRenderingEnabled(false);
+        foreground.repaint();
+        foreground.repaint(0, 0, 8, 8);
+        foreground.serviceRepaints();
+        require(frames.get() == before && foreground.paints == foregroundPaints,
+                "session background gate suppresses Canvas paint and frame publication");
+        MobilePlatform.setRenderingEnabled(true);
+        foreground.repaint();
+        require(frames.get() == before + 1 && foreground.paints == foregroundPaints + 1,
+                "foreground session resumes Canvas rendering");
 
         BufferedCanvas game = new BufferedCanvas();
         game.fill(0x00AA77);
@@ -149,7 +177,7 @@ public final class CanvasVisibilitySmoke {
         for (CloneCanvas clone : clones) clone.serviceRepaints();
         require(frames.get() == before, "background canvases cannot draw over launcher/Form");
         System.out.println("CanvasVisibilitySmoke: " + checks
-                + " checks passed; 5 concurrent clone loops, pixels/input, Canvas/GameCanvas visibility");
+                + " checks passed; 5 concurrent clone loops, hidden paint suppression, pixels/input, Canvas/GameCanvas visibility");
     }
 
     private static int pixel(MobilePlatform platform) {

@@ -57,7 +57,10 @@
                 <data android:mimeType="application/octet-stream"/>
             </intent-filter>
         </activity>
+        <activity android:name=".SessionOverviewActivity" android:exported="false"
+            android:windowSoftInputMode="adjustNothing"/>
         <activity android:name=".RuntimeActivity" android:exported="false"
+            android:launchMode="singleTop"
             android:process=":runtime"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
@@ -71,14 +74,77 @@
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeSecondActivity" android:exported="false"
+            android:launchMode="singleTop"
+            android:process=":runtime2"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeSecondLandscapeActivity" android:exported="false"
+            android:process=":runtime2"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeSecondPortraitActivity" android:exported="false"
+            android:process=":runtime2"
+            android:screenOrientation="portrait"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeThirdActivity" android:exported="false"
+            android:process=":runtime3"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeFourthActivity" android:exported="false"
+            android:process=":runtime4"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".RuntimeFifthActivity" android:exported="false"
+            android:process=":runtime5"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"/>
         <service android:name=".BackgroundGameService"
             android:exported="false"
             android:process=":runtime"
-            android:stopWithTask="true"
+            android:stopWithTask="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the active J2ME game runtime available while the user switches apps."/>
+        </service>
+        <service android:name=".BackgroundGameService2"
+            android:exported="false"
+            android:process=":runtime2"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a second active J2ME game runtime available while the user switches apps."/>
+        </service>
+        <service android:name=".BackgroundGameService3"
+            android:exported="false"
+            android:process=":runtime3"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a third active J2ME game runtime available while the user switches apps."/>
+        </service>
+        <service android:name=".BackgroundGameService4"
+            android:exported="false"
+            android:process=":runtime4"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a fourth active J2ME game runtime available while the user switches apps."/>
+        </service>
+        <service android:name=".BackgroundGameService5"
+            android:exported="false"
+            android:process=":runtime5"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a fifth active J2ME game runtime available while the user switches apps."/>
         </service>
         <activity android:name=".GameSettingsActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize"/>

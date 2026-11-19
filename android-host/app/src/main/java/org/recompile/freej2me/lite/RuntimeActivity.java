@@ -55,6 +55,7 @@ import org.recompile.freej2me.protocol.NativeScreen;
 import org.recompile.freej2me.protocol.FramebufferProtocol;
 import org.recompile.freej2me.protocol.BluetoothProtocol;
 import org.recompile.freej2me.protocol.AudioProtocol;
+import org.recompile.freej2me.protocol.RuntimeHostProtocol;
 import org.recompile.freej2me.lite.nativeui.NativeLcdUiView;
 import org.recompile.freej2me.lite.nativeui.NativeTextInputView;
 import org.recompile.freej2me.lite.nativeui.NativeOverlays;
@@ -63,12 +64,6 @@ import org.recompile.freej2me.lite.audio.AndroidAudioController;
 public class RuntimeActivity extends LocalizedActivity {
     private static final int REQUEST_BACKGROUND_NOTIFICATIONS = 79;
     private static final int REQUEST_BACKGROUND_SETTINGS_NOTIFICATIONS = 80;
-    private static volatile Class<? extends RuntimeActivity> notificationReturnActivityClass =
-            RuntimeActivity.class;
-
-    static Class<? extends RuntimeActivity> notificationReturnActivityClass() {
-        return notificationReturnActivityClass;
-    }
 
     private static final int UI_BACKGROUND = Color.rgb(14, 24, 38);
     private static final int UI_SURFACE = Color.rgb(25, 36, 52);
@@ -205,6 +200,7 @@ public class RuntimeActivity extends LocalizedActivity {
     private volatile Socket socket;
     private volatile DataOutputStream commands;
     private NativeTextInputView textInputPanel;
+    private boolean nativeTextFieldFocused;
     private AndroidAudioController audio;
     private int textInputRequestId = -1;
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
@@ -216,6 +212,9 @@ public class RuntimeActivity extends LocalizedActivity {
     private final ArrayList<ResponsiveDialog> responsiveDialogs = new ArrayList<>();
     private final ArrayDeque<BluetoothRequest> bluetoothQueue = new ArrayDeque<>();
     private final Handler backgroundServiceHandler = new Handler(Looper.getMainLooper());
+    private boolean sessionOverviewOpening;
+    private boolean sessionOverviewLaunched;
+    private Runnable sessionOverviewTimeout;
     private final Runnable memoryDiagnosticsRunnable = new Runnable() {
         @Override public void run() {
             if (isFinishing() || isDestroyed() || !debugLogsEnabled || !sessionLogStarted) return;
@@ -245,6 +244,67 @@ public class RuntimeActivity extends LocalizedActivity {
     private boolean keepGameInBackground;
     private boolean backgroundTransitionPending;
     private Runnable pendingBackgroundServiceStop;
+    private String sessionId;
+    private String sessionTitle;
+    private int sessionSlot;
+    private volatile boolean sessionVisible = true;
+    private volatile boolean screenInteractive = true;
+    private boolean screenStateReceiverRegistered;
+    private boolean audioOwnerReceiverRegistered;
+    private boolean heapQueryReceiverRegistered;
+    private boolean backgroundActivityReceiverRegistered;
+    private volatile boolean backgroundAudioOwner;
+    private final BroadcastReceiver runtimeScreenStateReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null) return;
+            if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
+                screenInteractive = false;
+                updateRendererVisibility();
+                updateAudioOutput();
+            } else if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
+                screenInteractive = true;
+                updateRendererVisibility();
+                updateAudioOutput();
+            }
+        }
+    };
+    private final BroadcastReceiver audioOwnerReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null
+                    || !RuntimeSessionStore.ACTION_AUDIO_OWNER_CHANGED.equals(intent.getAction()))
+                return;
+            String ownerId = intent.getStringExtra(RuntimeSessionStore.EXTRA_AUDIO_OWNER_ID);
+            backgroundAudioOwner = sessionId != null && sessionId.equals(ownerId);
+            updateAudioOutput();
+        }
+    };
+    private final BroadcastReceiver heapQueryReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null
+                    || !RuntimeSessionStore.ACTION_HOTSPOT_MEMORY_QUERY.equals(intent.getAction())
+                    || stopping || sessionId == null
+                    || !sessionId.equals(intent.getStringExtra(
+                            RuntimeSessionStore.EXTRA_SESSION_ID))) return;
+            send(RuntimeHostProtocol.REQUEST_HOTSPOT_MEMORY);
+        }
+    };
+    private final BroadcastReceiver backgroundActivityReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent == null || !AppPreferences.ACTION_BACKGROUND_ACTIVITY_CHANGED
+                    .equals(intent.getAction())) return;
+            keepGameInBackground = intent.getBooleanExtra(
+                    AppPreferences.EXTRA_KEEP_GAME_IN_BACKGROUND, false);
+            BackgroundGameService.updateBackgroundActivitySettingInProcess(
+                    context, keepGameInBackground);
+            updateAudioOutput();
+            if (keepGameInBackground) {
+                if (runtimeLaunchStarted) startBackgroundServiceIfEnabled();
+            } else {
+                backgroundTransitionPending = false;
+                cancelPendingBackgroundServiceStop();
+            }
+        }
+    };
     private int frameCount;
     private int fpsIntervalFrames;
     private long fpsIntervalStart;
@@ -273,7 +333,15 @@ public class RuntimeActivity extends LocalizedActivity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        notificationReturnActivityClass = getClass().asSubclass(RuntimeActivity.class);
+        sessionSlot = getIntent().getIntExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT,
+                defaultSessionSlot());
+        sessionId = getIntent().getStringExtra(RuntimeSessionStore.EXTRA_SESSION_ID);
+        sessionTitle = getIntent().getStringExtra("title");
+        if (sessionSlot != defaultSessionSlot()) {
+            android.util.Log.e("J2MEX", "Runtime session was routed to the wrong process slot");
+            finish();
+            return;
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
@@ -291,6 +359,46 @@ public class RuntimeActivity extends LocalizedActivity {
         }
         String jarPath = getIntent().getStringExtra("jar");
         gameSettings = GameSettings.load(this, jarPath == null ? null : new File(jarPath));
+        if (sessionId == null || sessionId.isEmpty()) {
+            try {
+                RuntimeSessionStore.Session reserved = RuntimeSessionStore.reserve(
+                        this, jarPath, sessionTitle);
+                if (reserved == null || reserved.slot != sessionSlot) {
+                    Toast.makeText(this, AppLocalization.text(this,
+                            "Không thể tạo phiên game mới."), Toast.LENGTH_LONG).show();
+                    finish();
+                    return;
+                }
+                sessionId = reserved.id;
+                sessionTitle = reserved.title;
+            } catch (IOException error) {
+                Toast.makeText(this, AppLocalization.text(this,
+                        "Không thể lưu phiên game."), Toast.LENGTH_LONG).show();
+                finish();
+                return;
+            }
+        }
+        RuntimeSessionStore.Session registered = RuntimeSessionStore.find(this, sessionId);
+        if (registered == null || registered.slot != sessionSlot) {
+            Toast.makeText(this, AppLocalization.text(this,
+                    "Phiên game không còn hoạt động."), Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+        if (registered.processId > 0) {
+            if (registered.processId != android.os.Process.myPid()) {
+                RuntimeSessionStore.remove(this, sessionId);
+                BackgroundGameService.stop(this, sessionSlot);
+                Toast.makeText(this, AppLocalization.text(this,
+                        "Phiên game đã dừng; J2MEX không tự khởi động lại game."),
+                        Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, AppLocalization.text(this,
+                        "Game này đã chạy trong phiên khác."), Toast.LENGTH_SHORT).show();
+            }
+            finish();
+            return;
+        }
         physicalKeyMappings = PhysicalKeyMapping.decode(gameSettings.physicalKeyMappings);
         gamepadVisibleForSession = gameSettings.gamepadEnabled;
         fpsEnabled = getIntent().getBooleanExtra(
@@ -303,6 +411,9 @@ public class RuntimeActivity extends LocalizedActivity {
         keepGameInBackground = getIntent().getBooleanExtra(
                 AppPreferences.EXTRA_KEEP_GAME_IN_BACKGROUND,
                 AppPreferences.keepGameInBackground(this));
+        registerAudioOwnerReceiver();
+        registerHeapQueryReceiver();
+        registerBackgroundActivityReceiver();
         applyRequestedOrientation();
         applyStatusBarPreference();
         gameSettings.gamepadLayoutId = GamepadTemplateLibrary.resolveId(
@@ -343,7 +454,8 @@ public class RuntimeActivity extends LocalizedActivity {
         });
         controlsLayer.addView(gamepadControls, new FrameLayout.LayoutParams(-1, -1,
                 Gravity.TOP | Gravity.LEFT));
-        nativeScreen = new NativeLcdUiView(this, this::sendNativeEvent);
+        nativeScreen = new NativeLcdUiView(this, this::sendNativeEvent,
+                this::onNativeTextFieldFocusChanged);
         overlays = new NativeOverlays(this, this::sendNativeEvent);
         nativeScreen.setVisibility(View.GONE);
         root.addView(nativeScreen, new FrameLayout.LayoutParams(-1, -1));
@@ -382,7 +494,7 @@ public class RuntimeActivity extends LocalizedActivity {
         updateCanvasLayout();
         root.requestApplyInsets();
         if (state != null && SessionLog.wasReplacedWithoutCleanEnd(
-                getFilesDir(), android.os.Process.myPid())) {
+                sessionLogRoot(), android.os.Process.myPid())) {
             Toast.makeText(this,
                     AppLocalization.text(this,
                             "Android đã kết thúc tiến trình game; J2MEX không tự tải lại game."),
@@ -391,6 +503,20 @@ public class RuntimeActivity extends LocalizedActivity {
             return;
         }
         requestBackgroundNotificationPermissionThenLaunch();
+    }
+
+    protected int defaultSessionSlot() {
+        return 0;
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null) return;
+        String requestedSession =
+                intent.getStringExtra(RuntimeSessionStore.EXTRA_SESSION_ID);
+        if (requestedSession != null && !requestedSession.equals(sessionId)) return;
+        if (intent.getBooleanExtra(RuntimeSessionStore.EXTRA_CLOSE_SESSION, false))
+            stopGame();
     }
 
     private void requestBackgroundNotificationPermissionThenLaunch() {
@@ -419,7 +545,7 @@ public class RuntimeActivity extends LocalizedActivity {
 
     private void applyStatusBarPreference(Window targetWindow) {
         if (targetWindow == null) return;
-        boolean editingTextInput = textInputPanel != null;
+        boolean editingTextInput = isTextInputAdjustingForIme();
         boolean hideStatusBar = !statusBarVisible && !editingTextInput;
         int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
         if (!editingTextInput) flags |= View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
@@ -442,6 +568,20 @@ public class RuntimeActivity extends LocalizedActivity {
                 }
             }
         }
+    }
+
+    private boolean isTextInputAdjustingForIme() {
+        return textInputPanel != null
+                || Build.VERSION.SDK_INT < Build.VERSION_CODES.R && nativeTextFieldFocused;
+    }
+
+    private void onNativeTextFieldFocusChanged(boolean focused) {
+        if (nativeTextFieldFocused == focused) return;
+        nativeTextFieldFocused = focused;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return;
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        applyStatusBarPreference();
+        if (root != null) root.requestApplyInsets();
     }
 
     private void showRuntimeDialog(Dialog dialog) {
@@ -476,7 +616,7 @@ public class RuntimeActivity extends LocalizedActivity {
         cutoutSafeInsetTop = safeTop;
         cutoutSafeInsetRight = safeRight;
         cutoutSafeInsetBottom = safeBottom;
-        boolean editingTextInput = textInputPanel != null;
+        boolean editingTextInput = isTextInputAdjustingForIme();
         int topInset = !editingTextInput && statusBarVisible
                 ? insets.getStableInsetTop() : 0;
         if (!editingTextInput && statusBarVisible && topInset <= 0)
@@ -1831,16 +1971,12 @@ public class RuntimeActivity extends LocalizedActivity {
                     && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                             != PackageManager.PERMISSION_GRANTED;
             keepGameInBackground = draftSettings[2];
+            updateAudioOutput();
             AppPreferences.syncRuntimeSettingsToMain(this, fpsEnabled, debugLogsEnabled,
                     statusBarVisible, keepGameInBackground);
             dialog.dismiss();
-            if (keepGameInBackground) {
-                startBackgroundServiceIfEnabled();
-            } else {
-                backgroundTransitionPending = false;
-                cancelPendingBackgroundServiceStop();
-                BackgroundGameService.stop(this);
-            }
+            BackgroundGameService.applyBackgroundActivitySetting(
+                    this, keepGameInBackground);
             if (requestBackgroundPermission) {
                 requestPermissions(new String[]{
                         android.Manifest.permission.POST_NOTIFICATIONS
@@ -2263,10 +2399,15 @@ public class RuntimeActivity extends LocalizedActivity {
     private final class EdgeSwipeMenu extends FrameLayout {
         private final View handle;
         private final LinearLayout panel;
+        private final HorizontalScrollView actionPager;
+        private final LinearLayout pageStrip;
         private final LinearLayout actionRows;
+        private final LinearLayout logRows;
+        private final View[] pageDots = new View[2];
         private final View logAction;
         private LinearLayout currentActionRow;
         private int actionCount;
+        private int currentPage;
         private boolean open;
         private float downX;
         private int contentTopInset;
@@ -2290,10 +2431,56 @@ public class RuntimeActivity extends LocalizedActivity {
                     Gravity.TOP | Gravity.LEFT);
             addView(panel, panelParams);
 
+            actionPager = new HorizontalScrollView(context);
+            actionPager.setHorizontalScrollBarEnabled(false);
+            actionPager.setFillViewport(true);
+            actionPager.setOverScrollMode(View.OVER_SCROLL_NEVER);
+            pageStrip = new LinearLayout(context);
+            pageStrip.setOrientation(LinearLayout.HORIZONTAL);
+            actionPager.addView(pageStrip, new HorizontalScrollView.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
             actionRows = new LinearLayout(context);
             actionRows.setOrientation(LinearLayout.VERTICAL);
-            panel.addView(actionRows, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            logRows = new LinearLayout(context);
+            logRows.setOrientation(LinearLayout.VERTICAL);
+            pageStrip.addView(actionRows, new LinearLayout.LayoutParams(
+                    dp(340), ViewGroup.LayoutParams.MATCH_PARENT));
+            pageStrip.addView(logRows, new LinearLayout.LayoutParams(
+                    dp(340), ViewGroup.LayoutParams.MATCH_PARENT));
+            panel.addView(actionPager, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(152)));
+
+            LinearLayout pageIndicator = new LinearLayout(context);
+            pageIndicator.setGravity(Gravity.CENTER);
+            pageIndicator.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams indicatorParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(8));
+            panel.addView(pageIndicator, indicatorParams);
+            pageIndicator.setTranslationY(-dp(4));
+            for (int index = 0; index < pageDots.length; index++) {
+                final int page = index;
+                View dot = new View(context);
+                dot.setClickable(true);
+                dot.setFocusable(true);
+                LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(
+                        dp(5), dp(5));
+                dotParams.setMargins(dp(3), 0, dp(3), 0);
+                pageIndicator.addView(dot, dotParams);
+                dot.setOnClickListener(view -> scrollToPage(page));
+                pageDots[index] = dot;
+            }
+            updatePageIndicator(0);
+            actionPager.getViewTreeObserver().addOnScrollChangedListener(() -> {
+                int pageWidth = actionRows.getWidth();
+                if (pageWidth > 0)
+                    updatePageIndicator(actionPager.getScrollX() >= pageWidth / 2 ? 1 : 0);
+            });
+            actionPager.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_UP)
+                    postDelayed(this::snapToPage, 100);
+                return false;
+            });
+
             addAction(EdgeActionIcon.SETTINGS, "Cài đặt",
                     RuntimeActivity.this::showRuntimeSettings);
             addAction(EdgeActionIcon.GAMEPAD, "Gamepad",
@@ -2302,15 +2489,25 @@ public class RuntimeActivity extends LocalizedActivity {
                     RuntimeActivity.this::captureCanvasScreenshot);
             addAction(EdgeActionIcon.KEYBOARD, "Bàn phím",
                     RuntimeActivity.this::showGameKeyboard);
+            addAction(EdgeActionIcon.MULTITASK, "Tác vụ",
+                    RuntimeActivity.this::openSessionManager);
             addAction(EdgeActionIcon.SPEED, "Tốc độ giả lập",
                     RuntimeActivity.this::showEmulationSpeedDialog);
             addAction(EdgeActionIcon.MEMORY, "Trình sửa bộ nhớ",
                     RuntimeActivity.this::showMemoryEditor);
-            logAction = addAction(EdgeActionIcon.LOG, "Lưu log",
-                    () -> HostFiles.requestLog(RuntimeActivity.this));
-            setLogActionEnabled(debugLogsEnabled);
             addAction(EdgeActionIcon.EXIT, "Thoát game",
                     RuntimeActivity.this::confirmStopGame);
+            LinearLayout logRow = new LinearLayout(RuntimeActivity.this);
+            logRow.setOrientation(LinearLayout.HORIZONTAL);
+            logRows.addView(logRow, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(76)));
+            logAction = createActionButton(EdgeActionIcon.LOG, "Lưu log",
+                    () -> HostFiles.requestLog(RuntimeActivity.this));
+            logRow.addView(logAction, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            logRow.addView(new View(RuntimeActivity.this), new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.MATCH_PARENT, 3f));
+            setLogActionEnabled(debugLogsEnabled);
 
             handle = new View(context) {
                 private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -2362,6 +2559,14 @@ public class RuntimeActivity extends LocalizedActivity {
                 actionRows.addView(currentActionRow, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, dp(76)));
             }
+            LinearLayout button = createActionButton(icon, description, action);
+            currentActionRow.addView(button, new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            actionCount++;
+            return button;
+        }
+
+        private LinearLayout createActionButton(int icon, String description, Runnable action) {
             LinearLayout button = new LinearLayout(RuntimeActivity.this);
             button.setOrientation(LinearLayout.VERTICAL);
             button.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
@@ -2383,9 +2588,6 @@ public class RuntimeActivity extends LocalizedActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(32));
             labelParams.topMargin = dp(3);
             button.addView(label, labelParams);
-            currentActionRow.addView(button, new LinearLayout.LayoutParams(0,
-                    ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-            actionCount++;
             button.setOnClickListener(view -> {
                 closeMenu();
                 action.run();
@@ -2399,6 +2601,31 @@ public class RuntimeActivity extends LocalizedActivity {
                 return false;
             });
             return button;
+        }
+
+        private void updatePageIndicator(int selectedPage) {
+            currentPage = Math.max(0, Math.min(1, selectedPage));
+            for (int index = 0; index < pageDots.length; index++) {
+                View dot = pageDots[index];
+                if (dot != null)
+                    dot.setBackground(roundDrawable(index == currentPage
+                            ? UI_ACCENT : UI_MUTED, dp(6), 0));
+            }
+        }
+
+        private void scrollToPage(int page) {
+            int width = actionRows.getWidth();
+            if (width <= 0) return;
+            int selectedPage = Math.max(0, Math.min(1, page));
+            currentPage = selectedPage;
+            actionPager.smoothScrollTo(selectedPage * width, 0);
+            updatePageIndicator(selectedPage);
+        }
+
+        private void snapToPage() {
+            int width = actionRows.getWidth();
+            if (width <= 0) return;
+            scrollToPage(actionPager.getScrollX() >= width / 2 ? 1 : 0);
         }
 
         private void setLogActionEnabled(boolean enabled) {
@@ -2416,6 +2643,8 @@ public class RuntimeActivity extends LocalizedActivity {
             panel.setVisibility(View.VISIBLE);
             panel.setAlpha(0f);
             panel.setTranslationX(-Math.max(panel.getWidth(), dp(360)) - dp(20));
+            actionPager.scrollTo(0, 0);
+            updatePageIndicator(0);
             setClickable(true);
             bringToFront();
             handle.bringToFront();
@@ -2483,6 +2712,33 @@ public class RuntimeActivity extends LocalizedActivity {
                 panelParams.width = nextWidth;
                 panel.setLayoutParams(panelParams);
             }
+            int pageWidth = Math.max(dp(1),
+                    nextWidth - panel.getPaddingLeft() - panel.getPaddingRight());
+            for (LinearLayout page : new LinearLayout[]{actionRows, logRows}) {
+                LinearLayout.LayoutParams pageParams =
+                        (LinearLayout.LayoutParams) page.getLayoutParams();
+                if (pageParams.width != pageWidth) {
+                    pageParams.width = pageWidth;
+                    page.setLayoutParams(pageParams);
+                }
+            }
+            ViewGroup.LayoutParams stripParams = pageStrip.getLayoutParams();
+            int stripWidth = pageWidth * 2;
+            if (stripParams.width != stripWidth) {
+                stripParams.width = stripWidth;
+                pageStrip.setLayoutParams(stripParams);
+            }
+            alignCurrentPageAfterLayout();
+        }
+
+        private void alignCurrentPageAfterLayout() {
+            int pageToKeep = currentPage;
+            actionPager.post(() -> {
+                int pageWidth = actionRows.getWidth();
+                if (pageWidth <= 0) return;
+                actionPager.scrollTo(pageToKeep * pageWidth, 0);
+                updatePageIndicator(pageToKeep);
+            });
         }
 
         void refreshForCurrentViewport() {
@@ -2492,6 +2748,10 @@ public class RuntimeActivity extends LocalizedActivity {
             panel.requestLayout();
             requestLayout();
             post(() -> {
+                int actualWidth = getWidth();
+                if (actualWidth > 0) updatePanelWidth(actualWidth);
+                actionPager.requestLayout();
+                alignCurrentPageAfterLayout();
                 if (getHeight() > 0) updatePosition(getHeight());
             });
         }
@@ -2549,6 +2809,7 @@ public class RuntimeActivity extends LocalizedActivity {
         static final int SETTINGS = 6;
         static final int GAMEPAD = 7;
         static final int SCREENSHOT = 8;
+        static final int MULTITASK = 9;
 
         EdgeActionIcon(Context context, int type) {
             super(context);
@@ -2568,6 +2829,7 @@ public class RuntimeActivity extends LocalizedActivity {
                 case SETTINGS: return R.drawable.edge_settings;
                 case GAMEPAD: return R.drawable.edge_gamepad;
                 case SCREENSHOT: return R.drawable.edge_screenshot;
+                case MULTITASK: return R.drawable.edge_multitask;
                 default: throw new IllegalArgumentException("Unknown edge icon " + icon);
             }
         }
@@ -2660,6 +2922,11 @@ public class RuntimeActivity extends LocalizedActivity {
     private synchronized void startEngineThread() {
         if (runtimeLaunchStarted || isFinishing() || isDestroyed()) return;
         runtimeLaunchStarted = true;
+        try {
+            RuntimeSessionStore.updateProcessId(this, sessionId, android.os.Process.myPid());
+        } catch (IOException error) {
+            android.util.Log.e("J2MEX", "Cannot persist runtime session process", error);
+        }
         startBackgroundServiceIfEnabled();
         new Thread(this::launchEngine, "RuntimeLauncher").start();
     }
@@ -2695,7 +2962,8 @@ public class RuntimeActivity extends LocalizedActivity {
                                 ? "(manifest default)" : selectedMidletName + " [" + selectedMidletClass + "]")
                         + "\nRun stage=preparing runtime\n";
                 try {
-                    SessionLog.begin(getFilesDir(), work, header, android.os.Process.myPid());
+                    SessionLog.begin(
+                            sessionLogRoot(), work, header, android.os.Process.myPid());
                     sessionLogStarted = true;
                     recordRuntimeState("runtime-start");
                     backgroundServiceHandler.removeCallbacks(memoryDiagnosticsRunnable);
@@ -2711,14 +2979,18 @@ public class RuntimeActivity extends LocalizedActivity {
             if (!debugLogsEnabled) {
                 try {
                     SessionLog.beginRuntimeMarker(
-                            getFilesDir(), work, android.os.Process.myPid());
+                            sessionLogRoot(), work, android.os.Process.myPid());
                 } catch (IOException markerError) {
                     android.util.Log.w("FreeJ2ME", "Cannot persist runtime process marker",
                             markerError);
                 }
             }
-            File audioCache = new File(getCacheDir(), "freej2me-audio");
+            File audioCache = new File(
+                    new File(getCacheDir(), "freej2me-audio"), sessionId);
             resetAudioCache(audioCache);
+            File nativeCache = new File(
+                    new File(getCacheDir(), "runtime-sessions"), sessionId);
+            HostFiles.mkdir(nativeCache);
             File runtime = new File(getFilesDir(), "runtime");
             String token = UUID.randomUUID().toString();
             fontServer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
@@ -2736,7 +3008,8 @@ public class RuntimeActivity extends LocalizedActivity {
             String cp = new File(getFilesDir(), "engine.jar") + ":" + new File(getFilesDir(), "bridge.jar");
             String deviceLocale = Locale.getDefault().toLanguageTag();
             String nativeLogPath = debugLogsEnabled && sessionLogStarted
-                    ? HostFiles.log(this).getAbsolutePath() : "/dev/null";
+                    ? new File(sessionLogRoot(), "latestlog.txt").getAbsolutePath()
+                    : "/dev/null";
             ArrayList<String> launchArguments = new ArrayList<>(Arrays.asList(
                     jar.toURI().toASCIIString(),
                     Integer.toString(gameSettings.canvasWidth),
@@ -2754,10 +3027,10 @@ public class RuntimeActivity extends LocalizedActivity {
             if (debugLogsEnabled && sessionLogStarted)
                 launchArguments.add("--j2mex-memory-diagnostics=true");
             int result = NativeHost.launch(runtime.getAbsolutePath(), work.getAbsolutePath(),
-                    getCacheDir().getAbsolutePath(), cp, nativeLogPath,
+                    nativeCache.getAbsolutePath(), cp, nativeLogPath,
                     launchArguments.toArray(new String[0]));
             runtimeHostExited = true;
-            SessionLog.markRuntimeEnded(getFilesDir(), android.os.Process.myPid(),
+            SessionLog.markRuntimeEnded(sessionLogRoot(), android.os.Process.myPid(),
                     "native-host-return-" + result);
             appendSessionLog("[runtime-exit] native host result=" + result);
             update(result == -21
@@ -3040,6 +3313,8 @@ public class RuntimeActivity extends LocalizedActivity {
                 socket = candidate; socket.setSoTimeout(0);
                 commands = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
                 send(14, displayRefreshHz);
+                send(RuntimeHostProtocol.SET_RENDERING_ENABLED,
+                        sessionVisible && screenInteractive ? 1 : 0);
                 byte[] bytes = null;
                 int[] pixels = null;
                 IntBuffer pixelBuffer = null;
@@ -3119,7 +3394,7 @@ public class RuntimeActivity extends LocalizedActivity {
                                     && (lastSlowFrameLogAt == 0
                                             || now - lastSlowFrameLogAt >= 15_000_000_000L)) {
                                 try {
-                                    SessionLog.append(getFilesDir(), String.format(Locale.US,
+                                    SessionLog.append(sessionLogRoot(), String.format(Locale.US,
                                             "[frame-pipeline] slow window frames=%d gapAvg/Max=%.2f/%.2fms " +
                                             ">1.5vsync=%d readAvg/Max=%.2f/%.2fms " +
                                             "decodeAvg/Max=%.2f/%.2fms bitmapAvg/Max=%.2f/%.2fms %s",
@@ -3153,7 +3428,7 @@ public class RuntimeActivity extends LocalizedActivity {
                                     } catch (RuntimeException ignored) { }
                                 }
                                 try {
-                                    SessionLog.append(getFilesDir(), String.format(Locale.US,
+                                    SessionLog.append(sessionLogRoot(), String.format(Locale.US,
                                             "[android-perf] intervalMs=%d processCpuDeltaMs=%d " +
                                             "cpuPermilleOneCore=%d thermalStatus=%d",
                                             intervalMs, processCpuDeltaMs,
@@ -3221,11 +3496,21 @@ public class RuntimeActivity extends LocalizedActivity {
                         int flags = incoming.readInt();
                         if (debugLogsEnabled) {
                             try {
-                                SessionLog.append(getFilesDir(), "[audio-host] command action=" + action
+                                SessionLog.append(sessionLogRoot(), "[audio-host] command action=" + action
                                         + " player=" + playerId + " number=" + number + " flags=" + flags);
                             } catch (IOException error) { appendError(error); }
                         }
                         if (audio != null) audio.handle(action, playerId, text, extra, value, number, flags);
+                    } else if (type == RuntimeHostProtocol.HOTSPOT_MEMORY_RESPONSE) {
+                        long usedBytes = Math.max(0L, incoming.readLong());
+                        long maxBytes = Math.max(0L, incoming.readLong());
+                        Intent memoryUpdate = new Intent(
+                                RuntimeSessionStore.ACTION_HOTSPOT_MEMORY_UPDATE)
+                                .setPackage(getPackageName())
+                                .putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, sessionId)
+                                .putExtra(RuntimeSessionStore.EXTRA_HOTSPOT_MEMORY_USED, usedBytes)
+                                .putExtra(RuntimeSessionStore.EXTRA_HOTSPOT_MEMORY_MAX, maxBytes);
+                        sendBroadcast(memoryUpdate);
                     } else if (type == BluetoothProtocol.MEMORY_EDITOR_REPLY) {
                         int requestId = incoming.readInt();
                         int operation = incoming.readInt();
@@ -3269,7 +3554,7 @@ public class RuntimeActivity extends LocalizedActivity {
                     else {
                         if (debugLogsEnabled) {
                             try {
-                                SessionLog.append(getFilesDir(), "[frame-rx] invalid-type=" + type
+                                SessionLog.append(sessionLogRoot(), "[frame-rx] invalid-type=" + type
                                         + " after-frames=" + frameCount + " last-size="
                                         + lastFrameWidth + "x" + lastFrameHeight
                                         + " native-ui=" + nativeVisible);
@@ -3329,7 +3614,7 @@ public class RuntimeActivity extends LocalizedActivity {
         diagnosticUncaughtExceptionHandler = (thread, error) -> {
             if (debugLogsEnabled && sessionLogStarted) {
                 try {
-                    SessionLog.appendUncaught(getFilesDir(), thread, error);
+                    SessionLog.appendUncaught(sessionLogRoot(), thread, error);
                 } catch (IOException logError) {
                     android.util.Log.e("FreeJ2ME", "Cannot persist runtime crash report",
                             logError);
@@ -3354,10 +3639,17 @@ public class RuntimeActivity extends LocalizedActivity {
         previousUncaughtExceptionHandler = null;
     }
 
+    private File sessionLogRoot() {
+        File root = SessionLog.sessionDirectory(getFilesDir(), sessionId);
+        if (!root.isDirectory() && !root.mkdirs())
+            android.util.Log.w("J2MEX", "Cannot create per-session diagnostic folder");
+        return root;
+    }
+
     private void appendSessionLog(String line) {
         if (!debugLogsEnabled || !sessionLogStarted) return;
         try {
-            SessionLog.append(getFilesDir(), line);
+            SessionLog.append(sessionLogRoot(), line);
         } catch (IOException error) {
             android.util.Log.w("FreeJ2ME", "Cannot append runtime diagnostic log", error);
         }
@@ -4078,7 +4370,7 @@ public class RuntimeActivity extends LocalizedActivity {
                 default: state = "event-" + event;
             }
             try {
-                SessionLog.append(getFilesDir(), "[audio] player=" + playerId + " " + state
+                SessionLog.append(sessionLogRoot(), "[audio] player=" + playerId + " " + state
                         + (value >= 0 ? " duration-us=" + value : "") + (detail == null || detail.isEmpty() ? "" : " " + detail));
             } catch (IOException error) { appendError(error); }
         }
@@ -4224,7 +4516,27 @@ public class RuntimeActivity extends LocalizedActivity {
     }
     @Override protected void onResume() {
         super.onResume();
+        sessionOverviewOpening = false;
+        sessionOverviewLaunched = false;
+        sessionOverviewTimeout = null;
         backgroundTransitionPending = false;
+        sessionVisible = !stopping;
+        PowerManager powerManager =
+                (PowerManager) getSystemService(Context.POWER_SERVICE);
+        screenInteractive = powerManager == null || powerManager.isInteractive();
+        updateAudioOutput();
+        updateRendererVisibility();
+        if (sessionId != null && !stopping) {
+            try {
+                RuntimeSessionStore.setForeground(this, sessionId);
+                backgroundAudioOwner = true;
+                RuntimeSessionStore.publishAudioOwner(this, sessionId);
+                RuntimeSessionStore.updateProcessId(
+                        this, sessionId, android.os.Process.myPid());
+            } catch (IOException error) {
+                android.util.Log.e("J2MEX", "Cannot update active runtime session", error);
+            }
+        }
         if (keepGameInBackground && !stopping) {
             cancelPendingBackgroundServiceStop();
             if (runtimeLaunchStarted) startBackgroundServiceIfEnabled();
@@ -4241,6 +4553,74 @@ public class RuntimeActivity extends LocalizedActivity {
         updateDisplayRefreshRate();
         recordRuntimeState("onResume");
     }
+    @Override protected void onStart() {
+        super.onStart();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(runtimeScreenStateReceiver, filter,
+                        Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(runtimeScreenStateReceiver, filter);
+            }
+            screenStateReceiverRegistered = true;
+        } catch (RuntimeException error) {
+            android.util.Log.w("J2MEX",
+                    "Could not observe screen state for canvas rendering", error);
+        }
+        PowerManager powerManager =
+                (PowerManager) getSystemService(Context.POWER_SERVICE);
+        screenInteractive = powerManager == null || powerManager.isInteractive();
+        updateRendererVisibility();
+        updateAudioOutput();
+    }
+
+    private void updateRendererVisibility() {
+        boolean visible = sessionVisible && screenInteractive && !stopping;
+        if (runtimeLaunchStarted && !runtimeHostExited)
+            send(RuntimeHostProtocol.SET_RENDERING_ENABLED, visible ? 1 : 0);
+    }
+
+    private void updateAudioOutput() {
+        if (audio == null) return;
+        boolean enabled = !stopping
+                && (sessionVisible || keepGameInBackground && backgroundAudioOwner);
+        audio.setOutputEnabled(enabled);
+    }
+
+    private void registerAudioOwnerReceiver() {
+        IntentFilter filter = new IntentFilter(RuntimeSessionStore.ACTION_AUDIO_OWNER_CHANGED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(audioOwnerReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(audioOwnerReceiver, filter);
+        }
+        audioOwnerReceiverRegistered = true;
+    }
+
+    private void registerHeapQueryReceiver() {
+        IntentFilter filter = new IntentFilter(RuntimeSessionStore.ACTION_HOTSPOT_MEMORY_QUERY);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(heapQueryReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(heapQueryReceiver, filter);
+        }
+        heapQueryReceiverRegistered = true;
+    }
+
+    private void registerBackgroundActivityReceiver() {
+        IntentFilter filter =
+                new IntentFilter(AppPreferences.ACTION_BACKGROUND_ACTIVITY_CHANGED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(backgroundActivityReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(backgroundActivityReceiver, filter);
+        }
+        backgroundActivityReceiverRegistered = true;
+    }
+
     @Override protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         if (shouldKeepRuntimeInBackground()) {
@@ -4262,6 +4642,9 @@ public class RuntimeActivity extends LocalizedActivity {
     }
     @Override protected void onPause() {
         recordRuntimeState("onPause");
+        sessionVisible = false;
+        updateAudioOutput();
+        updateRendererVisibility();
         // Retry after the activity begins pausing: the first foreground-service request can
         // race the launcher/Recents transition on some Android builds.
         if (backgroundTransitionPending && shouldKeepRuntimeInBackground())
@@ -4280,6 +4663,14 @@ public class RuntimeActivity extends LocalizedActivity {
 
     @Override protected void onStop() {
         recordRuntimeState("onStop");
+        if (screenStateReceiverRegistered) {
+            try {
+                unregisterReceiver(runtimeScreenStateReceiver);
+            } catch (RuntimeException error) {
+                android.util.Log.w("J2MEX", "Could not unregister runtime screen listener", error);
+            }
+            screenStateReceiverRegistered = false;
+        }
         super.onStop();
     }
 
@@ -4302,7 +4693,9 @@ public class RuntimeActivity extends LocalizedActivity {
     private void startBackgroundServiceIfEnabled() {
         if (!shouldKeepRuntimeInBackground()) return;
         cancelPendingBackgroundServiceStop();
-        if (!BackgroundGameService.start(this)
+        RuntimeSessionStore.Session session =
+                RuntimeSessionStore.find(this, sessionId);
+        if (!BackgroundGameService.start(this, session)
                 && Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
@@ -4322,7 +4715,7 @@ public class RuntimeActivity extends LocalizedActivity {
         pendingBackgroundServiceStop = () -> {
             pendingBackgroundServiceStop = null;
             if (!backgroundTransitionPending && !isFinishing() && !isDestroyed())
-                BackgroundGameService.stop(this);
+                BackgroundGameService.stop(this, sessionSlot);
         };
         backgroundServiceHandler.postDelayed(pendingBackgroundServiceStop, 500);
     }
@@ -4335,6 +4728,114 @@ public class RuntimeActivity extends LocalizedActivity {
             }
         }
     }
+    private void openSessionManager() {
+        if (sessionOverviewOpening) return;
+        sessionOverviewOpening = true;
+        if (edgeMenu != null) {
+            edgeMenu.closeMenu();
+            edgeMenu.setVisibility(View.GONE);
+        }
+        if (sessionId != null) RuntimeSessionPreviewStore.delete(this, sessionId);
+        captureSessionCanvasPreview();
+    }
+
+    private void captureSessionCanvasPreview() {
+        if (nativeVisible || !initialDisplayReady || screenView == null
+                || screen == null || sessionId == null
+                || screenView.getWidth() <= 0 || screenView.getHeight() <= 0) {
+            launchSessionOverview();
+            return;
+        }
+
+        RectF canvasBounds = new RectF();
+        if (!screen.getCanvasBounds(canvasBounds)) {
+            launchSessionOverview();
+            return;
+        }
+        int sourceWidth = screenView.getWidth();
+        int sourceHeight = screenView.getHeight();
+        int left = Math.max(0, (int) Math.floor(canvasBounds.left));
+        int top = Math.max(0, (int) Math.floor(canvasBounds.top));
+        int right = Math.min(sourceWidth, (int) Math.ceil(canvasBounds.right));
+        int bottom = Math.min(sourceHeight, (int) Math.ceil(canvasBounds.bottom));
+        if (right <= left || bottom <= top) {
+            launchSessionOverview();
+            return;
+        }
+        Rect sourceRect = new Rect(left, top, right, bottom);
+        float scale = Math.min(1f, 900f / Math.max(sourceRect.width(), sourceRect.height()));
+        int previewWidth = Math.max(1, Math.round(sourceRect.width() * scale));
+        int previewHeight = Math.max(1, Math.round(sourceRect.height() * scale));
+        final Bitmap bitmap;
+        try {
+            bitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888);
+        } catch (OutOfMemoryError error) {
+            android.util.Log.w("J2MEX", "Not enough memory for task preview", error);
+            launchSessionOverview();
+            return;
+        }
+
+        sessionOverviewTimeout = this::launchSessionOverview;
+        backgroundServiceHandler.postDelayed(sessionOverviewTimeout, 500);
+        if (screenView instanceof SurfaceView) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                bitmap.recycle();
+                launchSessionOverview();
+                return;
+            }
+            android.view.Surface surface =
+                    ((SurfaceView) screenView).getHolder().getSurface();
+            if (surface == null || !surface.isValid()) {
+                bitmap.recycle();
+                launchSessionOverview();
+                return;
+            }
+            PixelCopy.request(surface, sourceRect, bitmap, result -> {
+                if (result != PixelCopy.SUCCESS) {
+                    bitmap.recycle();
+                    android.util.Log.w("J2MEX",
+                            "Canvas preview capture failed: " + result);
+                    launchSessionOverview();
+                    return;
+                }
+                saveSessionCanvasPreview(bitmap);
+            }, new Handler(Looper.getMainLooper()));
+            return;
+        }
+
+        Canvas captureCanvas = new Canvas(bitmap);
+        captureCanvas.scale(scale, scale);
+        captureCanvas.translate(-sourceRect.left, -sourceRect.top);
+        screenView.draw(captureCanvas);
+        saveSessionCanvasPreview(bitmap);
+    }
+
+    private void saveSessionCanvasPreview(Bitmap bitmap) {
+        String capturedSessionId = sessionId;
+        Thread writer = new Thread(() -> {
+            RuntimeSessionPreviewStore.save(this, capturedSessionId, bitmap);
+            bitmap.recycle();
+            runOnUiThread(this::launchSessionOverview);
+        }, "SessionPreviewWriter");
+        writer.setDaemon(true);
+        writer.start();
+    }
+
+    private void launchSessionOverview() {
+        if (sessionOverviewLaunched) return;
+        sessionOverviewLaunched = true;
+        if (sessionOverviewTimeout != null) {
+            backgroundServiceHandler.removeCallbacks(sessionOverviewTimeout);
+            sessionOverviewTimeout = null;
+        }
+        Intent intent = new Intent(this, SessionOverviewActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (sessionId != null)
+            intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, sessionId);
+        startActivity(intent);
+    }
+
     private void confirmStopGame() {
         if (stopping) return;
         Dialog dialog = new Dialog(this);
@@ -4463,17 +4964,48 @@ public class RuntimeActivity extends LocalizedActivity {
         backgroundServiceHandler.removeCallbacks(memoryDiagnosticsRunnable);
         recordRuntimeState("onDestroy");
         restoreDiagnosticCrashHandler();
+        if (audioOwnerReceiverRegistered) {
+            try {
+                unregisterReceiver(audioOwnerReceiver);
+            } catch (RuntimeException error) {
+                android.util.Log.w("J2MEX", "Could not unregister audio-owner listener", error);
+            }
+            audioOwnerReceiverRegistered = false;
+        }
+        if (heapQueryReceiverRegistered) {
+            try {
+                unregisterReceiver(heapQueryReceiver);
+            } catch (RuntimeException error) {
+                android.util.Log.w("J2MEX", "Could not unregister heap-query listener", error);
+            }
+            heapQueryReceiverRegistered = false;
+        }
+        if (backgroundActivityReceiverRegistered) {
+            try {
+                unregisterReceiver(backgroundActivityReceiver);
+            } catch (RuntimeException error) {
+                android.util.Log.w("J2MEX",
+                        "Could not unregister background-setting listener", error);
+            }
+            backgroundActivityReceiverRegistered = false;
+        }
         super.onDestroy();
         if (overlays != null) overlays.clear();
         if (audio != null) audio.close();
         if (isFinishing()) {
             if (!runtimeHostExited) {
-                SessionLog.markRuntimeEnded(getFilesDir(), android.os.Process.myPid(),
+                SessionLog.markRuntimeEnded(sessionLogRoot(), android.os.Process.myPid(),
                         "activity-finishing");
             }
+            try {
+                SessionLog.promote(sessionLogRoot(), getFilesDir());
+            } catch (IOException error) {
+                android.util.Log.w("J2MEX", "Cannot promote latest runtime log", error);
+            }
+            RuntimeSessionStore.remove(this, sessionId);
             backgroundTransitionPending = false;
             cancelPendingBackgroundServiceStop();
-            BackgroundGameService.stop(this);
+            BackgroundGameService.stop(this, sessionSlot);
             stopping = true; commands = null; sender.shutdownNow();
             unregisterBluetoothDiscoveryReceiver();
             unregisterBluetoothUuidReceiver();

@@ -48,6 +48,7 @@ public class MobilePlatform
 	private static final IdentityHashMap<Object, Object> displayOwners =
 			new IdentityHashMap<Object, Object>();
 	private static Object activeDisplayOwner = NO_ACTIVE_DISPLAY_OWNER;
+	private static volatile boolean renderingEnabled = true;
 
 	/**
 	 * Tracks the active child MIDlet for JARs that bundle a multi-MIDlet launcher.
@@ -80,6 +81,16 @@ public class MobilePlatform
 	{
 		Object owner = displayOwners.get(displayProxy);
 		return owner != null && activeDisplayOwner == owner && !CloneClassSpace.isRetired(owner);
+	}
+
+	public static void setRenderingEnabled(boolean enabled)
+	{
+		renderingEnabled = enabled;
+	}
+
+	public static boolean isRenderingEnabled()
+	{
+		return renderingEnabled;
 	}
 
 	public static void destroyDisplayOwner(Object owner)
