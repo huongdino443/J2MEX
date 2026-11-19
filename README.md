@@ -1,4 +1,8 @@
-# J2MEX
+<p align="center">
+  <img src="assets/j2mex-icon.png" alt="J2MEX icon" width="140">
+</p>
+
+<h1 align="center">J2MEX</h1>
 
 J2MEX is an Android Java ME emulator that runs original MIDlet `.jar` files
 directly, without converting them to Android DEX. It uses the FreeJ2ME
