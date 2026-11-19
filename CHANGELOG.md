@@ -14,7 +14,7 @@
 
 - Redesign the edge-swipe menu as two swipeable pages, with log export on the second page and an updated Tasks label.
 - Use J2MEX-styled dialogs and place primary actions on the right.
-- Improve gamepad editor behavior when the Android keyboard opens, including on Android 10.
+- Keep the command bar visible when the Android keyboard opens from a text field, including on Android 10.
 
 #### Settings and compatibility
 
