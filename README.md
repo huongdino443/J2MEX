@@ -14,7 +14,7 @@ The release page includes the latest APK and release notes.
 ## JAR Tool
 
 Want to run multiple MIDlets at once, or create many copies of a Java game that
-all run from a single JAR? Try [JAR Tool](https://huongdino443.github.io/J2MEX/tools/jar-tool/).
+all run from a single JAR? Try [𝙅𝘼𝙍 𝙏𝙤𝙤𝙡](https://huongdino443.github.io/J2MEX/tools/jar-tool/).
 It runs in your browser and processes JAR files locally on your device.
 
 ## Features
