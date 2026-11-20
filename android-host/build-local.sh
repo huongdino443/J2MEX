@@ -306,6 +306,13 @@ java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/rms-large
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/audio-test tools/AudioBridgeSmoke.java
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/audio-test AudioBridgeSmoke
+mkdir -p build/audio-mute-test
+javac --release 8 -encoding UTF-8 \
+    -cp "$ANDROID_HOME/platforms/android-34/android.jar" \
+    -d build/audio-mute-test app/src/main/java/org/recompile/freej2me/lite/audio/MidiToneSynth.java \
+    tools/MidiToneSynthMuteSmoke.java
+java -cp "build/audio-mute-test:$ANDROID_HOME/platforms/android-34/android.jar" \
+    org.recompile.freej2me.lite.audio.MidiToneSynthMuteSmoke
 mkdir -p build/framebuffer-test
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/framebuffer-test tools/FramebufferSnapshotSmoke.java

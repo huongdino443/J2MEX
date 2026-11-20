@@ -1,5 +1,18 @@
 # J2MEX Changelog
 
+## J2MEX 0.1.5
+
+#### Background performance
+
+- Fix offline games failing to continue gameplay updates while running in the background. They now keep progressing without rendering frames, reducing CPU usage.
+- Online game behavior remains unchanged.
+
+#### Audio
+
+- Background game audio continues to progress silently in Tasks; audio for the currently displayed game remains unchanged.
+
+**Install this update over 0.1.4 without uninstalling; existing app and game data will be retained.**
+
 ## J2MEX 0.1.4
 
 #### Game sessions

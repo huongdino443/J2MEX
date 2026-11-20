@@ -20,6 +20,7 @@ public final class CanvasVisibilitySmoke {
             graphics.setColor(color);
             graphics.fillRect(0, 0, getWidth(), getHeight());
         }
+        int bufferPixel() { return platformImage.getCanvas().getRGB(1, 1) & 0xFFFFFF; }
         public void keyPressed(int key) { keys++; }
         public void pointerPressed(int x, int y) { touches++; }
         public void pointerDragged(int x, int y) { drags++; }
@@ -33,6 +34,7 @@ public final class CanvasVisibilitySmoke {
             graphics.setColor(color);
             graphics.fillRect(0, 0, getWidth(), getHeight());
         }
+        int bufferPixel() { return platformImage.getCanvas().getRGB(1, 1) & 0xFFFFFF; }
     }
 
     public static void main(String[] args) throws Exception {
@@ -141,15 +143,18 @@ public final class CanvasVisibilitySmoke {
         CloneCanvas foreground = clones[4];
         before = frames.get();
         int foregroundPaints = foreground.paints;
+        int foregroundPixel = foreground.bufferPixel();
         MobilePlatform.setRenderingEnabled(false);
         foreground.repaint();
         foreground.repaint(0, 0, 8, 8);
         foreground.serviceRepaints();
-        require(frames.get() == before && foreground.paints == foregroundPaints,
-                "session background gate suppresses Canvas paint and frame publication");
+        require(frames.get() == before && foreground.paints == foregroundPaints + 2,
+                "hidden Canvas keeps its game update callback without publishing frames");
+        require(foreground.bufferPixel() == foregroundPixel,
+                "hidden Canvas skips raster drawing");
         MobilePlatform.setRenderingEnabled(true);
         foreground.repaint();
-        require(frames.get() == before + 1 && foreground.paints == foregroundPaints + 1,
+        require(frames.get() == before + 1 && foreground.paints == foregroundPaints + 3,
                 "foreground session resumes Canvas rendering");
 
         BufferedCanvas game = new BufferedCanvas();
@@ -169,6 +174,17 @@ public final class CanvasVisibilitySmoke {
                 "GameCanvas flushes obey the configured frame limit");
         Canvas.setFrameRateLimit(0);
         require(pixel(platform) == 0x00AA77, "visible GameCanvas buffer reaches display");
+        int gameBufferPixel = game.bufferPixel();
+        MobilePlatform.setRenderingEnabled(false);
+        game.fill(0x0000FF);
+        game.flushGraphics();
+        require(game.bufferPixel() == gameBufferPixel && frames.get() == before + 2,
+                "hidden GameCanvas skips raster drawing and frame publication");
+        MobilePlatform.setRenderingEnabled(true);
+        game.fill(0x0000FF);
+        game.flushGraphics();
+        require(pixel(platform) == 0x0000FF,
+                "foreground GameCanvas resumes drawing and publication");
         display.setCurrent(new Form("Launcher"));
         before = frames.get();
         game.flushGraphics();
@@ -177,7 +193,7 @@ public final class CanvasVisibilitySmoke {
         for (CloneCanvas clone : clones) clone.serviceRepaints();
         require(frames.get() == before, "background canvases cannot draw over launcher/Form");
         System.out.println("CanvasVisibilitySmoke: " + checks
-                + " checks passed; 5 concurrent clone loops, hidden paint suppression, pixels/input, Canvas/GameCanvas visibility");
+                + " checks passed; 5 concurrent clone loops, hidden raster suppression, pixels/input, Canvas/GameCanvas visibility");
     }
 
     private static int pixel(MobilePlatform platform) {

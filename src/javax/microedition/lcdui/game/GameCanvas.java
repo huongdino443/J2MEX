@@ -45,6 +45,7 @@ public abstract class GameCanvas extends Canvas
 		height = Mobile.getPlatform().lcdHeight;
 
 platformImage = new PlatformImage(width, height);
+platformImage.setRenderingSurface(true);
 	}
 
 	protected Graphics getGraphics()
@@ -58,6 +59,7 @@ platformImage = new PlatformImage(width, height);
 	{
 if (!isShown()) return;
 		limitFrameRate();
+		if (!org.recompile.mobile.MobilePlatform.isRenderingEnabled()) return;
 		Mobile.getPlatform().flushGraphics(platformImage, x, y, width, height);
 	}
 

@@ -99,6 +99,7 @@ protected Canvas()
 		System.out.println("Create Canvas:"+width+", "+height);
 
 platformImage = new PlatformImage(width, height);
+platformImage.setRenderingSurface(true);
 	}
 
 	public int getGameAction(int keyCode)
@@ -263,7 +264,7 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 
 	public void repaint()
 	{
- if (!isShown() || !MobilePlatform.isRenderingEnabled()) return;
+	 if (!isShown()) return;
 		if (!beginRepaint()) return;
 		limitFrameRate();
 		PlatformGraphics graphics;
@@ -272,7 +273,8 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 			graphics = platformImage.getGraphics();
 			graphics.reset();
 			paint(graphics);
-			if(Mobile.getDisplay().getCurrent() == this)
+			if(MobilePlatform.isRenderingEnabled()
+					&& Mobile.getDisplay().getCurrent() == this)
 			{
 				Mobile.getPlatform().repaint(platformImage, 0, 0, width, height);
 			}
@@ -287,7 +289,7 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 
 	public void repaint(int x, int y, int width, int height)
 	{
- if (!isShown() || !MobilePlatform.isRenderingEnabled()) return;
+	 if (!isShown()) return;
 		if (!beginRepaint()) return;
 		limitFrameRate();
 		try
@@ -295,7 +297,8 @@ public boolean hasPointerMotionEvents() { return pointerInputEnabled; }
 			PlatformGraphics graphics = platformImage.getGraphics();
 			graphics.reset();
 			paint(graphics);
-			if(Mobile.getDisplay().getCurrent() == this)
+			if(MobilePlatform.isRenderingEnabled()
+					&& Mobile.getDisplay().getCurrent() == this)
 			{
 				Mobile.getPlatform().repaint(platformImage, x, y, width, height);
 			}

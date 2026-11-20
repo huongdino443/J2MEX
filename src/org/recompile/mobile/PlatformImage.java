@@ -37,10 +37,21 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 	protected PlatformGraphics gc;
 
 	public boolean isNull = false;
+	private boolean renderingSurface;
 
 	public BufferedImage getCanvas()
 	{
 		return canvas;
+	}
+
+	public boolean isRenderingSurface()
+	{
+		return renderingSurface;
+	}
+
+	public void setRenderingSurface(boolean renderingSurface)
+	{
+		this.renderingSurface = renderingSurface;
 	}
 
 	public PlatformGraphics getGraphics()

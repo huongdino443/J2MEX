@@ -49,10 +49,6 @@ final class MidiToneSynth {
 
     synchronized void setOutputEnabled(boolean enabled) {
         outputEnabled = enabled;
-        if (enabled) notifyAll();
-        else if (track != null) {
-            try { track.pause(); } catch (RuntimeException ignored) { }
-        }
         if (enabled && !voices.isEmpty() && (worker == null || !worker.isAlive()))
             startWorker();
     }
@@ -118,19 +114,12 @@ final class MidiToneSynth {
             while (!stopping && outputTrack != null) {
                 int active;
                 synchronized (this) {
-                    while (!outputEnabled && !stopping) {
-                        try { wait(); }
-                        catch (InterruptedException interrupted) {
-                            Thread.currentThread().interrupt();
-                            stopping = true;
-                        }
-                    }
                     if (stopping) break;
                     try {
                         if (outputTrack.getPlayState() != AudioTrack.PLAYSTATE_PLAYING)
                             outputTrack.play();
                     } catch (RuntimeException ignored) { }
-                    active = renderBlock(output);
+                    active = renderBlock(output, outputEnabled);
                 }
                 if (active == 0) {
                     if (++silentBlocks > 24) break;
@@ -154,7 +143,7 @@ final class MidiToneSynth {
         }
     }
 
-    private int renderBlock(short[] output) {
+    int renderBlock(short[] output, boolean audible) {
         int active = 0;
         for (int frame = 0; frame < output.length; frame++) {
             double sample = 0.0;
@@ -174,12 +163,16 @@ final class MidiToneSynth {
                 float channelVolume = selectedVolume == null ? 1.0f : selectedVolume.floatValue();
                 Float selectedOwnerVolume = ownerVolumes.get((int)(entry.getKey() >> 11));
                 float ownerVolume = selectedOwnerVolume == null ? 1.0f : selectedOwnerVolume.floatValue();
-                sample += Math.sin(voice.phase) * voice.level * voice.velocity * channelVolume * ownerVolume;
+                if (audible)
+                    sample += Math.sin(voice.phase) * voice.level * voice.velocity
+                            * channelVolume * ownerVolume;
                 voice.phase += voice.increment;
                 if (voice.phase > Math.PI * 2.0) voice.phase -= Math.PI * 2.0;
             }
             if (count > 0) active++;
-            output[frame] = (short)(Math.max(-1.0, Math.min(1.0, sample * 0.18)) * 32767);
+            output[frame] = audible
+                    ? (short)(Math.max(-1.0, Math.min(1.0, sample * 0.18)) * 32767)
+                    : 0;
         }
         return active;
     }

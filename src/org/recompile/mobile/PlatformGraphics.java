@@ -43,6 +43,11 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	protected int strokeStyle = SOLID;
 
+	private boolean skipRasterDrawing()
+	{
+		return platformImage != null && platformImage.isRenderingSurface()
+				&& !MobilePlatform.isRenderingEnabled();
+	}
 
 	public PlatformGraphics platformGraphics;
 	public PlatformImage platformImage;
@@ -90,11 +95,13 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void clearRect(int x, int y, int width, int height)
 	{
+		if (skipRasterDrawing()) return;
 		gc.clearRect(x, y, width, height);
 	}
 
 	public void copyArea(int subx, int suby, int subw, int subh, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 if (subw <= 0 || subh <= 0) return;
 // Snapshot before writing: a camera scroll often copies overlapping areas of
 // this same canvas. A getSubimage() view aliases the destination, so drawing it
@@ -147,6 +154,7 @@ else
 
 	public void drawArc(int x, int y, int width, int height, int startAngle, int arcAngle)
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawArc(x, y, width, height, startAngle, arcAngle);
 	}
 
@@ -157,6 +165,7 @@ else
 
 	public void drawChars(char[] data, int offset, int length, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 		char[] str = new char[length];
 		for(int i=offset; i<offset+length; i++)
 		{
@@ -170,6 +179,7 @@ else
 
 	public void drawImage(Image image, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 		try
 		{
 			int imgWidth = image.getWidth();
@@ -188,6 +198,7 @@ else
 
 	public void drawImage(Image image, int x, int y)
 	{
+		if (skipRasterDrawing()) return;
 		try
 		{
 			gc.drawImage(image.platformImage.getCanvas(), x, y, null);
@@ -200,14 +211,17 @@ else
 
 	public void drawImage2(Image image, int x, int y) // Internal use method called by PlatformImage
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawImage(image.platformImage.getCanvas(), x, y, null);
 	}
 	public void drawImage2(BufferedImage image, int x, int y) // Internal use method called by PlatformImage
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawImage(image, x, y, null);
 	}
 	public void drawImage2Test(BufferedImage image, int x, int y)
 	{
+		if (skipRasterDrawing()) return;
 		// This Fixes some transparency issues with some images drawn 
 		// with Nokia drawImage in a few games.  
 		// There's probably a deeper underlying issue.
@@ -245,6 +259,7 @@ else
 
 	public void flushGraphics(Image image, int x, int y, int width, int height)
 	{
+		if (skipRasterDrawing()) return;
 		// called by MobilePlatform.flushGraphics/repaint
 		try
 		{
@@ -260,6 +275,7 @@ else
 
 	public void drawRegion(Image image, int subx, int suby, int subw, int subh, int transform, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 		try
 		{
 			if(transform == 0)
@@ -294,6 +310,7 @@ else
 		long first=offset, last=first+(long)(height-1)*scanlength;
 		if(Math.min(first,last)<0 || Math.max(first,last)+width>rgbData.length)
 			throw new ArrayIndexOutOfBoundsException("RGB source outside array");
+		if (skipRasterDrawing()) return;
 		if(canvas.getType()==BufferedImage.TYPE_INT_ARGB||canvas.getType()==BufferedImage.TYPE_INT_RGB) {
 			int dx=x+translateX, dy=y+translateY;
 			int left=Math.max(Math.max(dx,clipX+translateX),0);
@@ -346,21 +363,25 @@ else
 
 	public void drawLine(int x1, int y1, int x2, int y2)
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawLine(x1, y1, x2, y2);
 	}
 
 	public void drawRect(int x, int y, int width, int height)
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawRect(x, y, width, height);
 	}
 
 	public void drawRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight)
 	{
+		if (skipRasterDrawing()) return;
 		gc.drawRoundRect(x, y, width, height, arcWidth, arcHeight);
 	}
 
 	public void drawString(String str, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 if(str!=null && str.length()>0)
 		{
 if(font.platformFont.hasAndroidFontBridge())
@@ -417,6 +438,7 @@ gc.drawImage(bitmap, AffineTransform.getTranslateInstance(
 
 	public void drawSubstring(String str, int offset, int len, int x, int y, int anchor)
 	{
+		if (skipRasterDrawing()) return;
 		if (str.length() >= offset + len)
 		{
 			drawString(str.substring(offset, offset+len), x, y, anchor);
@@ -425,16 +447,19 @@ gc.drawImage(bitmap, AffineTransform.getTranslateInstance(
 
 	public void fillArc(int x, int y, int width, int height, int startAngle, int arcAngle)
 	{
+		if (skipRasterDrawing()) return;
 		gc.fillArc(x, y, width, height, startAngle, arcAngle);
 	}
 
 	public void fillRect(int x, int y, int width, int height)
 	{
+		if (skipRasterDrawing()) return;
 		gc.fillRect(x, y, width, height);
 	}
 
 	public void fillRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight)
 	{
+		if (skipRasterDrawing()) return;
 		gc.fillRoundRect(x, y, width, height, arcWidth, arcHeight);
 		gc.fillRect(x, y, width, height);
 	}
@@ -573,6 +598,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawImage(javax.microedition.lcdui.Image img, int x, int y, int anchor, int manipulation)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("Nokia drawImage");
 		BufferedImage image = manipulateImage(img.platformImage.getCanvas(), manipulation);
 		x = AnchorX(x, image.getWidth(), anchor);
@@ -583,6 +609,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("drawPixels A "+format); // Found In Use
 		int[] Type1 = {0xFFFFFFFF, 0xFF000000, 0x00FFFFFF, 0x00000000};
 		int c = 0;
@@ -637,6 +664,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawPixels(int[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("drawPixels B "+format+" "+transparency); // Found In Use
 		BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		temp.setRGB(0, 0, width, height, pixels, offset, scanlength);
@@ -646,6 +674,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawPixels(short[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("drawPixels C "+format+" "+transparency); // Found In Use
 		int[] data = new int[pixels.length];
 		for(int i=0; i<pixels.length; i++)
@@ -661,6 +690,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawPolygon(int[] xPoints, int xOffset, int[] yPoints, int yOffset, int nPoints, int argbColor)
 	{
+		if (skipRasterDrawing()) return;
 		int temp = color;
 		int[] x = new int[nPoints];
 		int[] y = new int[nPoints];
@@ -678,6 +708,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void drawTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("drawTriange");
 		int temp = color;
 		setAlphaRGB(argbColor);
@@ -687,6 +718,7 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void fillPolygon(int[] xPoints, int xOffset, int[] yPoints, int yOffset, int nPoints, int argbColor)
 	{
+		if (skipRasterDrawing()) return;
 		int temp = color;
 		int[] x = new int[nPoints];
 		int[] y = new int[nPoints];
@@ -704,12 +736,14 @@ private static int AnchorY(int y, int height, int anchor)
 
 	public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("fillTriangle"); // Found In Use
 		gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);
 	}
 
 	public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)
 	{
+		if (skipRasterDrawing()) return;
 		//System.out.println("fillTriangle"); // Found In Use
 		int temp = color;
 		setAlphaRGB(argbColor);
