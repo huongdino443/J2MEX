@@ -523,8 +523,13 @@ public final class GamepadEditorActivity extends LocalizedActivity {
             rows.addView(check, checkParams);
             checks[i] = check;
         }
+        View rootContent = findViewById(android.R.id.content);
+        int availableHeight = rootContent == null ? 0 : rootContent.getHeight();
+        if (availableHeight <= 0) {
+            availableHeight = getResources().getDisplayMetrics().heightPixels - dp(64);
+        }
         int maxListHeight = Math.min(dp(360),
-                Math.max(dp(120), getResources().getDisplayMetrics().heightPixels / 2));
+                Math.max(0, availableHeight - dp(160)));
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(-1, maxListHeight);
         scrollParams.topMargin = dp(10);
         panel.addView(scroll, scrollParams);
@@ -554,7 +559,6 @@ public final class GamepadEditorActivity extends LocalizedActivity {
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setElevation(dp(10));
         popup.setOutsideTouchable(true);
-        View rootContent = findViewById(android.R.id.content);
         View dim = new View(this);
         dim.setBackgroundColor(0x80000000);
         dim.setClickable(true);
