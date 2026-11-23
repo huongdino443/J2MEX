@@ -227,15 +227,13 @@ public class BackgroundGameService extends Service {
                 returnIntent.putExtra("title", session.title);
                 returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
                 returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
-                returnIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                returnIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             } else {
                 returnIntent = new Intent(this, MainActivity.class);
                 returnIntent.putExtra(RuntimeSessionStore.EXTRA_RETURN_TO_SESSION, sessionId);
                 returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, sessionSlot);
-                returnIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                returnIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP
                         | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             }
         } else {
@@ -271,8 +269,7 @@ public class BackgroundGameService extends Service {
     private static Intent sessionManagerIntent(Context context) {
         Intent intent = new Intent(context, MainActivity.class);
         intent.putExtra(RuntimeSessionStore.EXTRA_OPEN_SESSION_MANAGER, true);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP
-                | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         return intent;
     }
 

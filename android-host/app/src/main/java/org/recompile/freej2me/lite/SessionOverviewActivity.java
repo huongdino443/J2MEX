@@ -578,7 +578,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         }
         selectedSessionId = session.id;
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -638,7 +638,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
             return;
         }
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", session.jarPath);
         intent.putExtra("title", session.title);
@@ -653,7 +653,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         homeLaunchPending = true;
         MainActivity.setLauncherHomePinned(this, true);
         Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra(EXTRA_OPEN_HOME, true);
         startActivity(intent);

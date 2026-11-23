@@ -24,25 +24,17 @@ assert len(runtime_activities) == 9, (
 assert main_activity.get(ANDROID + "excludeFromRecents", "false").lower() != "true", (
     "the single launcher task must remain visible in Android Recents"
 )
-not_hidden = [
-    activity.get(ANDROID + "name")
-    for activity in runtime_activities
-    if activity.get(ANDROID + "excludeFromRecents", "false").lower() != "true"
-]
-assert not not_hidden, (
-    f"runtime tasks must stay out of Recents so only the launcher task appears: {not_hidden}"
-)
-assert all(activity.get(ANDROID + "taskAffinity") for activity in runtime_activities), (
-    "runtime activities must keep their per-session task affinities"
-)
 assert all(activity.get(ANDROID + "process") for activity in runtime_activities), (
     "runtime activities must keep their isolated Android processes"
 )
+assert all(not activity.get(ANDROID + "taskAffinity") for activity in runtime_activities), (
+    "runtime activities must share the launcher task affinity"
+)
+assert all(activity.get(ANDROID + "excludeFromRecents", "false").lower() != "true"
+           for activity in runtime_activities), (
+    "the active runtime screen must remain part of the single visible Recents task"
+)
 
-visibility_source = (
-    Path(__file__).resolve().parents[1]
-    / "app/src/main/java/org/recompile/freej2me/lite/RecentsTaskVisibility.java"
-).read_text()
 main_source = (
     Path(__file__).resolve().parents[1]
     / "app/src/main/java/org/recompile/freej2me/lite/MainActivity.java"
@@ -51,14 +43,59 @@ runtime_source = (
     Path(__file__).resolve().parents[1]
     / "app/src/main/java/org/recompile/freej2me/lite/RuntimeActivity.java"
 ).read_text()
-assert "task.setExcludeFromRecents(" in visibility_source, (
-    "the active task must be switched into Recents dynamically"
+assert "RecentsTaskVisibility" not in main_source + runtime_source, (
+    "runtime task visibility must not be toggled while sessions are running"
 )
-assert "RecentsTaskVisibility.showOnlyTask(this, getTaskId())" in main_source, (
-    "the launcher task must become the sole Recents task while the launcher is active"
+assert "returnToActiveRuntime()" in main_source, (
+    "selecting the launcher task must still return to the foreground game"
 )
-assert "RecentsTaskVisibility.showOnlyTask(this, getTaskId())" in runtime_source, (
-    "the game task must become the sole Recents task while the game is active"
+assert "Intent.FLAG_ACTIVITY_CLEAR_TASK" not in main_source, (
+    "launching a new game must not clear the shared launcher/runtime task"
+)
+assert "Intent.FLAG_ACTIVITY_CLEAR_TOP" not in main_source + runtime_source, (
+    "session routing must not destroy activities stacked above the chosen game"
+)
+assert "Intent.FLAG_ACTIVITY_REORDER_TO_FRONT" in main_source, (
+    "returning to an existing game must reorder its Activity instead of starting a new task"
+)
+assert "pendingRecentsRuntimeSessionId" not in main_source, (
+    "the v495 Recents-return marker must not override the shared v485 task stack"
+)
+assert "RuntimeReturnPolicy" not in main_source, (
+    "the v495 Recents-return fallback must not reopen a game from MainActivity"
+)
+assert "requestRecentsReturn" not in runtime_source, (
+    "leaving a runtime must not create the v495 Recents-return marker"
+)
+assert "launcherRuntimeReturnPending" in main_source, (
+    "preserve the launcher-intent return behavior that existed in v485"
+)
+overview_source = (
+    Path(__file__).resolve().parents[1]
+    / "app/src/main/java/org/recompile/freej2me/lite/SessionOverviewActivity.java"
+).read_text()
+assert "Intent.FLAG_ACTIVITY_REORDER_TO_FRONT" in overview_source, (
+    "the session overview must switch to existing runtime activities in the shared task"
+)
+assert "Intent.FLAG_ACTIVITY_CLEAR_TOP" not in overview_source, (
+    "returning from session overview must not clear running games"
+)
+service_source = (
+    Path(__file__).resolve().parents[1]
+    / "app/src/main/java/org/recompile/freej2me/lite/BackgroundGameService.java"
+).read_text()
+assert "FOREGROUND_SERVICE_IMMEDIATE" in service_source, (
+    "keep the fast foreground notification behavior on Android 12 and newer"
+)
+assert "Intent.FLAG_ACTIVITY_CLEAR_TOP" not in service_source, (
+    "tapping a game notification must not destroy a later running game"
+)
+session_store_source = (
+    Path(__file__).resolve().parents[1]
+    / "app/src/main/java/org/recompile/freej2me/lite/RuntimeSessionStore.java"
+).read_text()
+assert "requestRecentsReturn" not in session_store_source, (
+    "runtime leave events must not add a separate Recents redirection request"
 )
 
-print("RuntimeRecentsManifestSmoke: per-session isolation and single visible-task routing passed")
+print("RuntimeRecentsManifestSmoke: v485 task routing kept; v495 Recents fallback removed")

@@ -89,18 +89,6 @@ javac --release 8 -encoding UTF-8 -d build/storage-policy-test \
 java -cp build/storage-policy-test org.recompile.freej2me.lite.StorageAccessPolicySmoke
 python3 tools/test_storage_manifest.py
 python3 tools/test_runtime_recents_manifest.py
-mkdir -p build/recents-task-policy-test
-javac --release 8 -encoding UTF-8 -d build/recents-task-policy-test \
-    app/src/main/java/org/recompile/freej2me/lite/RecentsTaskPolicy.java \
-    tools/RecentsTaskPolicySmoke.java
-java -cp build/recents-task-policy-test \
-    org.recompile.freej2me.lite.RecentsTaskPolicySmoke
-mkdir -p build/runtime-return-policy-test
-javac --release 8 -encoding UTF-8 -d build/runtime-return-policy-test \
-    app/src/main/java/org/recompile/freej2me/lite/RuntimeReturnPolicy.java \
-    tools/RuntimeReturnPolicySmoke.java
-java -cp build/runtime-return-policy-test \
-    org.recompile.freej2me.lite.RuntimeReturnPolicySmoke
 mkdir -p build/native-list-viewport-test
 javac --release 8 -encoding UTF-8 -d build/native-list-viewport-test \
     app/src/main/java/org/recompile/freej2me/lite/nativeui/NativeListViewportPolicy.java \

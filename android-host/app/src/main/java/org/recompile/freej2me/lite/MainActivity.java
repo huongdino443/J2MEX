@@ -3,9 +3,7 @@ package org.recompile.freej2me.lite;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.Manifest;
-import android.content.BroadcastReceiver;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.res.ColorStateList;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -90,8 +88,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
     private static final int REQUEST_POST_NOTIFICATIONS = 78;
     private static final String STATE_PENDING_EXTERNAL_GAME_URI =
             "main.pendingExternalGameUri";
-    private static final String STATE_PENDING_RECENTS_RETURN_SESSION =
-            "main.pendingRecentsReturnSession";
     private static final String EXTRA_EXTERNAL_GAME_OPEN_HANDLED =
             "org.recompile.freej2me.lite.EXTRA_EXTERNAL_GAME_OPEN_HANDLED";
     private static final String LAUNCHER_STATE_PREFS = "j2mex_launcher_state";
@@ -180,19 +176,7 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
     private boolean launcherRuntimeReturnPending;
     private boolean pendingSessionManagerOpen;
     private String pendingRuntimeSessionId;
-    private String pendingRecentsRuntimeSessionId;
     private boolean pendingHomeOpen;
-    private boolean recentsReturnReceiverRegistered;
-    private final BroadcastReceiver recentsReturnReceiver = new BroadcastReceiver() {
-        @Override public void onReceive(Context context, Intent intent) {
-            if (intent == null || !RuntimeSessionStore.ACTION_RECENTS_RETURN_REQUESTED
-                    .equals(intent.getAction())) return;
-            String sessionId = intent.getStringExtra(
-                    RuntimeSessionStore.EXTRA_RECENTS_RETURN_SESSION_ID);
-            if (sessionId != null && !sessionId.isEmpty())
-                pendingRecentsRuntimeSessionId = sessionId;
-        }
-    };
 
     static int dp(Activity activity, int value) {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
@@ -231,7 +215,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
                 && !openSessionManager && pendingRuntimeSessionId == null && !pendingHomeOpen;
         pendingSessionManagerOpen = openSessionManager;
         activeInstance = this;
-        registerRecentsReturnReceiver();
         if (state != null) {
             int savedScreen = state.getInt("main.currentScreen", TAB_HOME);
             currentScreen = savedScreen == TAB_COLLECTION || savedScreen == TAB_SEARCH
@@ -242,8 +225,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
             searchScrollY = state.getInt("main.searchScrollY", 0);
             moreScrollY = state.getInt("main.moreScrollY", 0);
             restoredSearchQuery = state.getString("main.searchQuery", "");
-            pendingRecentsRuntimeSessionId =
-                    state.getString(STATE_PENDING_RECENTS_RETURN_SESSION);
             String pendingUri = state.getString(STATE_PENDING_EXTERNAL_GAME_URI);
             if (pendingUri != null && !pendingUri.isEmpty()) {
                 pendingExternalGameUri = Uri.parse(pendingUri);
@@ -305,10 +286,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
         if (pendingExternalGameUri != null) {
             state.putString(STATE_PENDING_EXTERNAL_GAME_URI,
                     pendingExternalGameUri.toString());
-        }
-        if (pendingRecentsRuntimeSessionId != null) {
-            state.putString(STATE_PENDING_RECENTS_RETURN_SESSION,
-                    pendingRecentsRuntimeSessionId);
         }
         super.onSaveInstanceState(state);
     }
@@ -2525,7 +2502,7 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
         }
         File jar = new File(session.jarPath);
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -3056,8 +3033,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
                     intent.putExtra("title", session.title);
                     intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
                     intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     AppPreferences.addRuntimeSnapshotExtras(this, intent);
                     boolean launchStateSaved = jar == null
                             || GameSettings.markLaunched(this, selected);
@@ -3164,7 +3139,7 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
             return false;
         }
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -3501,10 +3476,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
     @Override protected void onResume() {
         super.onResume();
         activityResumed = true;
-        boolean explicitHomePending = pendingHomeOpen;
-        boolean sessionManagerPending = pendingSessionManagerOpen;
-        boolean explicitSessionPending = pendingRuntimeSessionId != null;
-        boolean externalGamePending = pendingExternalGameUri != null;
         if (!AppPreferences.keepGameInBackground(this))
             BackgroundGameService.applyBackgroundActivitySetting(this, false);
         updateHomeMultitaskBadge();
@@ -3516,24 +3487,11 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
             pendingSessionManagerOpen = false;
             openSessionOverview();
         }
-        if (openPendingRuntimeSession()) {
-            pendingRecentsRuntimeSessionId = null;
-            return;
-        }
-        String recentsReturnSessionId = pendingRecentsRuntimeSessionId;
-        pendingRecentsRuntimeSessionId = null;
-        RuntimeSessionStore.Session foregroundSession = recentsReturnSessionId == null
-                ? null : RuntimeSessionStore.foreground(this);
-        boolean returnFromRecents = RuntimeReturnPolicy.shouldReturnToForegroundRuntime(
-                recentsReturnSessionId,
-                foregroundSession == null ? null : foregroundSession.id,
-                isLauncherHomePinned(this), explicitHomePending,
-                sessionManagerPending, explicitSessionPending, externalGamePending);
-        if (launcherRuntimeReturnPending || returnFromRecents) {
+        if (openPendingRuntimeSession()) return;
+        if (launcherRuntimeReturnPending) {
             launcherRuntimeReturnPending = false;
             if (returnToActiveRuntime()) return;
         }
-        RecentsTaskVisibility.showOnlyTask(this, getTaskId());
         RuntimeSessionStore.Session audioOwner = RuntimeSessionStore.foreground(this);
         RuntimeSessionStore.publishAudioOwner(this,
                 audioOwner == null ? null : audioOwner.id);
@@ -3563,7 +3521,6 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
         if (requestedSession != null && openRuntimeSession(requestedSession)) {
             return true;
         } else {
-            RecentsTaskVisibility.showOnlyTask(this, getTaskId());
             updateHomeMultitaskBadge();
             if (requestedSession == null) {
                 Toast.makeText(this, AppLocalization.text(this,
@@ -4037,23 +3994,7 @@ import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
         }
     }
 
-    private void registerRecentsReturnReceiver() {
-        if (recentsReturnReceiverRegistered) return;
-        IntentFilter filter = new IntentFilter(
-                RuntimeSessionStore.ACTION_RECENTS_RETURN_REQUESTED);
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(recentsReturnReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(recentsReturnReceiver, filter);
-        }
-        recentsReturnReceiverRegistered = true;
-    }
-
     @Override protected void onDestroy() {
-        if (recentsReturnReceiverRegistered) {
-            unregisterReceiver(recentsReturnReceiver);
-            recentsReturnReceiverRegistered = false;
-        }
         if (activeInstance == this) activeInstance = null;
         mainHandler.removeCallbacks(navigationBlurUpdate);
         if (activeStyledPopup != null) activeStyledPopup.dismiss();

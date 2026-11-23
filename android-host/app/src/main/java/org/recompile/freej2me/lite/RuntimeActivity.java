@@ -4917,7 +4917,6 @@ public class RuntimeActivity extends LocalizedActivity {
             } catch (IOException error) {
                 android.util.Log.e("J2MEX", "Cannot update active runtime session", error);
             }
-            RecentsTaskVisibility.showOnlyTask(this, getTaskId());
         }
         if (keepGameInBackground && !stopping) {
             cancelPendingBackgroundServiceStop();
@@ -5022,7 +5021,6 @@ public class RuntimeActivity extends LocalizedActivity {
     @Override protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         if (shouldKeepRuntimeInBackground()) {
-            RuntimeSessionStore.requestRecentsReturn(this, sessionId);
             backgroundTransitionPending = true;
             startBackgroundServiceIfEnabled();
         }
