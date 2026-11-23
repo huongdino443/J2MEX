@@ -24,6 +24,10 @@ final class RuntimeSessionStore {
     static final String EXTRA_SESSION_SLOT = "org.recompile.freej2me.lite.SESSION_SLOT";
     static final String ACTION_SESSION_REGISTRY_CHANGED =
             "org.recompile.freej2me.lite.SESSION_REGISTRY_CHANGED";
+    static final String ACTION_RECENTS_RETURN_REQUESTED =
+            "org.recompile.freej2me.lite.RECENTS_RETURN_REQUESTED";
+    static final String EXTRA_RECENTS_RETURN_SESSION_ID =
+            "org.recompile.freej2me.lite.RECENTS_RETURN_SESSION_ID";
     static final String EXTRA_CHANGED_SESSION_ID =
             "org.recompile.freej2me.lite.CHANGED_SESSION_ID";
     static final String EXTRA_OPEN_SESSION_MANAGER =
@@ -155,6 +159,14 @@ final class RuntimeSessionStore {
         Intent intent = new Intent(ACTION_AUDIO_OWNER_CHANGED)
                 .setPackage(context.getPackageName())
                 .putExtra(EXTRA_AUDIO_OWNER_ID, sessionId == null ? "" : sessionId);
+        context.sendBroadcast(intent);
+    }
+
+    static void requestRecentsReturn(Context context, String sessionId) {
+        if (sessionId == null || sessionId.isEmpty()) return;
+        Intent intent = new Intent(ACTION_RECENTS_RETURN_REQUESTED)
+                .setPackage(context.getPackageName())
+                .putExtra(EXTRA_RECENTS_RETURN_SESSION_ID, sessionId);
         context.sendBroadcast(intent);
     }
 
