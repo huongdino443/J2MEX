@@ -23,10 +23,11 @@ final class GamepadControlView extends View {
         void onKey(int code, boolean down);
     }
 
-    private static final int KEY_BG = 0x9626262E;
-    private static final int KEY_PRESSED_BG = 0xDCB9C3FF;
-    private static final int KEY_STROKE = 0x96DCE1EB;
-    private static final int JOYSTICK_IDLE = -4408128;
+    static final int KEY_BG = 0x8026262E;
+    static final int KEY_PRESSED_BG = 0xDCB9C3FF;
+    static final int KEY_STROKE = 0x80DCE1EB;
+    static final int JOYSTICK_IDLE = 0xD9BCBCC0;
+    static final int JOYSTICK_STROKE = 0xD092949A;
     private static final int[] JOYSTICK_DIRECTIONS = {-1, -4, -2, -3};
 
     private static final class KeySpec {
@@ -686,7 +687,7 @@ final class GamepadControlView extends View {
         canvas.drawCircle(joystickBaseCenterX, joystickBaseCenterY, joystickBaseRadius, paint);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(Math.max(1, Math.round(joystickBaseRadius / 45f)));
-        paint.setColor(-7170918);
+        paint.setColor(JOYSTICK_STROKE);
         canvas.drawCircle(joystickBaseCenterX, joystickBaseCenterY, joystickBaseRadius, paint);
         float thumbX = joystickPointerId < 0 ? joystickBaseCenterX : joystickThumbX;
         float thumbY = joystickPointerId < 0 ? joystickBaseCenterY : joystickThumbY;
@@ -695,7 +696,7 @@ final class GamepadControlView extends View {
         canvas.drawCircle(thumbX, thumbY, joystickThumbRadius, paint);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(1);
-        paint.setColor(-7170918);
+        paint.setColor(JOYSTICK_STROKE);
         canvas.drawCircle(thumbX, thumbY, joystickThumbRadius, paint);
     }
 
@@ -893,8 +894,9 @@ final class GamepadControlView extends View {
 
     private void pressIndex(int index) {
         if (index < 0 || index >= keyCounts.length || index >= placedKeys.size()) return;
-        if (keyCounts[index]++ == 0 && sink != null)
-            sink.onKey(placedKeys.get(index).key.code, true);
+        if (keyCounts[index]++ == 0) {
+            if (sink != null) sink.onKey(placedKeys.get(index).key.code, true);
+        }
         invalidate();
     }
 

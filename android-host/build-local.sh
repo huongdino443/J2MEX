@@ -26,6 +26,11 @@ fi
 find ../src -name '*.java' | sort > build/engine-sources.txt
 javac --release 8 -encoding UTF-8 -d build/engine @build/engine-sources.txt
 jar cf app/src/main/assets/engine.jar -C build/engine . -C ../resources .
+mkdir -p build/vibration-test
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/vibration-test tools/VibrationBridgeSmoke.java
+java -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/vibration-test VibrationBridgeSmoke
 native_draw_descriptor=$("$JAVA_HOME/bin/javap" -classpath app/src/main/assets/engine.jar \
     -private -s javax.microedition.m3g.M3GNativeGpu \
     | awk '/nativeDraw\(/ { getline; sub(/^[[:space:]]*descriptor: /, ""); print; exit }')
@@ -65,6 +70,12 @@ java -cp app/src/main/assets/engine.jar:build/manifest-test MIDletManifestProper
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/manifest-test tools/MIDletPlatformPropertySmoke.java
 java -cp app/src/main/assets/engine.jar:build/manifest-test MIDletPlatformPropertySmoke
+mkdir -p build/platform-request-test
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/platform-request-test tools/MIDletPlatformRequestSmoke.java
+java -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/platform-request-test \
+    MIDletPlatformRequestSmoke
 mkdir -p build/update-version-test
 javac --release 8 -encoding UTF-8 -d build/update-version-test \
     app/src/main/java/org/recompile/freej2me/lite/ReleaseVersionPolicy.java \
@@ -284,6 +295,11 @@ java -Xverify:all -Djava.awt.headless=true \
     -cp app/src/main/assets/engine.jar:build/legacy-class-literal-test \
     org.recompile.mobile.Legacy45ClassLiteralSmoke
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/legacy-class-literal-test tools/InvalidInterfaceModifiersSmoke.java
+java -Xverify:all -Djava.awt.headless=true \
+    -cp app/src/main/assets/engine.jar:build/legacy-class-literal-test \
+    org.recompile.mobile.InvalidInterfaceModifiersSmoke
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/fileconnection-test tools/FileConnectionSmoke.java
 if [ -n "${PVTK_FILE_TEST_JAR:-}" ]; then
     java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/fileconnection-test \
@@ -365,6 +381,9 @@ if [ -n "${ONLINE_TEST_JAR:-}" ]; then
 else
     java -cp app/src/main/assets/engine.jar:build/network-test SocketConnectorSmoke
 fi
+javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
+    -d build/network-test tools/LanConnectorSmoke.java
+java -cp app/src/main/assets/engine.jar:build/network-test LanConnectorSmoke
 javac --release 8 -encoding UTF-8 -cp app/src/main/assets/engine.jar \
     -d build/lcdui-test tools/LcdUiSmoke.java
 java -Djava.awt.headless=true -cp app/src/main/assets/engine.jar:build/lcdui-test LcdUiSmoke

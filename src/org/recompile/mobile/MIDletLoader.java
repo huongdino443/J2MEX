@@ -23,6 +23,7 @@ import java.io.InputStreamReader;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -377,7 +378,8 @@ private static String throwableTypes(Throwable error)
 		try
 		{
 			InputStream is = url.openStream();
-			BufferedReader br = new BufferedReader(new InputStreamReader(is));
+			BufferedReader br = new BufferedReader(
+					new InputStreamReader(is, StandardCharsets.UTF_8));
 
 			ArrayList<String> lines = new ArrayList<String>();
 			while ((line = br.readLine()) != null)
@@ -1265,6 +1267,17 @@ reader.accept(visitor, readerFlags);
 								helper, helperDesc);
 						return;
 					}
+				}
+				if (cloneDisplayIsolation && "lib/MIDlet".equals(ownerClass)
+						&& "start".equals(methodName)
+						&& "()V".equals(methodDescriptor)
+						&& opcode == INVOKEVIRTUAL && "lib/MIDlet".equals(owner)
+						&& "startApp".equals(name) && "()V".equals(desc))
+				{
+					mv.visitMethodInsn(opcode, owner, name, desc);
+					mv.visitVarInsn(ALOAD, 0);
+					mv.visitMethodInsn(INVOKEVIRTUAL, "lib/MIDlet", "showDisplay", "()V");
+					return;
 				}
 				if (cloneClassSpace != null && !staticMethod
 						&& cloneClassSpace.isFactory(ownerClass.replace('/', '.'))

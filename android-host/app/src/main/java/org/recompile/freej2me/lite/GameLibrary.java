@@ -7,7 +7,6 @@ import android.util.Log;
 import java.io.File;
 import java.io.IOException;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -50,6 +49,48 @@ final class GameLibrary {
             this.name = name;
             this.icon = icon;
             this.className = className;
+        }
+    }
+
+    static final class GameInfo {
+        final String title;
+        final String vendor;
+        final String version;
+        final String description;
+        final String infoUrl;
+        final String author;
+        final String copyright;
+        final String profile;
+        final String configuration;
+        final String jarUrl;
+        final String jarSize;
+        final String permissions;
+        final String optionalPermissions;
+        final List<String> midletNames;
+        final String sourceName;
+        final long fileSize;
+
+        GameInfo(String title, String vendor, String version, String description,
+                String infoUrl, String author, String copyright, String profile,
+                String configuration, String jarUrl, String jarSize, String permissions,
+                String optionalPermissions, List<String> midletNames, String sourceName,
+                long fileSize) {
+            this.title = title;
+            this.vendor = vendor;
+            this.version = version;
+            this.description = description;
+            this.infoUrl = infoUrl;
+            this.author = author;
+            this.copyright = copyright;
+            this.profile = profile;
+            this.configuration = configuration;
+            this.jarUrl = jarUrl;
+            this.jarSize = jarSize;
+            this.permissions = permissions;
+            this.optionalPermissions = optionalPermissions;
+            this.midletNames = midletNames;
+            this.sourceName = sourceName;
+            this.fileSize = fileSize;
         }
     }
 
@@ -155,6 +196,43 @@ final class GameLibrary {
         }
     }
 
+    static GameInfo readInfo(File jarFile, String sourceName) throws IOException {
+        try (JarFile jar = new JarFile(jarFile)) {
+            Manifest manifest = JarManifestReader.read(jar);
+            Attributes attributes = manifest == null ? null : manifest.getMainAttributes();
+            String descriptor = attributes == null ? null : attributes.getValue("MIDlet-1");
+            String title = firstNonEmpty(
+                    attributes == null ? null : attributes.getValue("MIDlet-Name"),
+                    descriptorTitle(descriptor),
+                    withoutExtension(sourceName));
+            ArrayList<String> midletNames = new ArrayList<>();
+            if (attributes != null) {
+                for (int index = 1; index <= 255; index++) {
+                    String name = descriptorTitle(attributes.getValue("MIDlet-" + index));
+                    if (name != null && !name.trim().isEmpty()) midletNames.add(name.trim());
+                }
+            }
+            return new GameInfo(
+                    title,
+                    value(attributes, "MIDlet-Vendor"),
+                    value(attributes, "MIDlet-Version"),
+                    value(attributes, "MIDlet-Description"),
+                    value(attributes, "MIDlet-Info-URL"),
+                    firstOptional(value(attributes, "MIDlet-Author"),
+                            value(attributes, "Implementation-Author")),
+                    value(attributes, "MIDlet-Copyright"),
+                    value(attributes, "MicroEdition-Profile"),
+                    value(attributes, "MicroEdition-Configuration"),
+                    value(attributes, "MIDlet-Jar-URL"),
+                    value(attributes, "MIDlet-Jar-Size"),
+                    value(attributes, "MIDlet-Permissions"),
+                    value(attributes, "MIDlet-Permissions-Opt"),
+                    midletNames,
+                    sourceName,
+                    jarFile.length());
+        }
+    }
+
     static List<MidletDescriptor> readMidlets(File jarFile) throws IOException {
         ArrayList<MidletDescriptor> midlets = new ArrayList<>();
         try (JarFile jar = new JarFile(jarFile)) {
@@ -238,6 +316,17 @@ final class GameLibrary {
             if (value != null && !value.trim().isEmpty()) return value.trim();
         }
         return "MIDlet";
+    }
+
+    private static String value(Attributes attributes, String key) {
+        return attributes == null ? null : attributes.getValue(key);
+    }
+
+    private static String firstOptional(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) return value.trim();
+        }
+        return null;
     }
 
     private static String withoutExtension(String value) {

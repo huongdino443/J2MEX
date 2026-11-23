@@ -35,7 +35,9 @@ final class GameImportManager {
         String summary() {
             StringBuilder text = new StringBuilder();
             text.append("Đã thêm ").append(imported).append(" game");
-            if (duplicates > 0) text.append(", ").append(duplicates).append(" game đã có sẵn");
+            if (duplicates > 0) {
+                text.append(", ").append(duplicates).append(" game đã có sẵn");
+            }
             text.append('.');
             if (!errors.isEmpty()) {
                 text.append("\n\nĐã bỏ qua ").append(errors.size()).append(" mục bị lỗi:");

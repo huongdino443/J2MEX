@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets;
 final class HostFiles {
     static final int EXPORT_LOG = 72;
     private static final String INSTALL_VERSION = "v6-runtime-trim-1";
-    private static final String HOST_ASSETS_VERSION = "v110-j2mex-0.1.0-hotspot-heap";
+    private static final String HOST_ASSETS_VERSION = "v116-j2mex-0.1.6-platform-request-browser";
     static File log(Activity activity) {
         RuntimeSessionStore.Session active = RuntimeSessionStore.foreground(activity);
         File root = active == null ? activity.getFilesDir()

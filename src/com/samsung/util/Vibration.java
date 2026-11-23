@@ -16,11 +16,22 @@
 */
 package com.samsung.util;
 
+import org.recompile.mobile.Mobile;
+
 public final class Vibration
 {
-	public static boolean isSupported() { return true; }
+public static boolean isSupported()
+{
+return Mobile.getPlatform() != null && Mobile.getPlatform().isVibrationSupported();
+}
 
-	public static void start(int duration, int strength) {  }
+public static void start(int duration, int strength)
+{
+if (Mobile.getPlatform() != null) Mobile.getPlatform().vibrate(duration, strength);
+}
 
-	public static void stop() {  }
+public static void stop()
+{
+if (Mobile.getPlatform() != null) Mobile.getPlatform().stopVibration();
+}
 }

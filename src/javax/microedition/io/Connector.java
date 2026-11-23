@@ -137,11 +137,26 @@ if(!name.regionMatches(true, 4, "//", 0, 2))
 return new SmsConnectionImpl(name);
 }
 
+if(name.regionMatches(true, 0, "datagram:", 0, 9))
+{
+boolean tracked = MemoryEditorGuard.beginConnection(name);
+try
+{
+return new DatagramConnectionImpl(name, mode);
+}
+finally
+{
+MemoryEditorGuard.finishConnection(tracked);
+}
+}
+
 if(name.regionMatches(true, 0, "socket:", 0, 7))
 {
 boolean tracked = MemoryEditorGuard.beginConnection(name);
 try
 {
+if(ServerSocketConnectionImpl.isServerSocketUrl(name))
+    return new ServerSocketConnectionImpl(name);
 return new SocketConnectionImpl(name, mode, timeouts);
 }
 finally

@@ -38,14 +38,20 @@ public final class FileConnectionSmoke {
 
     public static void main(String[] args) throws Exception {
         File temp = Files.createTempDirectory("freej2me-jsr75-").toFile();
+        File sharedRoot = Files.createTempDirectory("freej2me-shared-").toFile();
         MobilePlatform platform = new MobilePlatform(2, 2);
         platform.dataPath = temp.getCanonicalPath() + File.separator;
+        platform.sharedStoragePath = sharedRoot.getCanonicalPath();
         Mobile.setPlatform(platform);
 
         Enumeration roots = FileSystemRegistry.listRoots();
         check(roots.hasMoreElements(), "private storage root is listed");
-        check((ROOT_URL.substring("file:///".length())
-                .equals(String.valueOf(roots.nextElement()))), "listed root matches file URL");
+        check("freej2me/".equals(String.valueOf(roots.nextElement())),
+                "private root matches file URL");
+        check(roots.hasMoreElements(), "shared Android storage root is listed");
+        check("Storage/".equals(String.valueOf(roots.nextElement())),
+                "shared root uses the Storage volume name");
+        check(!roots.hasMoreElements(), "only configured roots are exposed");
         File storageRoot = new File(temp, "jsr75-files");
 
         FileConnection directory = (FileConnection) Connector.open(
@@ -114,6 +120,43 @@ public final class FileConnectionSmoke {
         remove.delete();
         remove.close();
 
+        FileConnection sharedDirectory = (FileConnection) Connector.open(
+                "file:///Storage/Documents/", Connector.READ_WRITE);
+        sharedDirectory.mkdir();
+        check(sharedDirectory.isDirectory(), "shared root creates directories");
+        check("file:///Storage/Documents/".equals(sharedDirectory.getURL()),
+                "shared connection URLs preserve the Storage volume");
+        sharedDirectory.close();
+        FileConnection sharedFile = (FileConnection) Connector.open(
+                "file:///Storage/Documents/note.txt", Connector.READ_WRITE);
+        sharedFile.create();
+        try (FileOutputStream output = (FileOutputStream) sharedFile.openOutputStream()) {
+            output.write(new byte[] { 4, 5, 6 });
+        }
+        sharedFile.close();
+        FileConnection sharedRead = (FileConnection) Connector.open(
+                "file:///Storage/Documents/note.txt", Connector.READ);
+        try (DataInputStream input = sharedRead.openDataInputStream()) {
+            byte[] content = new byte[3];
+            input.readFully(content);
+            check(content[0] == 4 && content[2] == 6,
+                    "shared Android file contents can be read");
+        }
+        sharedRead.close();
+        FileConnection sharedRemove = (FileConnection) Connector.open(
+                "file:///Storage/Documents/note.txt", Connector.READ_WRITE);
+        sharedRemove.delete();
+        sharedRemove.close();
+        expectIOException(() -> Connector.open(
+                "file:///Storage/../outside", Connector.READ_WRITE),
+                "shared path traversal cannot leave Android storage");
+        File outside = new File(temp, "outside.txt");
+        Files.createFile(outside.toPath());
+        Files.createSymbolicLink(new File(sharedRoot, "escape").toPath(), outside.toPath());
+        expectIOException(() -> Connector.open(
+                "file:///Storage/escape", Connector.READ),
+                "shared symlinks cannot escape Android storage");
+
         if (args.length > 0) {
             File jar = new File(args[0]).getCanonicalFile();
             MIDletLoader loader = new MIDletLoader(new URL[] { jar.toURI().toURL() });
@@ -134,7 +177,7 @@ public final class FileConnectionSmoke {
         }
 
         System.out.println("FileConnectionSmoke: " + checks
-                + " checks passed; private root, file lifecycle, byte I/O, traversal guard"
+                + " checks passed; private/shared roots, file lifecycle, byte I/O, traversal guard"
                 + (args.length > 0 ? ", PVTK resource bootstrap" : ""));
     }
 }

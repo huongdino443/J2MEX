@@ -12,14 +12,14 @@ import java.io.IOException;
 import java.util.Enumeration;
 import java.util.Vector;
 
-/** Exposes only this MIDlet's private persistent file area. */
+/** Exposes this MIDlet's private volume and Android's shared storage volume. */
 public final class FileSystemRegistry
 {
 	private FileSystemRegistry() {}
 
 	public static Enumeration listRoots()
 	{
-		Vector roots = new Vector(1);
+		Vector roots = new Vector(2);
 		try
 		{
 			FileConnectionImpl.storageRoot();
@@ -28,6 +28,15 @@ public final class FileSystemRegistry
 		catch (IOException error)
 		{
 			System.err.println("FileSystemRegistry: private file root unavailable: " + error);
+		}
+		try
+		{
+			FileConnectionImpl.sharedStorageRoot();
+			roots.addElement(FileConnectionImpl.SHARED_ROOT_NAME + "/");
+		}
+		catch (IOException error)
+		{
+			System.err.println("FileSystemRegistry: shared storage unavailable: " + error);
 		}
 		return roots.elements();
 	}

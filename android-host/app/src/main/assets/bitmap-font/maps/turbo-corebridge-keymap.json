@@ -1,7 +1,7 @@
 {
   "format": "phoneme-turbo-bitmap-font-keymap-v1",
   "atlasFile": "turbo-corebridge-atlas.png",
-  "atlasSha256": "4c34bb3caba852c8a068c9bb5e0200779f656a0e6b6ffe43abfc00340b4a0aaf",
+  "atlasSha256": "179d02053a6200461e126415091a6f41e6f0fc45ee066cf2b869adc51dd6db0a",
   "atlasWidth": 256,
   "atlasHeight": 225,
   "columns": 16,

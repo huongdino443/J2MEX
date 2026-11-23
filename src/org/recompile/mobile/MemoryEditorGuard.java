@@ -72,7 +72,8 @@ public final class MemoryEditorGuard {
             return true;
         }
         if (!"http".equals(scheme) && !"https".equals(scheme)
-                && !"ssl".equals(scheme) && !"socket".equals(scheme)) return false;
+                && !"ssl".equals(scheme) && !"socket".equals(scheme)
+                && !"datagram".equals(scheme)) return false;
 
         String host;
         int port;
@@ -131,7 +132,10 @@ public final class MemoryEditorGuard {
         return first == 0 || first == 10 || first == 127
                 || (first == 169 && octets[1] == 254)
                 || (first == 172 && octets[1] >= 16 && octets[1] <= 31)
-                || (first == 192 && octets[1] == 168);
+                || (first == 192 && octets[1] == 168)
+                || (first >= 224 && first <= 239)
+                || (first == 255 && octets[1] == 255
+                        && octets[2] == 255 && octets[3] == 255);
     }
 
     private static boolean isLocalIpv6(String host) {
@@ -141,7 +145,8 @@ public final class MemoryEditorGuard {
         if (firstWord.isEmpty()) return false;
         try {
             int prefix = Integer.parseInt(firstWord, 16);
-            return (prefix & 0xfe00) == 0xfc00 || (prefix & 0xffc0) == 0xfe80;
+            return (prefix & 0xfe00) == 0xfc00 || (prefix & 0xffc0) == 0xfe80
+                    || (prefix & 0xff00) == 0xff00;
         } catch (NumberFormatException error) {
             return false;
         }

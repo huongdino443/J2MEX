@@ -17,6 +17,7 @@
 package org.recompile.mobile;
 
 import java.net.URL;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -43,6 +44,17 @@ import java.awt.image.DataBufferInt;
 
 public class MobilePlatform
 {
+
+public interface VibrationHandler
+{
+void vibrate(long durationMillis, int strength);
+void stop();
+}
+
+public interface ExternalUrlHandler
+{
+void open(String url) throws IOException;
+}
 
 	private static final Object NO_ACTIVE_DISPLAY_OWNER = new Object();
 	private static final IdentityHashMap<Object, Object> displayOwners =
@@ -161,6 +173,7 @@ void dismiss();
 	public Runnable painter;
 
 	public String dataPath = "";
+	public String sharedStoragePath = "";
 
 	public int keyState = 0;
 private final Object gameKeyStateLock = new Object();
@@ -168,6 +181,8 @@ private int heldGameKeyState = 0;
 private final Map<Integer,Integer> heldGameKeyMasks = new HashMap<Integer,Integer>();
 
 private volatile TextInputHandler textInputHandler;
+private volatile VibrationHandler vibrationHandler;
+private volatile ExternalUrlHandler externalUrlHandler;
 private volatile Runnable midletExitHandler;
 private int textInputRequestId;
 private javax.microedition.lcdui.Displayable textInputTarget;
@@ -235,6 +250,18 @@ System.arraycopy(source,0,pixels,0,required);
 	public void setMidletExitHandler(Runnable handler)
 	{
 		midletExitHandler = handler;
+	}
+
+	public void setExternalUrlHandler(ExternalUrlHandler handler)
+	{
+		externalUrlHandler = handler;
+	}
+
+	public void openExternalUrl(String url) throws IOException
+	{
+		ExternalUrlHandler handler = externalUrlHandler;
+		if (handler == null) throw new IOException("Android URL handler is unavailable");
+		handler.open(url);
 	}
 
 	public boolean requestMidletExit()
@@ -316,6 +343,24 @@ if (!Canvas.isPointerInputEnabled()) return;
 	}
 
 public void setTextInputHandler(TextInputHandler handler) { textInputHandler = handler; }
+
+public void setVibrationHandler(VibrationHandler handler) { vibrationHandler = handler; }
+
+public boolean isVibrationSupported() { return vibrationHandler != null; }
+
+public void vibrate(long durationMillis, int strength)
+{
+VibrationHandler handler = vibrationHandler;
+if (handler == null) return;
+if (durationMillis == 0) handler.stop();
+else handler.vibrate(durationMillis, strength);
+}
+
+public void stopVibration()
+{
+VibrationHandler handler = vibrationHandler;
+if (handler != null) handler.stop();
+}
 
 public synchronized void requestTextInput(String title, String value, int maxSize, int constraints)
 {

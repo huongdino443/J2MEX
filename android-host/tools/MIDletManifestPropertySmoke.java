@@ -17,6 +17,7 @@ public final class MIDletManifestPropertySmoke {
             attributes.putValue("Manifest-Version", "1.0");
             attributes.putValue("MIDlet-1", "Test Game,/icon.png,example.TestMidlet");
             attributes.putValue("MIDlet-Name", "Test Game");
+            attributes.putValue("start", "Bắt đầu ghép");
             try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(jarFile.toPath()), manifest)) {
                 output.flush();
             }
@@ -29,13 +30,29 @@ public final class MIDletManifestPropertySmoke {
                 if (!expected.equals(properties.get("MIDlet-1"))) {
                     throw new AssertionError("MIDlet-1 was not retained as an app property");
                 }
+                if (!"Bắt đầu ghép".equals(properties.get("start"))) {
+                    throw new AssertionError("UTF-8 manifest properties were not decoded correctly: "
+                            + properties.get("start"));
+                }
                 if (!"example.TestMidlet".equals(loader.getMIDletClassName())) {
                     throw new AssertionError("MIDlet-1 still must identify the entry class");
                 }
             }
-            System.out.println("MIDletManifestPropertySmoke: MIDlet-1 property and entry class passed");
+            if (args.length > 0) assertUploadedJarProperties(new File(args[0]));
+            System.out.println("MIDletManifestPropertySmoke: UTF-8 app properties and entry class passed");
         } finally {
             Files.deleteIfExists(jarFile.toPath());
+        }
+    }
+
+    private static void assertUploadedJarProperties(File jar) throws Exception {
+        try (MIDletLoader loader = new MIDletLoader(new URL[]{jar.getCanonicalFile().toURI().toURL()})) {
+            Field propertiesField = MIDletLoader.class.getDeclaredField("properties");
+            propertiesField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<String, String> properties = (Map<String, String>) propertiesField.get(loader);
+            if (!"Bắt đầu ghép".equals(properties.get("start")))
+                throw new AssertionError("Uploaded JAR's start label is not decoded as UTF-8");
         }
     }
 }

@@ -16,13 +16,23 @@
 */
 package com.nokia.mid.ui;
 
+import org.recompile.mobile.Mobile;
+
 public class DeviceControl
 {
 	public static void flashLights(long duration) { }
 
 	public static void setLights(int num, int level) { }
 
-	public static void startVibra(int freq, long duration) { }
+public static void startVibra(int freq, long duration)
+{
+if (Mobile.getPlatform() == null) return;
+if (duration == 0 || freq <= 0) Mobile.getPlatform().stopVibration();
+else Mobile.getPlatform().vibrate(duration, Math.max(1, Math.min(100, freq)));
+}
 
-	public static void stopVibra() { }
+public static void stopVibra()
+{
+if (Mobile.getPlatform() != null) Mobile.getPlatform().stopVibration();
+}
 }

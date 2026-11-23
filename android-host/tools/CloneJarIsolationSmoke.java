@@ -17,25 +17,33 @@ public final class CloneJarIsolationSmoke {
         }
         MIDletLoader parent = new MIDletLoader(urls);
         CloneClassSpace space = new CloneClassSpace(parent, urls, properties, "quyetdaik.quyetdaik");
-        Class.forName("quyetdaik.a", false, parent).getDeclaredMethods();
+        Class.forName(space.factoryClass, false, parent).getDeclaredMethods();
         require(space.isFactory("quyetdaik.a"), "real factory is recognized and verifies");
         Class<?> sharedMidlet = Class.forName("lib.MIDlet", false, parent);
-        Class<?>[] first = new Class<?>[5];
+        int count = Integer.parseInt(properties.get("num"));
+        Class<?>[] first = new Class<?>[count];
+        String[] names = new String[count];
         for (int i = 0; i < first.length; i++) {
-            String prefix = Character.toString((char)('a' + i));
-            first[i] = space.resolve(prefix + ".code.main.GameMidlet", false);
+            String descriptor = properties.get(Integer.toString(i));
+            String[] fields = descriptor == null ? new String[0] : descriptor.split(",", -1);
+            require(fields.length >= 3, "manifest clone descriptor is valid");
+            names[i] = fields[2].trim();
+            int dot = names[i].indexOf('.');
+            require(dot > 0, "clone has a private package namespace");
+            String prefix = names[i].substring(0, dot + 1);
+            first[i] = space.resolve(names[i], false);
             require(first[i].getSuperclass() == sharedMidlet, "real clone shares launcher API");
             require(first[i].getClassLoader() != parent, "real clone owns a private class space");
-            Class<?> canvas = Class.forName(prefix + ".es", false, first[i].getClassLoader());
-            canvas.getDeclaredMethods();
-            require(canvas.getClassLoader() == first[i].getClassLoader(), "canvas stays in clone generation");
+            Class<?> privateClass = Class.forName(prefix + "es", false, first[i].getClassLoader());
+            privateClass.getDeclaredMethods();
+            require(privateClass.getClassLoader() == first[i].getClassLoader(),
+                    "clone-private support class stays in its generation");
             require(Class.forName("lib.Class", false, first[i].getClassLoader()).getClassLoader()
                     == first[i].getClassLoader(), "reflection helper is generation local");
         }
         for (int i = 0; i < first.length; i++) {
-            String name = first[i].getName();
             CloneClassSpace.retireLoader(first[i].getClassLoader());
-            Class<?> next = space.resolve(name, false);
+            Class<?> next = space.resolve(names[i], false);
             require(next != first[i] && next.getSuperclass() == sharedMidlet,
                     "real clone restarts with fresh classes but shared MIDlet API");
             if (i + 1 < first.length)
@@ -43,7 +51,8 @@ public final class CloneJarIsolationSmoke {
                         "real sibling class space is preserved");
         }
         System.out.println("CloneJarIsolationSmoke: " + checks
-                + " checks passed on real 5-clone JAR; no game class initialization/network");
+                + " checks passed on real " + count
+                + "-clone JAR; no game class initialization/network");
     }
     private static void require(boolean condition, String label) {
         checks++;

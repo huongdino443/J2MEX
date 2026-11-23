@@ -76,6 +76,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
     private boolean homeLaunchPending;
     private boolean emptyReturnScheduled;
     private boolean heapUpdateReceiverRegistered;
+    private boolean sessionRegistryReceiverRegistered;
     private String heapSampleSessionId;
     private long heapSampleAt;
     private final Runnable heapQueryAction = new Runnable() {
@@ -100,6 +101,15 @@ public final class SessionOverviewActivity extends LocalizedActivity {
             heapSampleSessionId = sessionId;
             heapSampleAt = android.os.SystemClock.elapsedRealtime();
             heapValue.setText(formatHeap(usedBytes, maxBytes));
+        }
+    };
+    private final BroadcastReceiver sessionRegistryReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (intent != null
+                    && RuntimeSessionStore.ACTION_SESSION_REGISTRY_CHANGED
+                            .equals(intent.getAction())) {
+                refreshSessions();
+            }
         }
     };
     private final Runnable emptyReturnAction = () -> {
@@ -221,12 +231,18 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         super.onStart();
         IntentFilter filter = new IntentFilter(
                 RuntimeSessionStore.ACTION_HOTSPOT_MEMORY_UPDATE);
+        IntentFilter sessionsFilter = new IntentFilter(
+                RuntimeSessionStore.ACTION_SESSION_REGISTRY_CHANGED);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             registerReceiver(heapUpdateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(sessionRegistryReceiver, sessionsFilter,
+                    Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(heapUpdateReceiver, filter);
+            registerReceiver(sessionRegistryReceiver, sessionsFilter);
         }
         heapUpdateReceiverRegistered = true;
+        sessionRegistryReceiverRegistered = true;
     }
 
     @Override protected void onStop() {
@@ -238,6 +254,14 @@ public final class SessionOverviewActivity extends LocalizedActivity {
             }
             heapUpdateReceiverRegistered = false;
         }
+        if (sessionRegistryReceiverRegistered) {
+            try {
+                unregisterReceiver(sessionRegistryReceiver);
+            } catch (RuntimeException error) {
+                android.util.Log.w("J2MEX", "Could not unregister session listener", error);
+            }
+            sessionRegistryReceiverRegistered = false;
+        }
         super.onStop();
     }
 
@@ -248,6 +272,12 @@ public final class SessionOverviewActivity extends LocalizedActivity {
                 unregisterReceiver(heapUpdateReceiver);
             } catch (RuntimeException ignored) { }
             heapUpdateReceiverRegistered = false;
+        }
+        if (sessionRegistryReceiverRegistered) {
+            try {
+                unregisterReceiver(sessionRegistryReceiver);
+            } catch (RuntimeException ignored) { }
+            sessionRegistryReceiverRegistered = false;
         }
         if (activeTaskPopup != null) activeTaskPopup.dismiss();
         assetLoader.shutdownNow();
@@ -548,7 +578,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         }
         selectedSessionId = session.id;
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -561,6 +591,9 @@ public final class SessionOverviewActivity extends LocalizedActivity {
 
     private Class<? extends RuntimeActivity> runtimeActivityFor(
             RuntimeSessionStore.Session session) {
+        Class<? extends RuntimeActivity> recorded =
+                RuntimeSessionStore.activityClassForSession(session);
+        if (recorded != null) return recorded;
         if (session.slot >= 2) {
             switch (session.slot) {
                 case 2: return RuntimeThirdActivity.class;
@@ -605,7 +638,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
             return;
         }
         Intent intent = new Intent(this, runtimeActivityFor(session));
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", session.jarPath);
         intent.putExtra("title", session.title);
@@ -620,7 +653,7 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         homeLaunchPending = true;
         MainActivity.setLauncherHomePinned(this, true);
         Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra(EXTRA_OPEN_HOME, true);
         startActivity(intent);
@@ -648,9 +681,13 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         if (activeTaskPopup != null) activeTaskPopup.dismiss();
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 12));
-        panel.setBackground(pill(COLOR_SURFACE, dp(this, 20), COLOR_BORDER));
-        panel.setElevation(dp(this, 8));
+        panel.setPadding(dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_TOP_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_BOTTOM_PADDING_DP));
+        panel.setBackground(pill(COLOR_SURFACE,
+                dp(this, AppPopupDimensions.PANEL_CORNER_RADIUS_DP), COLOR_BORDER));
+        panel.setElevation(dp(this, AppPopupDimensions.PANEL_ELEVATION_DP));
 
         TextView heading = new TextView(this);
         heading.setText(title);
@@ -664,9 +701,10 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         body.setText(message);
         body.setTextColor(COLOR_TEXT);
         body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        body.setLineSpacing(dp(this, 2), 1f);
         LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        bodyParams.topMargin = dp(this, 10);
+        bodyParams.topMargin = dp(this, AppPopupDimensions.SECTION_GAP_DP);
         panel.addView(body, bodyParams);
 
         LinearLayout actions = new LinearLayout(this);
@@ -674,22 +712,23 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        actionsParams.topMargin = dp(this, 12);
+        actionsParams.topMargin = dp(this, AppPopupDimensions.SECTION_GAP_DP);
         panel.addView(actions, actionsParams);
 
         PopupWindow popup = new PopupWindow(panel,
-                Math.min(dp(this, 400),
-                        getResources().getDisplayMetrics().widthPixels - dp(this, 32)),
+                Math.min(dp(this, AppPopupDimensions.MAX_POPUP_WIDTH_DP),
+                        getResources().getDisplayMetrics().widthPixels
+                                - dp(this, AppPopupDimensions.SCREEN_EDGE_GUTTER_DP * 2)),
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(dp(this, 10));
+        popup.setElevation(dp(this, AppPopupDimensions.POPUP_ELEVATION_DP));
         popup.setOutsideTouchable(true);
         popup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
-        TextView primaryButton = taskActionButton(primaryLabel, COLOR_ACCENT);
+        TextView primaryButton = taskActionButton(primaryLabel, COLOR_ACCENT, true);
         TextView cancelButton = null;
         if (cancelLabel != null) {
-            cancelButton = taskActionButton(cancelLabel, COLOR_MUTED);
+            cancelButton = taskActionButton(cancelLabel, COLOR_MUTED, false);
             LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             actions.addView(cancelButton, cancelParams);
@@ -724,15 +763,19 @@ public final class SessionOverviewActivity extends LocalizedActivity {
         popup.showAtLocation(contentRoot, Gravity.CENTER, 0, 0);
     }
 
-    private TextView taskActionButton(String label, int color) {
+    private TextView taskActionButton(String label, int color, boolean primary) {
         TextView button = new TextView(this);
         button.setText(AppLocalization.text(this, label));
         button.setTextColor(color);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setTypeface(Typeface.create("sans-serif-medium",
+                primary ? Typeface.BOLD : Typeface.NORMAL));
         button.setGravity(Gravity.CENTER);
-        button.setPadding(dp(this, 14), dp(this, 8), dp(this, 14), dp(this, 8));
-        button.setMinHeight(dp(this, 48));
+        button.setPadding(dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.SPACE_2_DP),
+                dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.SPACE_2_DP));
+        button.setMinHeight(dp(this, AppPopupDimensions.STANDARD_ACTION_MIN_HEIGHT_DP));
         button.setMinWidth(dp(this, 64));
         button.setClickable(true);
         button.setFocusable(true);
@@ -1046,7 +1089,8 @@ public final class SessionOverviewActivity extends LocalizedActivity {
             addView(topBar, topParams);
 
             GameIconView headerIcon = new GameIconView(context);
-            headerIcon.setContentDescription(AppLocalization.text(context, "Icon game"));
+            headerIcon.setContentDescription(
+                    AppLocalization.text(context, "Icon game"));
             topBar.addView(headerIcon, new LinearLayout.LayoutParams(
                     dp(context, 30), dp(context, 30)));
             // Keep the fallback and header artwork in sync without retaining a second view.

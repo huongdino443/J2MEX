@@ -34,6 +34,8 @@ public final class CloneRestartSmoke {
         Object first = make.invoke(factory, "a.code.main.GameMidlet");
         invoke(first, "start");
         require(initialized(first), "first clone initializes");
+        require(display.getCurrent() == invoke(first, "screen"),
+                "constructor-selected child screen is displayed after its first start");
         Object second = make.invoke(factory, "b.code.main.GameMidlet");
         invoke(second, "start");
         require(initialized(second), "second clone initializes");
@@ -129,14 +131,14 @@ public final class CloneRestartSmoke {
             sources.put(prefix + "/code/main/GameMidlet.java",
                     "package " + prefix + ".code.main; public class GameMidlet extends lib.MIDlet {"
                     + "private javax.microedition.lcdui.Canvas screen;"
-                    + "protected void startApp(){if(" + prefix + ".State.booted)return;"
-                    + prefix + ".State.booted=true;" + prefix + ".State.starts++;"
-                    + "screen=new javax.microedition.lcdui.Canvas(){protected void paint("
-                    + "javax.microedition.lcdui.Graphics g){g.setColor(0x123456);"
-                    + "g.fillRect(0,0,getWidth(),getHeight());}};"
+                    + "public GameMidlet(){screen=new javax.microedition.lcdui.Canvas(){protected void paint("
+                    + "javax.microedition.lcdui.Graphics g){}};"
                     + "lib.Display.getDisplay(this).setCurrent(screen);}"
+                    + "protected void startApp(){if(" + prefix + ".State.booted)return;"
+                    + prefix + ".State.booted=true;" + prefix + ".State.starts++;}"
                     + "protected void destroyApp(boolean x){}"
                     + "public boolean initialized(){return screen!=null;}"
+                    + "public Object screen(){return screen;}"
                     + "public int starts(){return " + prefix + ".State.starts;}"
                     + "public java.lang.Class<?> reflectedState()throws Exception{"
                     + "return lib.Class.aorName(\"State\");}}");

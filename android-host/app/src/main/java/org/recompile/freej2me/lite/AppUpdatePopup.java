@@ -132,7 +132,8 @@ final class AppUpdatePopup {
                 new Action("Trang phát hành", true,
                         () -> AppUpdateUi.openReleasePage(activity, release)),
                 new Action("Đóng", false, null),
-                new Action("Tải về", true, () -> AppUpdateUi.download(activity, release)));
+                new Action("Tải về", true,
+                        () -> AppUpdateUi.download(activity, release)));
     }
 
     static void showMessage(Activity activity, String title, String message,
@@ -140,8 +141,10 @@ final class AppUpdatePopup {
         if (activity.isFinishing() || activity.isDestroyed()) return;
         LinearLayout panel = modalPanel(activity, title);
         addMessageBody(activity, panel, message, scrollable);
-        panel.setPadding(dp(activity, 20), dp(activity, 18),
-                dp(activity, 20), dp(activity, 8));
+        panel.setPadding(dp(activity, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_PANEL_TOP_PADDING_DP),
+                dp(activity, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_PANEL_BOTTOM_PADDING_DP));
 
         ArrayList<TextView> buttons = new ArrayList<>(actions.length);
         if (actions.length > 0) {
@@ -151,10 +154,11 @@ final class AppUpdatePopup {
                     | Gravity.CENTER_VERTICAL);
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rowParams.topMargin = dp(activity, 6);
+            rowParams.topMargin = dp(activity, AppPopupDimensions.UPDATE_FOOTER_GAP_DP);
             panel.addView(actionRow, rowParams);
             if (actions.length == 3) {
-                TextView leftButton = actionButton(activity, actions[0].label, actions[0].accent);
+                TextView leftButton = actionButton(activity, actions[0].label,
+                        actions[0].accent);
                 leftButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
                 actionRow.addView(leftButton, new LinearLayout.LayoutParams(
                         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -224,11 +228,11 @@ final class AppUpdatePopup {
             scroll.setVerticalScrollBarEnabled(false);
             scroll.addView(body, new ScrollView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            int maxHeight = Math.min(dp(activity, 360),
+            int maxHeight = Math.min(dp(activity, AppPopupDimensions.MAX_SCROLL_CONTENT_HEIGHT_DP),
                     activity.getResources().getDisplayMetrics().heightPixels / 2);
             LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, maxHeight);
-            scrollParams.topMargin = dp(activity, 12);
+            scrollParams.topMargin = dp(activity, AppPopupDimensions.SECTION_GAP_DP);
             panel.addView(scroll, scrollParams);
             ScrollCueOverlay.install(activity, scroll, 10);
         } else {
@@ -241,14 +245,16 @@ final class AppUpdatePopup {
     private static LinearLayout modalPanel(Activity activity, String title) {
         LinearLayout panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(activity, 20), dp(activity, 18),
-                dp(activity, 20), dp(activity, 16));
+        panel.setPadding(dp(activity, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_PANEL_TOP_PADDING_DP),
+                dp(activity, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(activity, AppPopupDimensions.PANEL_BOTTOM_PADDING_DP));
         GradientDrawable background = new GradientDrawable();
         background.setColor(COLOR_SURFACE);
-        background.setCornerRadius(dp(activity, 20));
+        background.setCornerRadius(dp(activity, AppPopupDimensions.UPDATE_PANEL_CORNER_RADIUS_DP));
         background.setStroke(dp(activity, 1), COLOR_BORDER);
         panel.setBackground(background);
-        panel.setElevation(dp(activity, 8));
+        panel.setElevation(dp(activity, AppPopupDimensions.PANEL_ELEVATION_DP));
 
         TextView heading = new TextView(activity);
         heading.setText(AppLocalization.text(activity, title));
@@ -273,12 +279,16 @@ final class AppUpdatePopup {
         TextView button = new TextView(activity);
         button.setText(AppLocalization.text(activity, label));
         button.setTextColor(accent ? COLOR_ACCENT : COLOR_MUTED);
-        button.setTextSize(13);
-        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setTextSize(AppPopupDimensions.UPDATE_ACTION_TEXT_SIZE_SP);
+        button.setTypeface(Typeface.create("sans-serif-medium",
+                accent ? Typeface.BOLD : Typeface.NORMAL));
         button.setGravity(Gravity.CENTER);
         button.setBackgroundColor(Color.TRANSPARENT);
-        button.setPadding(dp(activity, 4), dp(activity, 4), dp(activity, 4), dp(activity, 4));
-        button.setMinHeight(dp(activity, 44));
+        button.setPadding(dp(activity, AppPopupDimensions.UPDATE_ACTION_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_ACTION_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_ACTION_PADDING_DP),
+                dp(activity, AppPopupDimensions.UPDATE_ACTION_PADDING_DP));
+        button.setMinHeight(dp(activity, AppPopupDimensions.UPDATE_ACTION_MIN_HEIGHT_DP));
         button.setClickable(true);
         button.setFocusable(true);
         return button;
@@ -293,12 +303,13 @@ final class AppUpdatePopup {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         int screenWidth = activity.getResources().getDisplayMetrics().widthPixels;
-        int popupWidth = Math.min(dp(activity, 400),
-                Math.max(dp(activity, 260), screenWidth - dp(activity, 32)));
+        int popupWidth = Math.min(dp(activity, AppPopupDimensions.MAX_POPUP_WIDTH_DP),
+                Math.max(dp(activity, AppPopupDimensions.MIN_POPUP_WIDTH_DP),
+                        screenWidth - dp(activity, AppPopupDimensions.SCREEN_EDGE_GUTTER_DP * 2)));
         PopupWindow popup = new PopupWindow(panel, popupWidth,
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(dp(activity, 10));
+        popup.setElevation(dp(activity, AppPopupDimensions.POPUP_ELEVATION_DP));
         popup.setOutsideTouchable(dismissOnOutside);
         popup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
         popup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);

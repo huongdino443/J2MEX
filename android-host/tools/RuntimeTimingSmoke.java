@@ -64,15 +64,29 @@ public final class RuntimeTimingSmoke {
         expectNetworkDenied();
 
         MemoryEditorGuard.resetSession();
-        MemoryEditorGuard.checkConnector("datagram://8.8.8.8:53");
+        boolean udpPending = MemoryEditorGuard.beginConnection("datagram://8.8.8.8:53");
+        if (!udpPending || MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("An external UDP attempt must block memory editing while pending");
+        MemoryEditorGuard.finishConnection(udpPending);
+        if (!MemoryEditorGuard.openEditor(false))
+            throw new AssertionError("A finished UDP attempt must release the editor lock");
+        MemoryEditorGuard.closeEditor();
+
+        MemoryEditorGuard.resetSession();
+        MemoryEditorGuard.checkConnector("datagram://192.168.1.255:45322");
+        MemoryEditorGuard.checkConnector("datagram://:45322");
         MemoryEditorGuard.checkConnector("socket://:22122");
         MemoryEditorGuard.checkConnector("socket://127.0.0.1:14445");
         MemoryEditorGuard.checkConnector("http://192.168.1.40:8080");
         MemoryEditorGuard.checkConnector("http://game-server.local:8080");
         if (!MemoryEditorGuard.openEditor(false))
-            throw new AssertionError("Unsupported probes and local servers must not lock editing");
+            throw new AssertionError("LAN datagrams and local servers must not lock editing");
         MemoryEditorGuard.checkConnector("socket://127.0.0.1:14445");
         expectNetworkDenied();
+        try {
+            MemoryEditorGuard.checkConnector("datagram://8.8.8.8:53");
+            throw new AssertionError("External UDP must be denied after memory editing");
+        } catch (IOException expected) { }
         MemoryEditorGuard.closeEditor();
         expectNetworkDenied();
 

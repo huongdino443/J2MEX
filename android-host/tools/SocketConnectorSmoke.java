@@ -131,7 +131,12 @@ public final class SocketConnectorSmoke {
             }
             try (OutputStream stream = Connector.openOutputStream(url)) { stream.write(new byte[16]); }
             checks += 2;
-            for (String malformed : new String[]{"socket://localhost", "socket://:0",
+            ServerSocketConnection ephemeralListener = (ServerSocketConnection)
+                    Connector.open("socket://:0");
+            check(ephemeralListener.getLocalPort() > 0,
+                    "socket://:0 binds an ephemeral server port");
+            ephemeralListener.close();
+            for (String malformed : new String[]{"socket://localhost",
                     "socket://localhost:0", "socket://localhost:65536", "socket://localhost:1/a",
                     "socket://user@localhost:1", "socket://localhost:1?q=1",
                     "socket://localhost:1#fragment", "socket://bad host:1"}) {

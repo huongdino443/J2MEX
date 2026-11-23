@@ -27,6 +27,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 import org.recompile.mobile.Mobile;
+import org.recompile.mobile.MobilePlatform;
 
 public class Display
 {
@@ -215,8 +216,11 @@ Mobile.getPlatform().flushGraphics(next.platformImage, 0, 0, next.width, next.he
 
 	public boolean vibrate(int duration)
 	{
-		//System.out.println("Vibrate");
-		return true;
+MobilePlatform platform = Mobile.getPlatform();
+if (platform == null || !platform.isVibrationSupported()) return false;
+if (duration <= 0) platform.stopVibration();
+else platform.vibrate(duration, 100);
+return true;
 	}
 
 }

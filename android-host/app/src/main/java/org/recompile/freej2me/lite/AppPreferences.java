@@ -13,6 +13,7 @@ final class AppPreferences {
     private static final String DEBUG_LOGS = "debug_logs_enabled";
     private static final String STATUS_BAR = "status_bar_visible";
     private static final String KEEP_GAME_IN_BACKGROUND = "keep_game_in_background";
+    private static final String VIBRATION_ENABLED = "vibration_enabled";
     private static final String BACKGROUND_NOTIFICATION_PROMPTED =
             "background_notification_prompted";
     private static final String LANGUAGE = "language";
@@ -25,6 +26,9 @@ final class AppPreferences {
     static final String EXTRA_STATUS_BAR = "app_preferences.status_bar";
     static final String EXTRA_KEEP_GAME_IN_BACKGROUND =
             "app_preferences.keep_game_in_background";
+    static final String EXTRA_VIBRATION_ENABLED = "app_preferences.vibration_enabled";
+    static final String ACTION_VIBRATION_SETTING_CHANGED =
+            "org.recompile.freej2me.lite.VIBRATION_SETTING_CHANGED";
     static final String EXTRA_BACKGROUND_NOTIFICATION_PROMPTED =
             "app_preferences.background_notification_prompted";
 
@@ -39,19 +43,23 @@ final class AppPreferences {
         intent.putExtra(EXTRA_DEBUG_LOGS, debugLogsEnabled(context));
         intent.putExtra(EXTRA_STATUS_BAR, statusBarVisible(context));
         intent.putExtra(EXTRA_KEEP_GAME_IN_BACKGROUND, keepGameInBackground(context));
+        intent.putExtra(EXTRA_VIBRATION_ENABLED, vibrationEnabled(context));
         intent.putExtra(EXTRA_BACKGROUND_NOTIFICATION_PROMPTED,
                 backgroundNotificationPrompted(context));
     }
 
     static void syncRuntimeSettingsToMain(Context context, boolean showFps,
-            boolean debugLogs, boolean statusBar, boolean keepGameInBackground) {
+            boolean debugLogs, boolean statusBar, boolean keepGameInBackground,
+            boolean vibrationEnabled) {
         Intent update = new Intent(context, AppPreferencesReceiver.class);
         update.setAction(ACTION_RUNTIME_SETTINGS_CHANGED);
         update.putExtra(EXTRA_SHOW_FPS, showFps);
         update.putExtra(EXTRA_DEBUG_LOGS, debugLogs);
         update.putExtra(EXTRA_STATUS_BAR, statusBar);
         update.putExtra(EXTRA_KEEP_GAME_IN_BACKGROUND, keepGameInBackground);
+        update.putExtra(EXTRA_VIBRATION_ENABLED, vibrationEnabled);
         context.sendBroadcast(update);
+        broadcastVibrationSetting(context, vibrationEnabled);
     }
 
     static void broadcastBackgroundActivityChanged(Context context, boolean enabled) {
@@ -69,6 +77,9 @@ final class AppPreferences {
                 .putBoolean(KEEP_GAME_IN_BACKGROUND,
                         update.getBooleanExtra(EXTRA_KEEP_GAME_IN_BACKGROUND,
                                 keepGameInBackground(context)))
+                .putBoolean(VIBRATION_ENABLED,
+                        update.getBooleanExtra(EXTRA_VIBRATION_ENABLED,
+                                vibrationEnabled(context)))
                 .commit();
     }
 
@@ -102,6 +113,22 @@ final class AppPreferences {
 
     static void setKeepGameInBackground(Context context, boolean enabled) {
         preferences(context).edit().putBoolean(KEEP_GAME_IN_BACKGROUND, enabled).apply();
+    }
+
+    static boolean vibrationEnabled(Context context) {
+        return preferences(context).getBoolean(VIBRATION_ENABLED, true);
+    }
+
+    static void setVibrationEnabled(Context context, boolean enabled) {
+        preferences(context).edit().putBoolean(VIBRATION_ENABLED, enabled).apply();
+        broadcastVibrationSetting(context, enabled);
+    }
+
+    private static void broadcastVibrationSetting(Context context, boolean enabled) {
+        Intent update = new Intent(ACTION_VIBRATION_SETTING_CHANGED)
+                .setPackage(context.getPackageName())
+                .putExtra(EXTRA_VIBRATION_ENABLED, enabled);
+        context.sendBroadcast(update);
     }
 
     static boolean backgroundNotificationPrompted(Context context) {

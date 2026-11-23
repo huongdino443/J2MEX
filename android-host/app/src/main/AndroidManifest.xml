@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
@@ -61,43 +62,61 @@
             android:windowSoftInputMode="adjustNothing"/>
         <activity android:name=".RuntimeActivity" android:exported="false"
             android:launchMode="singleTop"
+            android:taskAffinity="${applicationId}.runtime1"
+            android:excludeFromRecents="true"
             android:process=":runtime"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeLandscapeActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime1"
+            android:excludeFromRecents="true"
             android:process=":runtime"
             android:screenOrientation="landscape"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimePortraitActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime1"
+            android:excludeFromRecents="true"
             android:process=":runtime"
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeSecondActivity" android:exported="false"
             android:launchMode="singleTop"
+            android:taskAffinity="${applicationId}.runtime2"
+            android:excludeFromRecents="true"
             android:process=":runtime2"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeSecondLandscapeActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime2"
+            android:excludeFromRecents="true"
             android:process=":runtime2"
             android:screenOrientation="landscape"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeSecondPortraitActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime2"
+            android:excludeFromRecents="true"
             android:process=":runtime2"
             android:screenOrientation="portrait"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeThirdActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime3"
+            android:excludeFromRecents="true"
             android:process=":runtime3"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeFourthActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime4"
+            android:excludeFromRecents="true"
             android:process=":runtime4"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>
         <activity android:name=".RuntimeFifthActivity" android:exported="false"
+            android:taskAffinity="${applicationId}.runtime5"
+            android:excludeFromRecents="true"
             android:process=":runtime5"
             android:configChanges="keyboardHidden|orientation|screenSize"
             android:windowSoftInputMode="adjustResize"/>

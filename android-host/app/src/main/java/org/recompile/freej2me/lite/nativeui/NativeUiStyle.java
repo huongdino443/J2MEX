@@ -24,7 +24,7 @@ final class NativeUiStyle {
     static final int GROUPED_BACKGROUND = 0xFF0E1826;
     static final int SURFACE = 0xFF192434;
     static final int MENU_SURFACE = 0xFF192434;
-    static final int FIELD_SURFACE = 0xFF192434;
+    static final int FIELD_SURFACE = 0xFF1C2838;
     static final int INTERACTIVE_SURFACE = 0xFF192434;
     static final int BUTTON_SURFACE = 0xFF192434;
     static final int LIST_SELECTED_SURFACE = 0xFF2B3548;
@@ -121,9 +121,13 @@ final class NativeUiStyle {
     }
 
     static Drawable control(Context context) {
+        return control(context, FIELD_SURFACE);
+    }
+
+    static Drawable control(Context context, int focusedSurface) {
         StateListDrawable states = new StateListDrawable();
         states.addState(new int[]{android.R.attr.state_focused},
-                shape(context, FIELD_SURFACE, ACCENT, 8));
+                shape(context, focusedSurface, ACCENT, 8));
         states.addState(new int[]{android.R.attr.state_pressed},
                 shape(context, FIELD_SURFACE, FIELD_OUTLINE, 8));
         states.addState(new int[0], shape(context, FIELD_SURFACE, FIELD_OUTLINE, 8));

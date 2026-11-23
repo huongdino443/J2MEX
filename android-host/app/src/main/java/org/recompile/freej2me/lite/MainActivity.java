@@ -76,6 +76,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.recompile.freej2me.lite.nativeui.NativeTextFieldStyle;
 
     public final class MainActivity extends LocalizedActivity {
     private static MainActivity activeInstance;
@@ -97,9 +98,13 @@ import java.util.concurrent.Executors;
     private static final int TAB_ADD = 2;
     private static final int TAB_SEARCH = 3;
     private static final int TAB_MORE = 4;
+    private static final int GAME_GRID_BOTTOM_PADDING_DP = 80;
+    private static final int CENTERED_LANDSCAPE_BOTTOM_PADDING_DP = 56;
+    private static final int OTHER_CONTENT_BOTTOM_PADDING_DP = 100;
 
     private static final int COLOR_BACKGROUND = Color.rgb(14, 24, 38);
     private static final int COLOR_SURFACE = Color.rgb(25, 36, 52);
+    private static final int COLOR_COLLECTION_INPUT_FOCUSED = 0xFF243144;
     private static final int COLOR_SURFACE_SELECTED = Color.rgb(43, 53, 72);
     private static final int COLOR_TEXT = Color.rgb(232, 239, 247);
     private static final int COLOR_MUTED = Color.rgb(157, 170, 187);
@@ -305,7 +310,18 @@ import java.util.concurrent.Executors;
             launcherRuntimeReturnPending = false;
         captureExternalGameOpen(intent);
         processPendingExternalGameOpen();
-        if (activityResumed && interfaceInitialized) openPendingRuntimeSession();
+        if (activityResumed && interfaceInitialized) {
+            if (pendingHomeOpen) {
+                pendingHomeOpen = false;
+                if (currentScreen != TAB_HOME) changeScreen(TAB_HOME);
+            }
+            if (pendingSessionManagerOpen) {
+                pendingSessionManagerOpen = false;
+                openSessionOverview();
+            } else {
+                openPendingRuntimeSession();
+            }
+        }
     }
 
     private static boolean isLauncherIntent(Intent intent) {
@@ -401,7 +417,8 @@ import java.util.concurrent.Executors;
 
         contentColumn = new LinearLayout(this);
         contentColumn.setOrientation(LinearLayout.VERTICAL);
-        contentColumn.setPadding(dp(this, 12), dp(this, 8), dp(this, 12), dp(this, 100));
+        contentColumn.setPadding(dp(this, 12), dp(this, 8), dp(this, 12),
+                dp(this, GAME_GRID_BOTTOM_PADDING_DP));
         contentScroll.addView(contentColumn, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -762,8 +779,8 @@ import java.util.concurrent.Executors;
                         collectionScreen ? IconView.ADD : IconView.FILTER);
                 action.addView(actionIcon, new FrameLayout.LayoutParams(dp(this, 23), dp(this, 23),
                         Gravity.CENTER));
-                action.setContentDescription(collectionScreen
-                        ? "Tạo bộ sưu tập" : "Sắp xếp game");
+                action.setContentDescription(AppLocalization.text(this, collectionScreen
+                        ? "Tạo bộ sưu tập" : "Sắp xếp game"));
                 action.setClickable(true);
                 action.setFocusable(true);
                 action.setOnClickListener(collectionScreen
@@ -1010,6 +1027,7 @@ import java.util.concurrent.Executors;
                     this, "Tạo bộ sưu tập để sắp xếp các game của bạn."));
             description.setTextColor(COLOR_MUTED);
             description.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            description.setLineSpacing(dp(this, 2), 1f);
             description.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1042,8 +1060,8 @@ import java.util.concurrent.Executors;
         addMoreSection(preferencesCard, vietnamese ? "Tùy chọn" : "Preferences");
         addMoreSwitch(preferencesCard,
                 vietnamese ? "Hiển thị FPS" : "Show FPS",
-                vietnamese ? "Hiển thị số khung hình nhận được mỗi giây khi chơi."
-                        : "Show received frames per second while playing.",
+                vietnamese ? "Hiển thị tốc độ khung hình."
+                        : "Show the frame rate.",
                 AppPreferences.showFps(this), AppPreferences::setShowFps);
         addMoreSwitch(preferencesCard,
                 vietnamese ? "Hoạt động dưới nền" : "Background activity",
@@ -1070,6 +1088,12 @@ import java.util.concurrent.Executors;
                 AppPreferences.statusBarVisible(this), AppPreferences::setStatusBarVisible);
 
         addMoreSwitch(preferencesCard,
+                vietnamese ? "Rung" : "Vibration",
+                vietnamese ? "Cho phép game yêu cầu rung."
+                        : "Allow games to request vibration.",
+                AppPreferences.vibrationEnabled(this), AppPreferences::setVibrationEnabled);
+
+        addMoreSwitch(preferencesCard,
                 vietnamese ? "Ghi log để gỡ lỗi" : "Diagnostic logging",
                 vietnamese ? "Cho phép ghi log runtime và bật chức năng lưu log trong menu cạnh."
                         : "Write runtime logs and enable log export in the edge menu.",
@@ -1085,7 +1109,7 @@ import java.util.concurrent.Executors;
                 null);
         setLatestLogExportRowEnabled(AppPreferences.debugLogsEnabled(this));
         addMoreRow(preferencesCard,
-                vietnamese ? "Ngôn ngữ" : "Language",
+                vietnamese ? "Ngôn ngữ ứng dụng" : "App language",
                 vietnamese ? "Chọn ngôn ngữ hoặc dựa theo thiết bị."
                         : "Choose a language or follow the device.",
                 languageChoiceLabel(), view -> showLanguagePopup());
@@ -1114,7 +1138,7 @@ import java.util.concurrent.Executors;
         addMoreRow(infoCard,
                 vietnamese ? "Giới thiệu" : "About",
                 vietnamese ? "Tổng quan ứng dụng và giấy phép thành phần."
-                        : "App overview and component licenses.",
+                        : "Project information and component licenses.",
                 vietnamese ? "Xem" : "View", view -> showIntroduction());
         contentColumn.addView(infoCard);
 
@@ -1301,6 +1325,7 @@ import java.util.concurrent.Executors;
         text.setText(AppLocalization.text(this, value));
         text.setTextColor(COLOR_TEXT);
         text.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+        text.setLineSpacing(dp(this, 2), 1f);
         return text;
     }
 
@@ -1318,7 +1343,7 @@ import java.util.concurrent.Executors;
                 ? new String[]{"Theo cài đặt hệ thống", "English", "Tiếng Việt"}
                 : new String[]{"System default", "English", "Tiếng Việt"};
         LinearLayout panel = collectionModalPanel(
-                vietnamese ? "Ngôn ngữ ứng dụng" : "App language");
+                vietnamese ? "Ngôn ngữ J2MEX" : "J2MEX language");
         LinearLayout choices = new LinearLayout(this);
         choices.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams choicesParams = new LinearLayout.LayoutParams(
@@ -1418,11 +1443,14 @@ import java.util.concurrent.Executors;
         ArrayList<GameLibrary.Game> items = gamesInCollection(collection);
         if (items.isEmpty()) {
             TextView empty = new TextView(this);
-            empty.setText(AppLocalization.text(this, "Chưa có game trong bộ sưu tập này."));
+            empty.setText(AppLocalization.text(this,
+                    "Chưa có mục nào trong bộ sưu tập này."));
             empty.setTextColor(COLOR_MUTED);
             empty.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            empty.setPadding(dp(this, 54), dp(this, 8), dp(this, 16), dp(this, 16));
-            body.addView(empty);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(dp(this, 16), dp(this, 8), dp(this, 16), dp(this, 16));
+            body.addView(empty, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         } else {
             View divider = new View(this);
             divider.setBackgroundColor(0x333D4A5E);
@@ -1502,6 +1530,7 @@ import java.util.concurrent.Executors;
         row.setFocusable(true);
 
         GameIconView icon = new GameIconView(this);
+        icon.setCornerRadiusDp(8);
         icon.setArtwork(game.icon, game.title);
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
                 dp(this, 46), dp(this, 46));
@@ -1520,9 +1549,15 @@ import java.util.concurrent.Executors;
 
         row.setOnClickListener(v -> openGame(game));
         row.setOnLongClickListener(v -> {
+            Set<Integer> disabledPositions = Collections.emptySet();
+            if (findRunningSessionForGame(game) != null) {
+                disabledPositions = new HashSet<>();
+                disabledPositions.add(1);
+                disabledPositions.add(2);
+            }
             showStyledPopup(v, new String[]{
-                    "Chạy game", "Thiết lập", "Đặt lại dữ liệu",
-                    "Gỡ cài đặt game", "Gỡ khỏi bộ sưu tập"},
+                    "Khởi chạy", "Thiết lập", "Đặt lại dữ liệu",
+                    "Gỡ cài đặt", "Thông tin", "Gỡ khỏi bộ sưu tập"},
                     false, false, position -> {
                 if (position == 0) {
                     openGame(game);
@@ -1532,12 +1567,14 @@ import java.util.concurrent.Executors;
                     confirmResetGameData(game);
                 } else if (position == 3) {
                     confirmUninstallGame(game);
+                } else if (position == 4) {
+                    showGameInfo(game);
                 } else {
                     collection.gamePaths.remove(gamePath(game));
                     saveCollections();
                     renderCollections(contentScroll.getScrollY());
                 }
-            });
+            }, null, disabledPositions);
             return true;
         });
         return row;
@@ -1576,12 +1613,16 @@ import java.util.concurrent.Executors;
         TextView button = new TextView(this);
         button.setText(AppLocalization.text(this, label));
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setTypeface(Typeface.create("sans-serif-medium",
+                primary ? Typeface.BOLD : Typeface.NORMAL));
         button.setGravity(Gravity.CENTER);
         button.setTextColor(primary ? COLOR_ACCENT : COLOR_MUTED);
         button.setBackgroundColor(Color.TRANSPARENT);
-        button.setPadding(dp(this, 14), dp(this, 8), dp(this, 14), dp(this, 8));
-        button.setMinHeight(dp(this, 48));
+        button.setPadding(dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.SPACE_2_DP),
+                dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.SPACE_2_DP));
+        button.setMinHeight(dp(this, AppPopupDimensions.STANDARD_ACTION_MIN_HEIGHT_DP));
         button.setClickable(true);
         button.setFocusable(true);
         return button;
@@ -1596,7 +1637,7 @@ import java.util.concurrent.Executors;
         button.setTextColor(COLOR_BACKGROUND);
         button.setBackground(rounded(COLOR_ACCENT, 24, 0));
         button.setPadding(dp(this, 20), dp(this, 12), dp(this, 20), dp(this, 12));
-        button.setMinHeight(dp(this, 48));
+        button.setMinHeight(dp(this, AppPopupDimensions.STANDARD_ACTION_MIN_HEIGHT_DP));
         button.setClickable(true);
         button.setFocusable(true);
         return button;
@@ -1609,9 +1650,13 @@ import java.util.concurrent.Executors;
     private LinearLayout collectionModalPanel(String title) {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 16));
-        panel.setBackground(rounded(COLOR_SURFACE, 20, 0xFF3D4A5E));
-        panel.setElevation(dp(this, 8));
+        panel.setPadding(dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_TOP_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(this, AppPopupDimensions.PANEL_BOTTOM_PADDING_DP));
+        panel.setBackground(rounded(COLOR_SURFACE,
+                AppPopupDimensions.PANEL_CORNER_RADIUS_DP, 0xFF3D4A5E));
+        panel.setElevation(dp(this, AppPopupDimensions.PANEL_ELEVATION_DP));
 
         TextView heading = new TextView(this);
         heading.setText(AppLocalization.text(this, title));
@@ -1638,11 +1683,12 @@ import java.util.concurrent.Executors;
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int popupWidth = Math.min(dp(this, 400), screenWidth - dp(this, 32));
+        int popupWidth = Math.min(dp(this, AppPopupDimensions.MAX_POPUP_WIDTH_DP),
+                screenWidth - dp(this, AppPopupDimensions.SCREEN_EDGE_GUTTER_DP * 2));
         PopupWindow popup = new PopupWindow(panel, popupWidth,
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(dp(this, 10));
+        popup.setElevation(dp(this, AppPopupDimensions.POPUP_ELEVATION_DP));
         popup.setOutsideTouchable(dismissOnOutside);
         popup.setInputMethodMode(needsInputMethod
                 ? PopupWindow.INPUT_METHOD_NEEDED : PopupWindow.INPUT_METHOD_NOT_NEEDED);
@@ -1696,15 +1742,14 @@ import java.util.concurrent.Executors;
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        input.setTextColor(COLOR_TEXT);
-        input.setHintTextColor(COLOR_MUTED);
+        NativeTextFieldStyle.apply(input, COLOR_COLLECTION_INPUT_FOCUSED);
         input.setHint(AppLocalization.text(this, "Tên bộ sưu tập"));
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        input.setBackground(rounded(COLOR_SURFACE_SELECTED, 12, 0xFF3D4A5E));
         input.setPadding(dp(this, 14), dp(this, 12), dp(this, 14), dp(this, 12));
         input.setText(initialName);
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 52));
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(this, AppPopupDimensions.STANDARD_ACTION_MIN_HEIGHT_DP));
         inputParams.topMargin = dp(this, 16);
         panel.addView(input, inputParams);
 
@@ -1788,6 +1833,7 @@ import java.util.concurrent.Executors;
                 + "” sẽ bị xóa. Các game trong thư viện vẫn được giữ nguyên."));
         message.setTextColor(COLOR_MUTED);
         message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setLineSpacing(dp(this, 2), 1f);
         message.setPadding(0, dp(this, 12), 0, 0);
         panel.addView(message, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2056,7 +2102,8 @@ import java.util.concurrent.Executors;
         cell.setClickable(true);
         cell.setFocusable(true);
         cell.setContentDescription(game.title + (runningInBackground
-                ? ", " + AppLocalization.text(this, "Đang chạy nền") : "") + ", chạy game");
+                ? ", " + AppLocalization.text(this, "Đang chạy nền") : "")
+                + ", " + AppLocalization.text(this, "Khởi chạy"));
 
         GameIconView icon = new GameIconView(this);
         icon.setArtwork(game.icon, game.title);
@@ -2196,6 +2243,7 @@ import java.util.concurrent.Executors;
         description.setGravity(Gravity.CENTER);
         description.setTextColor(COLOR_MUTED);
         description.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        description.setLineSpacing(dp(this, 2), 1f);
         description.setText(AppLocalization.text(this, waitingForSearchQuery
                 ? "Nhập tên game để tìm kiếm."
                 : !query.isEmpty()
@@ -2230,8 +2278,12 @@ import java.util.concurrent.Executors;
         if (contentColumn == null) return;
         boolean centerInLandscape = centered && isLandscape();
         int topPadding = headerOverlayMode ? 78 : 8;
+        int bottomPadding = currentScreen == TAB_MORE
+                ? OTHER_CONTENT_BOTTOM_PADDING_DP
+                : centerInLandscape ? CENTERED_LANDSCAPE_BOTTOM_PADDING_DP
+                        : GAME_GRID_BOTTOM_PADDING_DP;
         contentColumn.setPadding(dp(this, 12), dp(this, topPadding), dp(this, 12),
-                centerInLandscape ? dp(this, 72) : dp(this, 100));
+                dp(this, bottomPadding));
         contentColumn.setGravity(centerInLandscape ? Gravity.CENTER : Gravity.TOP);
     }
 
@@ -2252,13 +2304,21 @@ import java.util.concurrent.Executors;
     private void showGameMenu(View anchor, GameLibrary.Game game) {
         RuntimeSessionStore.Session runningSession = findRunningSessionForGame(game);
         String[] menuItems = new String[]{
-                "Chạy game", "Thiết lập", "Thêm vào bộ sưu tập",
-                "Đặt lại dữ liệu", "Gỡ cài đặt game"};
+                "Khởi chạy", "Thiết lập", "Thêm vào bộ sưu tập",
+                "Đặt lại dữ liệu", "Gỡ cài đặt", "Thông tin"};
         int stopPosition = -1;
         if (runningSession != null) {
             stopPosition = menuItems.length;
             menuItems = java.util.Arrays.copyOf(menuItems, menuItems.length + 1);
             menuItems[stopPosition] = "Dừng lại";
+        }
+        Set<Integer> disabledPositions;
+        if (runningSession != null) {
+            disabledPositions = new HashSet<>();
+            disabledPositions.add(1);
+            disabledPositions.add(3);
+        } else {
+            disabledPositions = Collections.emptySet();
         }
         final int stopIndex = stopPosition;
         final RuntimeSessionStore.Session sessionToStop = runningSession;
@@ -2274,10 +2334,147 @@ import java.util.concurrent.Executors;
                 showAddGameToCollectionPopup(anchor, game);
             } else if (position == 3) {
                 confirmResetGameData(game);
-            } else {
+            } else if (position == 4) {
                 confirmUninstallGame(game);
+            } else if (position == 5) {
+                showGameInfo(game);
             }
-        });
+        }, null, disabledPositions);
+    }
+
+    private void showGameInfo(GameLibrary.Game game) {
+        if (game == null || game.jar == null) return;
+        try {
+            GameLibrary.GameInfo info = GameLibrary.readInfo(game.jar, game.sourceName);
+            LinearLayout panel = collectionModalPanel("Thông tin");
+            ScrollView scroll = new ScrollView(this);
+            scroll.setFillViewport(false);
+            scroll.setVerticalScrollBarEnabled(false);
+            LinearLayout details = new LinearLayout(this);
+            details.setOrientation(LinearLayout.VERTICAL);
+
+            addGameInfoRow(details, "Tên hiển thị", info.title);
+            addGameInfoRow(details, "Nhà sản xuất", info.vendor);
+            addGameInfoRow(details, "Phiên bản", info.version);
+            addGameInfoRow(details, "Ghi chú", info.description);
+            addGameInfoRow(details, "Trang thông tin", info.infoUrl);
+            addGameInfoRow(details, "Tác giả", info.author);
+            addGameInfoRow(details, "Bản quyền", info.copyright);
+            addGameInfoRow(details, "MIDlet", joinValues(info.midletNames));
+            addGameInfoRow(details, "Nền tảng MIDP", info.profile);
+            addGameInfoRow(details, "Cấu hình Java", info.configuration);
+            addGameInfoRow(details, "Quyền truy cập", info.permissions);
+            addGameInfoRow(details, "Quyền tùy chọn", info.optionalPermissions);
+            addGameInfoRow(details, "Địa chỉ JAR", info.jarUrl);
+            addGameInfoRow(details, "Tên tệp gốc", info.sourceName);
+            addGameInfoRow(details, "Kích thước tệp", formatFileSize(info.fileSize));
+            addGameInfoRow(details, "Kích thước khai báo", info.jarSize);
+            scroll.addView(details, new ScrollView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0);
+            scrollParams.topMargin = dp(this, 12);
+            panel.addView(scroll, scrollParams);
+
+            LinearLayout actions = new LinearLayout(this);
+            actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            actionsParams.topMargin = 0;
+            panel.addView(actions, actionsParams);
+            panel.setPadding(dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                    dp(this, AppPopupDimensions.PANEL_TOP_PADDING_DP),
+                    dp(this, AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                    dp(this, AppPopupDimensions.PANEL_BOTTOM_PADDING_DP));
+            TextView close = styledActionButton("Đóng", true);
+            close.setMinHeight(dp(this, AppPopupDimensions.COMPACT_CLOSE_MIN_HEIGHT_DP));
+            close.setPadding(dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                    0, dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP), 0);
+            close.setTranslationX(dp(this, AppPopupDimensions.INFO_CLOSE_OPTICAL_OFFSET_DP));
+            actions.addView(close, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int popupWidth = Math.min(dp(this, 400), screenWidth - dp(this, 32));
+            int contentWidth = Math.max(0,
+                    popupWidth - panel.getPaddingLeft() - panel.getPaddingRight());
+            details.measure(
+                    View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int naturalContentHeight = details.getMeasuredHeight();
+            panel.measure(
+                    View.MeasureSpec.makeMeasureSpec(popupWidth, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            int fixedPanelHeight = panel.getMeasuredHeight();
+
+            FrameLayout contentRoot = findViewById(android.R.id.content);
+            int availableHeight = contentRoot == null ? 0 : contentRoot.getHeight();
+            if (availableHeight <= 0) {
+                android.graphics.Rect visibleFrame = new android.graphics.Rect();
+                getWindow().getDecorView().getWindowVisibleDisplayFrame(visibleFrame);
+                availableHeight = visibleFrame.height();
+            }
+            if (availableHeight <= 0) {
+                availableHeight = getResources().getDisplayMetrics().heightPixels;
+            }
+            int edgeSpacing = dp(this, 28);
+            int maxScrollHeight = Math.max(0,
+                    availableHeight - fixedPanelHeight - edgeSpacing * 2);
+            scrollParams.height = Math.min(naturalContentHeight, maxScrollHeight);
+
+            PopupWindow popup = showModalPopup(panel, false);
+            close.setOnClickListener(view -> popup.dismiss());
+        } catch (IOException error) {
+            showStyledMessagePopup("Không thể đọc thông tin",
+                    error.getMessage() == null ? "Không đọc được metadata trong tệp JAR."
+                            : error.getMessage(),
+                    "Đóng", null, null);
+        }
+    }
+
+    private void addGameInfoRow(LinearLayout container, String label, String value) {
+        if (value == null || value.trim().isEmpty()) return;
+        TextView heading = new TextView(this);
+        heading.setText(AppLocalization.text(this, label));
+        heading.setTextColor(COLOR_ACCENT);
+        heading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headingParams.topMargin = dp(this, 9);
+        container.addView(heading, headingParams);
+
+        TextView content = new TextView(this);
+        content.setText(value.trim());
+        content.setTextColor(COLOR_TEXT);
+        content.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        content.setLineSpacing(dp(this, 2), 1f);
+        if (Build.VERSION.SDK_INT >= 23) {
+            content.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        }
+        if ("Trang thông tin".equals(label) || "Địa chỉ JAR".equals(label)) {
+            android.text.util.Linkify.addLinks(content, android.text.util.Linkify.WEB_URLS);
+            content.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+        }
+        container.addView(content, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private String joinValues(List<String> values) {
+        if (values == null || values.isEmpty()) return null;
+        StringBuilder joined = new StringBuilder();
+        for (String value : values) {
+            if (value == null || value.trim().isEmpty()) continue;
+            if (joined.length() > 0) joined.append(", ");
+            joined.append(value.trim());
+        }
+        return joined.length() == 0 ? null : joined.toString();
+    }
+
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format(Locale.ROOT, "%.1f KB", bytes / 1024f);
+        return String.format(Locale.ROOT, "%.2f MB", bytes / (1024f * 1024f));
     }
 
     private RuntimeSessionStore.Session findRunningSessionForGame(GameLibrary.Game game) {
@@ -2304,8 +2501,8 @@ import java.util.concurrent.Executors;
             return;
         }
         File jar = new File(session.jarPath);
-        Intent intent = new Intent(this, runtimeActivityFor(jar, session.slot));
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        Intent intent = new Intent(this, runtimeActivityFor(session));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -2331,8 +2528,17 @@ import java.util.concurrent.Executors;
     private void showStyledPopup(View anchor, String[] labels,
             boolean belowAnchor, boolean alignRight, StyledPopupListener listener,
             StyledPopupDismissListener dismissListener) {
+        showStyledPopup(anchor, labels, belowAnchor, alignRight, listener, dismissListener,
+                Collections.emptySet());
+    }
+
+    private void showStyledPopup(View anchor, String[] labels,
+            boolean belowAnchor, boolean alignRight, StyledPopupListener listener,
+            StyledPopupDismissListener dismissListener, Set<Integer> disabledPositions) {
         if (anchor == null || labels == null || labels.length == 0) return;
         final String[] displayedLabels = AppLocalization.texts(this, labels);
+        final Set<Integer> disabledItems = disabledPositions == null
+                ? Collections.emptySet() : disabledPositions;
         if (activeStyledPopup != null) activeStyledPopup.dismiss();
         final boolean[] itemSelected = {false};
 
@@ -2376,10 +2582,21 @@ import java.util.concurrent.Executors;
         final int[] focusedPosition = {0};
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
                 this, android.R.layout.simple_list_item_1, displayedLabels) {
+            @Override public boolean areAllItemsEnabled() {
+                return disabledItems.isEmpty();
+            }
+
+            @Override public boolean isEnabled(int position) {
+                return !disabledItems.contains(position);
+            }
+
             @Override public View getView(int position, View recycled, ViewGroup parent) {
                 TextView row = (TextView) super.getView(position, recycled, parent);
+                boolean enabled = isEnabled(position);
                 row.setText(displayedLabels[position]);
-                row.setTextColor(COLOR_TEXT);
+                row.setEnabled(enabled);
+                row.setAlpha(enabled ? 1f : 0.5f);
+                row.setTextColor(enabled ? COLOR_TEXT : COLOR_MUTED);
                 row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
                 row.setSingleLine(true);
                 row.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -2387,7 +2604,7 @@ import java.util.concurrent.Executors;
                 row.setPadding(dp(MainActivity.this, 18), dp(MainActivity.this, 10),
                         dp(MainActivity.this, 18), dp(MainActivity.this, 10));
                 row.setBackground(commandMenuRowBackground());
-                row.setSelected(position == focusedPosition[0]);
+                row.setSelected(enabled && position == focusedPosition[0]);
                 return row;
             }
         };
@@ -2448,7 +2665,8 @@ import java.util.concurrent.Executors;
         menu.requestFocus();
         menu.setSelection(0);
         menu.setOnItemClickListener((parent, view, position, id) -> {
-            if (position < 0 || position >= displayedLabels.length) return;
+            if (position < 0 || position >= displayedLabels.length
+                    || disabledItems.contains(position)) return;
             itemSelected[0] = true;
             popup.dismiss();
             if (listener != null) listener.onSelected(position);
@@ -2515,7 +2733,7 @@ import java.util.concurrent.Executors;
 
     private void showInfoPopup(String title, String message, boolean scrollable) {
         LinearLayout panel = collectionModalPanel(title);
-        panel.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 8));
+        panel.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 16));
         TextView body = new TextView(this);
         body.setText(AppLocalization.text(this, message));
         body.setTextColor(COLOR_TEXT);
@@ -2550,14 +2768,15 @@ import java.util.concurrent.Executors;
         TextView close = styledActionButton(
                 "Tiếng Việt".equals(AppPreferences.automaticLanguage(this)) ? "Đóng" : "Close",
                 true);
-        close.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        close.setPadding(dp(this, 4), dp(this, 4), dp(this, 4), dp(this, 4));
-        close.setMinHeight(dp(this, 44));
+        close.setPadding(dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                0, dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP), 0);
+        close.setMinHeight(dp(this, AppPopupDimensions.COMPACT_CLOSE_MIN_HEIGHT_DP));
+        close.setTranslationX(dp(this, AppPopupDimensions.INFO_CLOSE_OPTICAL_OFFSET_DP));
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams closeParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        closeParams.topMargin = dp(this, 6);
+        closeParams.topMargin = 0;
         actions.addView(close, closeParams);
         panel.addView(actions, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -2788,7 +3007,7 @@ import java.util.concurrent.Executors;
                         }
                         if (isRuntimeSessionLaunchPending(existing)) {
                             Toast.makeText(this, AppLocalization.text(this,
-                                    "Game đang khởi động."), Toast.LENGTH_SHORT).show();
+                                    "Đang khởi động."), Toast.LENGTH_SHORT).show();
                             return;
                         }
                         RuntimeSessionStore.remove(this, existing.id);
@@ -2814,6 +3033,8 @@ import java.util.concurrent.Executors;
                     intent.putExtra("title", session.title);
                     intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
                     intent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                     AppPreferences.addRuntimeSnapshotExtras(this, intent);
                     boolean launchStateSaved = jar == null
                             || GameSettings.markLaunched(this, selected);
@@ -2847,6 +3068,14 @@ import java.util.concurrent.Executors;
         } else {
             openGameSettings(game.jar, game.title, true);
         }
+    }
+
+    private Class<? extends RuntimeActivity> runtimeActivityFor(
+            RuntimeSessionStore.Session session) {
+        Class<? extends RuntimeActivity> recorded =
+                RuntimeSessionStore.activityClassForSession(session);
+        if (recorded != null) return recorded;
+        return runtimeActivityFor(new File(session.jarPath), session.slot);
     }
 
     private Class<? extends RuntimeActivity> runtimeActivityFor(File jar, int slot) {
@@ -2891,7 +3120,7 @@ import java.util.concurrent.Executors;
         if (session == null) return;
         if (isRuntimeSessionLaunchPending(session)) {
             Toast.makeText(this, AppLocalization.text(this,
-                    "Game đang khởi động."), Toast.LENGTH_SHORT).show();
+                    "Đang khởi động."), Toast.LENGTH_SHORT).show();
             return;
         }
         File jar = new File(session.jarPath);
@@ -2911,8 +3140,8 @@ import java.util.concurrent.Executors;
             showError(error);
             return;
         }
-        Intent intent = new Intent(this, runtimeActivityFor(jar, session.slot));
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        Intent intent = new Intent(this, runtimeActivityFor(session));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("jar", jar.getAbsolutePath());
         intent.putExtra("title", session.title);
@@ -2972,6 +3201,7 @@ import java.util.concurrent.Executors;
                         + "The game JAR and control settings will remain.");
         message.setTextColor(COLOR_MUTED);
         message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setLineSpacing(dp(this, 2), 1f);
         message.setPadding(0, dp(this, 12), 0, 0);
         panel.addView(message, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -3037,6 +3267,7 @@ import java.util.concurrent.Executors;
                         + "will not be deleted.");
         message.setTextColor(COLOR_MUTED);
         message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setLineSpacing(dp(this, 2), 1f);
         message.setPadding(0, dp(this, 12), 0, 0);
         panel.addView(message, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -3154,6 +3385,7 @@ import java.util.concurrent.Executors;
         body.setText(AppLocalization.text(this, message));
         body.setTextColor(COLOR_MUTED);
         body.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        body.setLineSpacing(dp(this, 2), 1f);
         LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         bodyParams.topMargin = dp(this, 12);
@@ -3201,29 +3433,32 @@ import java.util.concurrent.Executors;
             option.setTextColor(COLOR_TEXT);
             option.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
             option.setGravity(Gravity.CENTER_VERTICAL);
-            option.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
-            option.setMinHeight(dp(this, 54));
+            option.setPadding(dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                    dp(this, AppPopupDimensions.SPACE_2_DP),
+                    dp(this, AppPopupDimensions.ACTION_HORIZONTAL_PADDING_DP),
+                    dp(this, AppPopupDimensions.SPACE_2_DP));
+            option.setMinHeight(dp(this, AppPopupDimensions.LIST_ITEM_MIN_HEIGHT_DP));
             option.setBackground(rounded(COLOR_SURFACE_SELECTED, 12, 0x463D4A5E));
             option.setClickable(true);
             option.setFocusable(true);
             LinearLayout.LayoutParams optionParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            optionParams.bottomMargin = dp(this, 6);
+            optionParams.bottomMargin = dp(this, AppPopupDimensions.SPACE_2_DP);
             options.addView(option, optionParams);
             optionViews.add(option);
         }
-        int maxListHeight = Math.min(dp(this, 360),
+        int maxListHeight = Math.min(dp(this, AppPopupDimensions.MAX_SCROLL_CONTENT_HEIGHT_DP),
                 Math.max(dp(this, 120), getResources().getDisplayMetrics().heightPixels / 2));
         LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, maxListHeight);
-        scrollParams.topMargin = dp(this, 12);
+        scrollParams.topMargin = dp(this, AppPopupDimensions.SECTION_GAP_DP);
         panel.addView(scroll, scrollParams);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        actionsParams.topMargin = dp(this, 8);
+        actionsParams.topMargin = dp(this, AppPopupDimensions.FOOTER_GAP_DP);
         panel.addView(actions, actionsParams);
         TextView close = styledActionButton("Đóng", true);
         actions.addView(close, new LinearLayout.LayoutParams(
@@ -3395,6 +3630,7 @@ import java.util.concurrent.Executors;
                 "J2MEX cần quyền truy cập bộ nhớ để duyệt thư mục và tìm game. Hãy cấp quyền để tiếp tục, hoặc thoát ứng dụng."));
         message.setTextColor(COLOR_MUTED);
         message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setLineSpacing(dp(this, 2), 1f);
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         messageParams.topMargin = dp(this, 10);

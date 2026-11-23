@@ -12,6 +12,8 @@ public final class BluetoothProtocol {
     public static final int SET_SPEED = 15;
     public static final int MAX_EMULATION_SPEED_PERCENT = 2000;
     public static final int MEMORY_EDITOR_COMMAND = 16;
+    public static final int MEMORY_EDITOR_HISTORY_PAGE = 7;
+    public static final int MEMORY_EDITOR_HISTORY_EDIT_ALL = 8;
     /** Bluetooth packets use ids above the runtime command range. */
     public static final int ENGINE_RESPONSE = 17;
     public static final int ENGINE_EVENT = 18;

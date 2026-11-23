@@ -49,18 +49,40 @@ public final class AppLocalization {
         add("Không thể tạo phiên game mới.", "Could not create a new game session.");
         add("Không thể lưu phiên game.", "Could not save the game session.");
         add("Tùy chọn", "Options");
+        add("Rung", "Vibration");
+        add("Cho phép game yêu cầu rung.", "Allow games to request vibration.");
         add("Thêm game", "Add games");
         add("Tìm ứng dụng...", "Search games...");
         add("Xóa nội dung tìm kiếm", "Clear search");
         add("Tạo bộ sưu tập", "Create collection");
         add("Sắp xếp game", "Sort games");
         add("Chạy game", "Launch game");
+        add("Khởi chạy", "Launch");
+        add("Tên hiển thị", "Display name");
+        add("Nhà sản xuất", "Vendor");
+        add("Phiên bản", "Version");
+        add("Ghi chú", "Description");
+        add("Trang thông tin", "Information URL");
+        add("Tác giả", "Author");
+        add("Bản quyền", "Copyright");
+        add("MIDlet", "MIDlet");
+        add("Nền tảng MIDP", "MIDP profile");
+        add("Cấu hình Java", "Java configuration");
+        add("Quyền truy cập", "Required permissions");
+        add("Quyền tùy chọn", "Optional permissions");
+        add("Địa chỉ JAR", "JAR URL");
+        add("Tên tệp gốc", "Original file name");
+        add("Kích thước tệp", "File size");
+        add("Kích thước khai báo", "Declared JAR size");
+        add("Không thể đọc thông tin", "Couldn't read information");
+        add("Không đọc được metadata trong tệp JAR.",
+                "Couldn't read metadata from the JAR file.");
         add("Thiết lập", "Settings");
-        add("Gỡ cài đặt game", "Uninstall game");
         add("Gỡ khỏi bộ sưu tập", "Remove from collection");
         add("Chỉnh sửa ", "Edit ");
         add("Thu gọn bộ sưu tập", "Collapse collection");
         add("Mở bộ sưu tập", "Open collection");
+        add("Chưa có mục nào trong bộ sưu tập này.", "This collection has no items yet.");
         add("Chưa có game trong bộ sưu tập này.", "This collection has no games yet.");
         add("Tạo bộ sưu tập để sắp xếp các game của bạn.",
                 "Create collections to organize your games.");
@@ -134,6 +156,7 @@ public final class AppLocalization {
         add("Đã đặt lại dữ liệu game.", "Game data reset.");
         add("Đã gỡ game và xóa toàn bộ thư mục dữ liệu.",
                 "Game removed and its entire data folder deleted.");
+        add("Không thể gỡ cài đặt game.", "Could not uninstall the game.");
         add("Không xóa được JAR đã nhập.", "Could not delete the imported JAR.");
         add("Không thể xóa toàn bộ thư mục game.", "Could not delete the entire game folder.");
         add("Không thể xác minh game cần gỡ.", "Could not verify the game to uninstall.");
@@ -267,8 +290,7 @@ public final class AppLocalization {
         add("Không thể xóa mẫu gamepad.", "Couldn't delete gamepad layout.");
         add("Đã lưu log.", "Log saved.");
         add("Hiển thị FPS", "Show FPS");
-        add("Hiển thị tốc độ khung hình khi đang chơi game.",
-                "Show the frame rate while playing.");
+        add("Hiển thị tốc độ khung hình.", "Show the frame rate.");
         add("Ghi log để gỡ lỗi", "Diagnostic logging");
         add("Cài đặt", "Settings");
         add("Menu nhanh", "Quick menu");
@@ -294,7 +316,7 @@ public final class AppLocalization {
         add("Chọn tiếng Việt, tiếng Anh hoặc theo thiết bị.",
                 "Choose Vietnamese, English, or follow the device.");
         add("Dữ liệu game", "Game data");
-        add("Thông tin", "Details");
+        add("Thông tin", "Information");
         add("Phiên bản, nền tảng và thông tin dự án.", "Version, platform, and project details.");
         add("Cập nhật", "Updates");
         add("Kiểm tra phiên bản mới và tải bản phát hành từ GitHub.",
@@ -334,6 +356,10 @@ public final class AppLocalization {
                 "J2MEX needs storage access to browse folders and find games. Allow access to continue, or exit the app.");
         add("Cấp quyền", "Allow access");
         add("Thoát", "Exit");
+        add("Thoát J2MEX", "Exit J2MEX");
+        add("Thoát J2MEX?", "Exit J2MEX?");
+        add("Bạn có chắc chắn muốn thoát J2MEX không?",
+                "Are you sure you want to exit J2MEX?");
         add("Thoát game", "Exit game");
         add("Thoát game?", "Exit game?");
         add("Bạn có chắc chắn muốn thoát khỏi game hiện tại không?",
@@ -363,8 +389,6 @@ public final class AppLocalization {
         add("Mẫu 4", "Layout 4");
         add("Đổi tên", "Rename");
         add("Xóa bộ sưu tập", "Delete collection");
-        add("Gỡ cài đặt game?", "Uninstall game?");
-        add("Gỡ cài đặt", "Uninstall");
         add("Thêm vào bộ sưu tập", "Add to collection");
         add("Chưa có bộ sưu tập", "No collections yet");
         add("Chọn thư mục", "Choose folder");
@@ -383,6 +407,8 @@ public final class AppLocalization {
         add("Trên", "Top");
         add("Giữa", "Center");
         add("Dưới", "Bottom");
+        add("Gỡ cài đặt game?", "Uninstall game?");
+        add("Gỡ cài đặt", "Uninstall");
         add("Không có game nào trong danh sách này.", "There are no games in this list yet.");
         add("Hãy bật ghi log trong mục Khác trước khi mở game.",
                 "Enable diagnostic logging in More before launching a game.");
@@ -399,6 +425,11 @@ public final class AppLocalization {
                 "For offline games only. This editor searches and changes numeric values in the running game's Java heap. Turn off Wi-Fi and mobile data before opening it. External server connections stay blocked until the game restarts; local and private-network connections remain available.");
         add("Tìm giá trị số trong heap Java của MIDlet đang chạy. Kết quả bị giới hạn để tránh làm chậm game.",
                 "Search numeric values in the running MIDlet's Java heap. Results are bounded to limit impact on gameplay.");
+        add("Tìm kiếm", "Search");
+        add("Đã sửa", "Edited");
+        add("Gốc", "Original");
+        add("Chưa có giá trị nào được sửa.", "No values have been edited yet.");
+        add("Lịch sử chỉnh sửa đã đầy.", "The edit history is full.");
         add("Tất cả", "All");
         add("Trang", "Page");
         add("Trang trước", "Previous page");

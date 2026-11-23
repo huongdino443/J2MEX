@@ -17,6 +17,8 @@
 package javax.microedition.midlet;
 
 import java.util.HashMap;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import javax.microedition.io.*;
 import javax.microedition.lcdui.*;
@@ -75,7 +77,36 @@ public abstract class MIDlet
 
 	protected abstract void pauseApp();
 
-	public final boolean platformRequest(String URL) { return false; }
+	public final boolean platformRequest(String URL) throws ConnectionNotFoundException
+	{
+		if (URL == null || URL.length() == 0 || URL.length() > 8192)
+			throw new ConnectionNotFoundException("Invalid external URL");
+		try
+		{
+			URI uri = new URI(URL);
+			String scheme = uri.getScheme();
+			if (scheme == null || uri.getHost() == null
+					|| (!"http".equalsIgnoreCase(scheme)
+							&& !"https".equalsIgnoreCase(scheme)))
+				throw new ConnectionNotFoundException("Only HTTP and HTTPS URLs can be opened externally");
+		}
+		catch (URISyntaxException invalidUrl)
+		{
+			throw new ConnectionNotFoundException("Invalid external URL");
+		}
+
+		org.recompile.mobile.MobilePlatform platform = Mobile.getPlatform();
+		if (platform == null) throw new ConnectionNotFoundException("Android URL handler is unavailable");
+		try
+		{
+			platform.openExternalUrl(URL);
+		}
+		catch (java.io.IOException error)
+		{
+			throw new ConnectionNotFoundException("Could not send URL to Android");
+		}
+		return false;
+	}
 
 	public final void resumeRequest() { }
 

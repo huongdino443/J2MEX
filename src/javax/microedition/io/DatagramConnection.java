@@ -16,6 +16,8 @@
 */
 package javax.microedition.io;
 
+import java.io.IOException;
+
 public interface DatagramConnection extends Connection
 {
 
@@ -31,8 +33,8 @@ public interface DatagramConnection extends Connection
 
 	public Datagram newDatagram(int size, String addr);
 
-	public void receive(Datagram dgram);
+public void receive(Datagram dgram) throws IOException;
 
-	public void send(Datagram dgram);
+public void send(Datagram dgram) throws IOException;
 
 }

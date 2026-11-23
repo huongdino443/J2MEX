@@ -42,6 +42,7 @@ public final class HeadlessMain {
     private static final String RENDER_PROFILE_ARGUMENT = "--j2mex-render-profile=";
     private static final String MEMORY_DIAGNOSTICS_ARGUMENT =
             "--j2mex-memory-diagnostics=";
+    private static final String SHARED_STORAGE_ARGUMENT = "--j2mex-shared-storage=";
 
     private static boolean parseTouchInputEnabled(String value) {
         if ("true".equalsIgnoreCase(value)) return true;
@@ -92,6 +93,20 @@ public final class HeadlessMain {
         }
     }
 
+    private static void sendVibrationRequest(long durationMillis, int strength) {
+        synchronized (HeadlessMain.class) {
+            if (output == null || !running) return;
+            try {
+                output.writeInt(RuntimeHostProtocol.VIBRATION_REQUEST);
+                output.writeLong(durationMillis);
+                output.writeInt(strength);
+                output.flush();
+            } catch (IOException error) {
+                System.err.println("Could not send game vibration request: " + error);
+            }
+        }
+    }
+
     private static void startHotSpotMemoryReporter() {
         Thread reporter = new Thread(() -> {
             while (running) {
@@ -131,6 +146,7 @@ public final class HeadlessMain {
                     output.writeUTF(entry.value);
                     output.writeUTF(entry.location);
                     output.writeUTF(entry.referenceKind);
+                    output.writeUTF(entry.originalValue);
                 }
                 output.flush();
             } catch (IOException error) {
@@ -154,14 +170,21 @@ public final class HeadlessMain {
     public static void main(String[] args) throws Exception {
         // jar URL, width, height, localhost port, token, RMS directory, audio cache,
         // refresh Hz, locale, required Android Paint port, optional legacy font paths,
-        // and optional --j2mex-touch-input=, --j2mex-ui-language=, and
-        // --j2mex-midlet-class= flags.
+        // and optional --j2mex-touch-input=, --j2mex-ui-language=,
+        // --j2mex-midlet-class=, and --j2mex-shared-storage= flags.
         int launchArgumentCount = args.length;
         boolean touchInputEnabled = true;
         boolean renderProfileEnabled = false;
         boolean memoryDiagnosticsEnabled = false;
         String uiLanguage = "en";
         String selectedMidletClass = null;
+        String sharedStoragePath = "";
+        if (launchArgumentCount > 10
+                && args[launchArgumentCount - 1].startsWith(SHARED_STORAGE_ARGUMENT)) {
+            sharedStoragePath = args[launchArgumentCount - 1]
+                    .substring(SHARED_STORAGE_ARGUMENT.length()).trim();
+            launchArgumentCount--;
+        }
         if (launchArgumentCount > 10
                 && args[launchArgumentCount - 1].startsWith(MEMORY_DIAGNOSTICS_ARGUMENT)) {
             memoryDiagnosticsEnabled = Boolean.parseBoolean(
@@ -198,7 +221,7 @@ public final class HeadlessMain {
         }
         if (args.length < 10 || launchArgumentCount > 13)
             throw new IllegalArgumentException("Expected ten to thirteen launch arguments, "
-                    + "optionally followed by touch input, app language, and MIDlet selection flags");
+                    + "optionally followed by runtime settings and shared storage flags");
         System.setProperty("j2mex.ui.language", "vi".equalsIgnoreCase(uiLanguage) ? "vi" : "en");
         System.setProperty("j2mex.render.profile", Boolean.toString(renderProfileEnabled));
         Canvas.setPointerInputEnabled(touchInputEnabled);
@@ -260,7 +283,25 @@ public final class HeadlessMain {
             }
             MobilePlatform platform = new MobilePlatform(width, height);
             platform.dataPath = args[5] + File.separator;
+            platform.sharedStoragePath = sharedStoragePath;
             Mobile.setPlatform(platform);
+            platform.setVibrationHandler(new MobilePlatform.VibrationHandler() {
+                @Override public void vibrate(long durationMillis, int strength) {
+                    sendVibrationRequest(durationMillis, strength);
+                }
+                @Override public void stop() {
+                    sendVibrationRequest(0L, 0);
+                }
+            });
+            platform.setExternalUrlHandler(url -> {
+                synchronized (HeadlessMain.class) {
+                    if (output == null || !running)
+                        throw new IOException("Android host is disconnected");
+                    output.writeInt(RuntimeHostProtocol.EXTERNAL_URL_REQUEST);
+                    output.writeUTF(url);
+                    output.flush();
+                }
+            });
             RuntimeTiming.reset();
             MemoryEditorGuard.resetSession();
             displayRefreshHz = args.length >= 8 ? Integer.parseInt(args[7]) : 0;
@@ -604,6 +645,16 @@ public final class HeadlessMain {
                     } else if (operation == 6) {
                         result = MemoryEditorGuard.isEditorOpen()
                                 ? memoryEditor.editAll(selectedIds, newValue)
+                                : ManagedMemoryEditor.notice(false,
+                                        "Trình sửa bộ nhớ phải được mở trước.");
+                    } else if (operation == BluetoothProtocol.MEMORY_EDITOR_HISTORY_PAGE) {
+                        result = MemoryEditorGuard.isEditorOpen()
+                                ? memoryEditor.historyPage(pageIndex)
+                                : ManagedMemoryEditor.notice(false,
+                                        "Trình sửa bộ nhớ phải được mở trước.");
+                    } else if (operation == BluetoothProtocol.MEMORY_EDITOR_HISTORY_EDIT_ALL) {
+                        result = MemoryEditorGuard.isEditorOpen()
+                                ? memoryEditor.editHistoryAll(selectedIds, newValue)
                                 : ManagedMemoryEditor.notice(false,
                                         "Trình sửa bộ nhớ phải được mở trước.");
                     } else if (operation == 4) {

@@ -90,7 +90,9 @@ public final class GameSettingsActivity extends LocalizedActivity {
         }
         jar = new File(jarPath);
         gameTitle = getIntent().getStringExtra(EXTRA_TITLE);
-        if (gameTitle == null || gameTitle.trim().isEmpty()) gameTitle = "Thiết lập game";
+        if (gameTitle == null || gameTitle.trim().isEmpty()) {
+            gameTitle = "Thiết lập game";
+        }
         launchAfterSave = getIntent().getBooleanExtra(EXTRA_LAUNCH_AFTER_SAVE, false);
         settings = GameSettings.load(this, jar);
         settings.gamepadLayoutId = GamepadTemplateLibrary.resolveId(
@@ -424,6 +426,7 @@ public final class GameSettingsActivity extends LocalizedActivity {
         view.setText(AppLocalization.text(this, text));
         view.setTextColor(COLOR_TEXT);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+        view.setLineSpacing(dp(2), 1f);
         view.setGravity(Gravity.CENTER_VERTICAL);
         return view;
     }
@@ -519,12 +522,13 @@ public final class GameSettingsActivity extends LocalizedActivity {
         LinearLayout.LayoutParams buttonsParams = new LinearLayout.LayoutParams(-1, dp(52));
         buttonsParams.topMargin = dp(18);
         content.addView(buttons, buttonsParams);
-        TextView remove = actionButton("Xóa", true);
-        buttons.addView(remove, new LinearLayout.LayoutParams(0, dp(44), 1f));
         TextView cancel = actionButton("Hủy", false);
         LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        cancelParams.leftMargin = dp(10);
         buttons.addView(cancel, cancelParams);
+        TextView remove = actionButton("Xóa", true);
+        LinearLayout.LayoutParams removeParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        removeParams.leftMargin = dp(10);
+        buttons.addView(remove, removeParams);
         PopupWindow popup = showPopup(content);
         remove.setOnClickListener(view -> {
             try {
@@ -640,8 +644,8 @@ public final class GameSettingsActivity extends LocalizedActivity {
         String translatedTitle = AppLocalization.text(this, title);
         String[] translatedChoices = AppLocalization.texts(this, choices);
         LinearLayout panel = popupPanel(translatedTitle);
-        int rowHeight = dp(52);
-        int rowGap = dp(2);
+        int rowHeight = dp(AppPopupDimensions.CHOICE_ROW_HEIGHT_DP);
+        int rowGap = dp(AppPopupDimensions.SPACE_1_DP);
         int maxListHeight = Math.max(dp(140),
                 Math.round(getResources().getDisplayMetrics().heightPixels * 0.62f));
         int contentHeight = rowHeight * choices.length
@@ -661,7 +665,8 @@ public final class GameSettingsActivity extends LocalizedActivity {
             option.setGravity(Gravity.CENTER_VERTICAL);
             option.setSingleLine(true);
             option.setEllipsize(TextUtils.TruncateAt.END);
-            option.setPadding(dp(18), 0, dp(18), 0);
+            option.setPadding(dp(AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP), 0,
+                    dp(AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP), 0);
             option.setBackground(choiceRowBackground());
             option.setClickable(true);
             option.setFocusable(false);
@@ -705,13 +710,17 @@ public final class GameSettingsActivity extends LocalizedActivity {
     private LinearLayout popupPanel(String title) {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(18), dp(18), dp(18), dp(14));
-        panel.setBackground(round(COLOR_SURFACE, 20, COLOR_BORDER));
+        panel.setPadding(dp(AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(AppPopupDimensions.PANEL_TOP_PADDING_DP),
+                dp(AppPopupDimensions.PANEL_HORIZONTAL_PADDING_DP),
+                dp(AppPopupDimensions.PANEL_BOTTOM_PADDING_DP));
+        panel.setBackground(round(COLOR_SURFACE,
+                AppPopupDimensions.PANEL_CORNER_RADIUS_DP, COLOR_BORDER));
         TextView heading = bodyText(title, 18);
         heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        headingParams.bottomMargin = dp(14);
+        headingParams.bottomMargin = dp(AppPopupDimensions.SPACE_4_DP);
         panel.addView(heading, headingParams);
         return panel;
     }
@@ -726,11 +735,12 @@ public final class GameSettingsActivity extends LocalizedActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int popupWidth = Math.min(dp(400), screenWidth - dp(32));
+        int popupWidth = Math.min(dp(AppPopupDimensions.MAX_POPUP_WIDTH_DP),
+                screenWidth - dp(AppPopupDimensions.SCREEN_EDGE_GUTTER_DP * 2));
         PopupWindow popup = new PopupWindow(panel, popupWidth,
                 ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setElevation(dp(10));
+        popup.setElevation(dp(AppPopupDimensions.POPUP_ELEVATION_DP));
         popup.setOutsideTouchable(true);
         popup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         dim.setOnClickListener(view -> popup.dismiss());
@@ -791,7 +801,8 @@ public final class GameSettingsActivity extends LocalizedActivity {
         settings.bitmapFontEnabled = bitmapFontSwitch.isChecked();
         settings.crtFilterEnabled = crtFilterSwitch.isChecked();
         if (!settings.save(this, jar)) {
-            Toast.makeText(this, AppLocalization.text(this, "Không thể lưu cài đặt game."),
+            Toast.makeText(this, AppLocalization.text(
+                    this, "Không thể lưu cài đặt game."),
                     Toast.LENGTH_SHORT).show();
             return;
         }

@@ -51,6 +51,7 @@ final class ClassFileCompatibility {
 
 	static Class<?> defineWithLegacy45CodeAttributeFallback(
 			String className, byte[] bytecode, ClassDefiner definer) {
+bytecode = adaptMissingInterfaceAbstractFlag(bytecode, className);
 		bytecode = adaptComputedMaxStack(bytecode, className);
 		bytecode = adaptLegacyDeadReturnMaxStack(bytecode, className);
 		bytecode = adaptPre49ClassLiteralLdc(bytecode, className);
@@ -82,6 +83,85 @@ final class ClassFileCompatibility {
 			}
 		}
 	}
+
+/**
+ * Repairs malformed legacy interfaces that set ACC_INTERFACE but omit the
+ * required ACC_ABSTRACT flag. The class bytes are changed only in memory.
+ */
+static byte[] adaptMissingInterfaceAbstractFlag(byte[] bytecode, String className) {
+if (bytecode == null || bytecode.length < 10
+|| (bytecode[0] & 0xff) != 0xca || (bytecode[1] & 0xff) != 0xfe
+|| (bytecode[2] & 0xff) != 0xba || (bytecode[3] & 0xff) != 0xbe) {
+return bytecode;
+}
+
+int major = readU2(bytecode, 6);
+int minor = readU2(bytecode, 4);
+if (major < 45 || major > 52 || (major == 45 && minor > 3)) return bytecode;
+
+try {
+int accessOffset = classAccessFlagsOffset(bytecode);
+int accessFlags = readU2(bytecode, accessOffset);
+if ((accessFlags & 0x0200) == 0 || (accessFlags & 0x0400) != 0)
+return bytecode;
+
+byte[] adapted = bytecode.clone();
+int correctedFlags = accessFlags | 0x0400;
+adapted[accessOffset] = (byte)(correctedFlags >>> 8);
+adapted[accessOffset + 1] = (byte)correctedFlags;
+System.out.println("ClassFileCompatibility: added missing ACC_ABSTRACT to interface "
++ className + " [" + classByteSummary(bytecode) + "]");
+return adapted;
+} catch (RuntimeException malformedOrUnsupportedClass) {
+return bytecode;
+}
+}
+
+private static int classAccessFlagsOffset(byte[] data) {
+int constantPoolCount = readU2(data, 8);
+int offset = 10;
+for (int index = 1; index < constantPoolCount; index++) {
+int tag = readU1(data, offset++);
+switch (tag) {
+case 1: {
+int length = readU2(data, offset);
+offset = checkedOffset(data, offset + 2, length);
+break;
+}
+case 3:
+case 4:
+offset = checkedOffset(data, offset, 4);
+break;
+case 5:
+case 6:
+offset = checkedOffset(data, offset, 8);
+index++;
+break;
+case 7:
+case 8:
+case 16:
+case 19:
+case 20:
+offset = checkedOffset(data, offset, 2);
+break;
+case 9:
+case 10:
+case 11:
+case 12:
+case 17:
+case 18:
+offset = checkedOffset(data, offset, 4);
+break;
+case 15:
+offset = checkedOffset(data, offset, 3);
+break;
+default:
+throw new IllegalArgumentException("Unsupported constant-pool tag: " + tag);
+}
+}
+checkedOffset(data, offset, 6); // access flags, this class, super class
+return offset;
+}
 
 	/**
 	 * Recompute and patch only max_stack values. This mirrors the reference

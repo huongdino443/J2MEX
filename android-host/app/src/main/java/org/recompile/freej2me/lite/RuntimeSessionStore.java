@@ -22,6 +22,10 @@ final class RuntimeSessionStore {
     static final int SLOT_COUNT = 5;
     static final String EXTRA_SESSION_ID = "org.recompile.freej2me.lite.SESSION_ID";
     static final String EXTRA_SESSION_SLOT = "org.recompile.freej2me.lite.SESSION_SLOT";
+    static final String ACTION_SESSION_REGISTRY_CHANGED =
+            "org.recompile.freej2me.lite.SESSION_REGISTRY_CHANGED";
+    static final String EXTRA_CHANGED_SESSION_ID =
+            "org.recompile.freej2me.lite.CHANGED_SESSION_ID";
     static final String EXTRA_OPEN_SESSION_MANAGER =
             "org.recompile.freej2me.lite.OPEN_SESSION_MANAGER";
     static final String EXTRA_RETURN_TO_SESSION =
@@ -41,7 +45,7 @@ final class RuntimeSessionStore {
     static final String EXTRA_HOTSPOT_MEMORY_MAX =
             "org.recompile.freej2me.lite.HOTSPOT_MEMORY_MAX";
 
-    private static final int FORMAT_VERSION = 1;
+    private static final int FORMAT_VERSION = 2;
     private static final String STORE_FILE = "runtime-sessions.bin";
     private static final String LOCK_FILE = "runtime-sessions.lock";
     private static final Object PROCESS_LOCK = new Object();
@@ -51,16 +55,18 @@ final class RuntimeSessionStore {
         final int slot;
         final String jarPath;
         final String title;
+        final String activityClassName;
         final int processId;
         final long startedAt;
         final boolean foreground;
 
-        Session(String id, int slot, String jarPath, String title, int processId,
-                long startedAt, boolean foreground) {
+        Session(String id, int slot, String jarPath, String title, String activityClassName,
+                int processId, long startedAt, boolean foreground) {
             this.id = id;
             this.slot = slot;
             this.jarPath = jarPath;
             this.title = title;
+            this.activityClassName = activityClassName == null ? "" : activityClassName;
             this.processId = processId;
             this.startedAt = startedAt;
             this.foreground = foreground;
@@ -95,6 +101,45 @@ final class RuntimeSessionStore {
         if (id == null || id.isEmpty()) return null;
         for (Session session : list(context)) {
             if (id.equals(session.id)) return session;
+        }
+        return null;
+    }
+
+    static Class<? extends RuntimeActivity> activityClassForSession(Session session) {
+        if (session == null || session.activityClassName.isEmpty()) return null;
+        switch (session.slot) {
+            case 0:
+                if (RuntimeActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeActivity.class;
+                if (RuntimeLandscapeActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeLandscapeActivity.class;
+                if (RuntimePortraitActivity.class.getName().equals(session.activityClassName))
+                    return RuntimePortraitActivity.class;
+                break;
+            case 1:
+                if (RuntimeSecondActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeSecondActivity.class;
+                if (RuntimeSecondLandscapeActivity.class.getName()
+                        .equals(session.activityClassName))
+                    return RuntimeSecondLandscapeActivity.class;
+                if (RuntimeSecondPortraitActivity.class.getName()
+                        .equals(session.activityClassName))
+                    return RuntimeSecondPortraitActivity.class;
+                break;
+            case 2:
+                if (RuntimeThirdActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeThirdActivity.class;
+                break;
+            case 3:
+                if (RuntimeFourthActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeFourthActivity.class;
+                break;
+            case 4:
+                if (RuntimeFifthActivity.class.getName().equals(session.activityClassName))
+                    return RuntimeFifthActivity.class;
+                break;
+            default:
+                break;
         }
         return null;
     }
@@ -145,7 +190,7 @@ final class RuntimeSessionStore {
             Session created = new Session(UUID.randomUUID().toString(), slot, canonical,
                     title == null || title.trim().isEmpty()
                             ? new File(canonical).getName() : title.trim(),
-                    -1, System.currentTimeMillis(), false);
+                    "", -1, System.currentTimeMillis(), false);
             sessions.add(created);
             return created;
         }, true);
@@ -158,7 +203,8 @@ final class RuntimeSessionStore {
                 boolean foreground = old.id.equals(id);
                 if (old.foreground != foreground) {
                     sessions.set(index, new Session(old.id, old.slot, old.jarPath,
-                            old.title, old.processId, old.startedAt, foreground));
+                            old.title, old.activityClassName, old.processId,
+                            old.startedAt, foreground));
                 }
             }
             return null;
@@ -166,12 +212,19 @@ final class RuntimeSessionStore {
     }
 
     static void updateProcessId(Context context, String id, int processId) throws IOException {
+        updateProcessId(context, id, processId, null);
+    }
+
+    static void updateProcessId(Context context, String id, int processId,
+            String activityClassName) throws IOException {
         if (id == null || processId <= 0) return;
         access(context, sessions -> {
             for (int index = 0; index < sessions.size(); index++) {
                 Session old = sessions.get(index);
                 if (!old.id.equals(id)) continue;
                 sessions.set(index, new Session(old.id, old.slot, old.jarPath, old.title,
+                        activityClassName == null || activityClassName.isEmpty()
+                                ? old.activityClassName : activityClassName,
                         processId, old.startedAt, old.foreground));
                 break;
             }
@@ -193,7 +246,8 @@ final class RuntimeSessionStore {
                 if (removedForeground && !sessions.isEmpty()) {
                     Session replacement = sessions.get(0);
                     sessions.set(0, new Session(replacement.id, replacement.slot,
-                            replacement.jarPath, replacement.title, replacement.processId,
+                            replacement.jarPath, replacement.title,
+                            replacement.activityClassName, replacement.processId,
                             replacement.startedAt, true));
                 }
                 return null;
@@ -202,6 +256,10 @@ final class RuntimeSessionStore {
             android.util.Log.e("J2MEX", "Cannot remove runtime session", error);
         } finally {
             RuntimeSessionPreviewStore.delete(context, id);
+            Intent changed = new Intent(ACTION_SESSION_REGISTRY_CHANGED)
+                    .setPackage(context.getPackageName())
+                    .putExtra(EXTRA_CHANGED_SESSION_ID, id);
+            context.sendBroadcast(changed);
         }
     }
 
@@ -233,7 +291,8 @@ final class RuntimeSessionStore {
         if (!file.getBaseFile().exists()) return sessions;
         try (FileInputStream raw = file.openRead();
                 DataInputStream input = new DataInputStream(raw)) {
-            if (input.readInt() != FORMAT_VERSION)
+            int formatVersion = input.readInt();
+            if (formatVersion < 1 || formatVersion > FORMAT_VERSION)
                 throw new IOException("Unsupported runtime session registry version");
             int count = input.readInt();
             if (count < 0 || count > SLOT_COUNT)
@@ -243,12 +302,14 @@ final class RuntimeSessionStore {
                 int slot = input.readInt();
                 String path = input.readUTF();
                 String title = input.readUTF();
+                String activityClassName =
+                        formatVersion >= 2 ? input.readUTF() : "";
                 int processId = input.readInt();
                 long startedAt = input.readLong();
                 boolean foreground = input.readBoolean();
                 if (id.isEmpty() || slot < 0 || slot >= SLOT_COUNT || path.isEmpty())
                     throw new IOException("Invalid runtime session record");
-                sessions.add(new Session(id, slot, path, title, processId,
+                sessions.add(new Session(id, slot, path, title, activityClassName, processId,
                         startedAt, foreground));
             }
         } catch (java.io.FileNotFoundException missing) {
@@ -270,6 +331,7 @@ final class RuntimeSessionStore {
                 output.writeInt(session.slot);
                 output.writeUTF(session.jarPath);
                 output.writeUTF(session.title);
+                output.writeUTF(session.activityClassName);
                 output.writeInt(session.processId);
                 output.writeLong(session.startedAt);
                 output.writeBoolean(session.foreground);

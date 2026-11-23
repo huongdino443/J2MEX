@@ -28,14 +28,13 @@ import javax.microedition.io.Connector;
 import org.recompile.mobile.Mobile;
 import org.recompile.mobile.MobilePlatform;
 
-/**
- * JSR-75 implementation constrained to a per-MIDlet directory inside the
- * app-private data area. No file URL can address shared phone storage.
- */
+/** JSR-75 volumes for per-MIDlet files and Android shared storage. */
 public final class FileConnectionImpl implements FileConnection
 {
 	static final String ROOT_NAME = "freej2me";
+	static final String SHARED_ROOT_NAME = "Storage";
 	private final File root;
+	private final String rootName;
 	private final int mode;
 	private File file;
 	private boolean open = true;
@@ -44,9 +43,12 @@ public final class FileConnectionImpl implements FileConnection
 	{
 		if (mode != Connector.READ && mode != Connector.WRITE && mode != Connector.READ_WRITE)
 			throw new IllegalArgumentException("Invalid connection mode: " + mode);
-		this.root = storageRoot();
+		URI uri = parseFileUrl(url);
+		String path = normalizedPath(uri);
+		this.rootName = rootNameForPath(path);
+		this.root = rootForName(rootName);
 		this.mode = mode;
-		this.file = resolveUrl(url);
+		this.file = resolvePath(path);
 	}
 
 	static File storageRoot() throws IOException
@@ -63,25 +65,66 @@ public final class FileConnectionImpl implements FileConnection
 		return root;
 	}
 
-	private File resolveUrl(String value) throws IOException
+	static File sharedStorageRoot() throws IOException
+	{
+		MobilePlatform platform = Mobile.getPlatform();
+		if (platform == null || platform.sharedStoragePath == null
+				|| platform.sharedStoragePath.trim().isEmpty())
+			throw new IOException("Android shared storage is not configured");
+		File root = new File(platform.sharedStoragePath).getCanonicalFile();
+		if (!root.isDirectory() || !root.canRead() || root.list() == null)
+			throw new IOException("Android shared storage is not accessible: " + root);
+		return root;
+	}
+
+	private static File rootForName(String name) throws IOException
+	{
+		if (ROOT_NAME.equals(name)) return storageRoot();
+		if (SHARED_ROOT_NAME.equals(name)) return sharedStorageRoot();
+		throw new IOException("Unknown file-system volume: " + name);
+	}
+
+	private static URI parseFileUrl(String value) throws IOException
 	{
 		if (value == null) throw new IllegalArgumentException("File URL must not be null");
 		final URI uri;
-// MIDP applications commonly pass unescaped spaces in file names.
-// Preserve existing escapes and the normal URI/root containment checks.
-try { uri = new URI(value.replace(" ", "%20")); }
+		try { uri = new URI(value.replace(" ", "%20")); }
 		catch (URISyntaxException error) { throw new IOException("Invalid file URL", error); }
-		if (!"file".equalsIgnoreCase(uri.getScheme()) || uri.getRawAuthority() != null
-				&& !uri.getRawAuthority().isEmpty() || uri.getQuery() != null || uri.getFragment() != null)
+		if (!"file".equalsIgnoreCase(uri.getScheme())
+				|| uri.getRawAuthority() != null && !uri.getRawAuthority().isEmpty()
+				|| uri.getQuery() != null || uri.getFragment() != null)
 			throw new IOException("Unsupported file URL: " + value);
+		return uri;
+	}
+
+	private static String normalizedPath(URI uri) throws IOException
+	{
 		String path = uri.getPath();
-		if (path == null || path.indexOf('\\') >= 0) throw new IOException("Invalid file path");
+		if (path == null || path.indexOf('\\') >= 0)
+			throw new IOException("Invalid file path");
 		while (path.startsWith("/")) path = path.substring(1);
-		if (path.isEmpty()) return root;
-		String prefix = ROOT_NAME;
-		if (path.equals(prefix) || path.equals(prefix + "/")) return root;
-		if (!path.startsWith(prefix + "/")) throw new IOException("Unknown private file volume");
-		return resolveRelative(path.substring(prefix.length() + 1));
+		return path.isEmpty() ? ROOT_NAME : path;
+	}
+
+	private static String rootNameForPath(String path) throws IOException
+	{
+		int separator = path.indexOf('/');
+		String name = separator < 0 ? path : path.substring(0, separator);
+		if (ROOT_NAME.equals(name) || SHARED_ROOT_NAME.equals(name)) return name;
+		throw new IOException("Unknown file-system volume");
+	}
+
+	private File resolveUrl(String value) throws IOException
+	{
+		return resolvePath(normalizedPath(parseFileUrl(value)));
+	}
+
+	private File resolvePath(String path) throws IOException
+	{
+		if (path.equals(rootName) || path.equals(rootName + "/")) return root;
+		String prefix = rootName + "/";
+		if (!path.startsWith(prefix)) throw new IOException("Unknown file-system volume");
+		return resolveRelative(path.substring(prefix.length()));
 	}
 
 	private File resolveRelative(String relative) throws IOException
@@ -91,7 +134,7 @@ try { uri = new URI(value.replace(" ", "%20")); }
 		File canonical = candidate.getCanonicalFile();
 		String rootPath = root.getCanonicalPath();
 		if (!canonical.equals(root) && !canonical.getPath().startsWith(rootPath + File.separator))
-			throw new IOException("File URL escapes the MIDlet's private directory");
+		throw new IOException("File URL escapes its configured volume");
 		return canonical;
 	}
 
@@ -110,7 +153,7 @@ try { uri = new URI(value.replace(" ", "%20")); }
 	{
 		checkOpen();
 		if ((mode & Connector.WRITE) == 0) throw new IOException("FileConnection is not open for writing");
-		if (isRoot()) throw new IOException("Cannot modify the private file-system root");
+		if (isRoot()) throw new IOException("Cannot modify a file-system volume root");
 	}
 
 	private File requireExisting() throws IOException
@@ -192,7 +235,7 @@ try { uri = new URI(value.replace(" ", "%20")); }
 
 	public String getURL()
 	{
-		String path = "/" + ROOT_NAME + getPath();
+		String path = "/" + rootName + getPath();
 		try { return new URI("file", "", path, null, null).toASCIIString(); }
 		catch (URISyntaxException impossible) { throw new IllegalStateException(impossible); }
 	}
@@ -349,11 +392,11 @@ try { uri = new URI(value.replace(" ", "%20")); }
 			File canonical = target.getCanonicalFile();
 			String rootPath = root.getCanonicalPath();
 			if (!canonical.equals(root) && !canonical.getPath().startsWith(rootPath + File.separator))
-				throw new IOException("File path escapes the private root");
+				throw new IOException("File path escapes its configured volume");
 			file = canonical;
 			return;
 		}
-		file = resolveUrl("file:///" + ROOT_NAME + "/" + relative);
+		file = resolveUrl("file:///" + rootName + "/" + relative);
 	}
 
 	public void setReadable(boolean readable) throws IOException

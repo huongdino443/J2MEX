@@ -15,11 +15,13 @@ final class GameIconView extends View {
     private static final int SURFACE = Color.rgb(35, 43, 57);
     private static final int ACCENT = Color.rgb(185, 195, 255);
     private static final int TEXT = Color.rgb(232, 239, 247);
+    private static final int ROUNDED_EDGE_ALPHA_THRESHOLD = 200;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Bitmap bitmap;
     private String title = "MIDlet";
     private boolean fullBleedSquare;
     private boolean sessionIconStyle;
+    private float cornerRadiusDp = 14f;
     private int artworkSurface = SURFACE;
 
     GameIconView(Context context) {
@@ -42,13 +44,18 @@ final class GameIconView extends View {
         setArtwork(artwork, gameTitle);
     }
 
+    void setCornerRadiusDp(float radiusDp) {
+        cornerRadiusDp = Math.max(0, radiusDp);
+        invalidate();
+    }
+
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         float inset = dp(1);
         RectF bounds = new RectF(inset, inset, getWidth() - inset, getHeight() - inset);
         float radius = sessionIconStyle
                 ? Math.min(bounds.width(), bounds.height()) * 0.22f
-                : dp(14);
+                : dp(cornerRadiusDp);
         Path clip = new Path();
         clip.addRoundRect(bounds, radius, radius, Path.Direction.CW);
         canvas.save();
@@ -108,7 +115,81 @@ final class GameIconView extends View {
             if (Color.alpha(image.getPixel(0, y)) >= 232) opaqueSamples++;
             if (Color.alpha(image.getPixel(image.getWidth() - 1, y)) >= 232) opaqueSamples++;
         }
-        return opaqueSamples >= Math.ceil(totalSamples * 0.92f);
+        return opaqueSamples >= Math.ceil(totalSamples * 0.92f)
+                || hasRoundedSquareEdges(image, aspect);
+    }
+
+    private boolean hasRoundedSquareEdges(Bitmap image, float aspect) {
+        if (aspect < 0.96f || aspect > 1.04f) return false;
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int centerX = width / 2;
+        int centerY = height / 2;
+        int left = firstOpaquePixelInRow(image, centerY);
+        int right = lastOpaquePixelInRow(image, centerY);
+        int top = firstOpaquePixelInColumn(image, centerX);
+        int bottom = lastOpaquePixelInColumn(image, centerX);
+        if (left < 0 || right <= left || top < 0 || bottom <= top) return false;
+
+        int artworkWidth = right - left + 1;
+        int artworkHeight = bottom - top + 1;
+        float artworkAspect = artworkWidth / (float) artworkHeight;
+        if (artworkWidth / (float) width < 0.72f
+                || artworkHeight / (float) height < 0.72f
+                || artworkAspect < 0.92f || artworkAspect > 1.08f) {
+            return false;
+        }
+        if (Color.alpha(image.getPixel(left, top)) >= 232
+                || Color.alpha(image.getPixel(right, top)) >= 232
+                || Color.alpha(image.getPixel(left, bottom)) >= 232
+                || Color.alpha(image.getPixel(right, bottom)) >= 232) return false;
+
+        int opaqueEdgeSamples = 0;
+        int totalEdgeSamples = 0;
+        for (int index = 0; index < 12; index++) {
+            float position = 0.30f + 0.40f * (index + 0.5f) / 12f;
+            int x = left + Math.round(position * (artworkWidth - 1));
+            int y = top + Math.round(position * (artworkHeight - 1));
+            if (Color.alpha(image.getPixel(x, top)) >= ROUNDED_EDGE_ALPHA_THRESHOLD)
+                opaqueEdgeSamples++;
+            if (Color.alpha(image.getPixel(x, bottom)) >= ROUNDED_EDGE_ALPHA_THRESHOLD)
+                opaqueEdgeSamples++;
+            if (Color.alpha(image.getPixel(left, y)) >= ROUNDED_EDGE_ALPHA_THRESHOLD)
+                opaqueEdgeSamples++;
+            if (Color.alpha(image.getPixel(right, y)) >= ROUNDED_EDGE_ALPHA_THRESHOLD)
+                opaqueEdgeSamples++;
+            totalEdgeSamples += 4;
+        }
+        return opaqueEdgeSamples >= Math.ceil(totalEdgeSamples * 0.92f);
+    }
+
+    private int firstOpaquePixelInRow(Bitmap image, int y) {
+        for (int x = 0; x < image.getWidth(); x++) {
+            if (Color.alpha(image.getPixel(x, y)) >= 232) return x;
+        }
+        return -1;
+    }
+
+    private int lastOpaquePixelInRow(Bitmap image, int y) {
+        for (int x = image.getWidth() - 1; x >= 0; x--) {
+            if (Color.alpha(image.getPixel(x, y)) >= 232) return x;
+        }
+        return -1;
+    }
+
+    private int firstOpaquePixelInColumn(Bitmap image, int x) {
+        for (int y = 0; y < image.getHeight(); y++) {
+            if (Color.alpha(image.getPixel(x, y)) >= 232) return y;
+        }
+        return -1;
+    }
+
+    private int lastOpaquePixelInColumn(Bitmap image, int x) {
+        for (int y = image.getHeight() - 1; y >= 0; y--) {
+            if (Color.alpha(image.getPixel(x, y)) >= 232) return y;
+        }
+        return -1;
     }
 
     private int estimateArtworkColor(Bitmap image) {

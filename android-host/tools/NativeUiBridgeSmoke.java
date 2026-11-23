@@ -69,6 +69,7 @@ public final class NativeUiBridgeSmoke {
     public static void main(String[] args) throws Exception {
         File log = new File("build/bridge-test/bridge.log");
         File data = Files.createTempDirectory("native-lcdui-").toFile();
+        File sharedStorage = Files.createTempDirectory("native-shared-storage-").toFile();
         try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
                 ServerSocket fontServer = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             server.setSoTimeout(15000);
@@ -84,7 +85,8 @@ public final class NativeUiBridgeSmoke {
                     "org.recompile.android.HeadlessMain", new File("build/bridge-test/input.jar").toURI().toString(),
                     "240", "320", Integer.toString(server.getLocalPort()), token, data.getAbsolutePath(),
                       new File("build/bridge-test/audio").getAbsolutePath(), "120", "vi-VN",
-                      Integer.toString(fontServer.getLocalPort()))
+                      Integer.toString(fontServer.getLocalPort()),
+                      "--j2mex-shared-storage=" + sharedStorage.getAbsolutePath())
                     .redirectErrorStream(true).redirectOutput(log).start();
             try (Socket socket = server.accept()) {
                 socket.setSoTimeout(15000);

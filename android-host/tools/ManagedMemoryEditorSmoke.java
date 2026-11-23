@@ -39,6 +39,16 @@ public final class ManagedMemoryEditorSmoke {
             ManagedMemoryEditor.Result edited = editor.edit(staticId, "12000");
             if (!edited.success || fixtureClass.getField("wallet").getInt(null) != 12000)
                 throw new AssertionError("Static field edit did not reach the MIDlet heap");
+            ManagedMemoryEditor.Result history = editor.historyPage(0);
+            boolean foundStaticHistory = false;
+            for (ManagedMemoryEditor.Entry entry : history.entries) {
+                if (entry.location.endsWith(".wallet")) {
+                    foundStaticHistory = "10000".equals(entry.originalValue)
+                            && "12000".equals(entry.value);
+                }
+            }
+            if (!foundStaticHistory || history.total != 1)
+                throw new AssertionError("History did not retain the original and live values");
 
             ManagedMemoryEditor.Result refined = editor.search("10000", true);
             if (!refined.success || refined.total != 2)
@@ -53,6 +63,16 @@ public final class ManagedMemoryEditorSmoke {
             editor.edit(instanceId, "9000");
             if (fixtureClass.getField("currentValue").getInt(fixture) != 9000)
                 throw new AssertionError("Instance field edit did not reach the MIDlet heap");
+            fixtureClass.getField("currentValue").setInt(fixture, 9100);
+            ManagedMemoryEditor.Result liveHistory = editor.historyPage(0);
+            boolean foundLiveInstance = false;
+            for (ManagedMemoryEditor.Entry entry : liveHistory.entries) {
+                if (entry.location.endsWith(".currentValue"))
+                    foundLiveInstance = "10000".equals(entry.originalValue)
+                            && "9100".equals(entry.value);
+            }
+            if (!foundLiveInstance || liveHistory.total != 2)
+                throw new AssertionError("Search/refine cleared or merged the edit history");
 
             ManagedMemoryEditor.Result unsigned = editor.search("60000", false, "UInt16", 0);
             if (!unsigned.success || unsigned.total != 3)
@@ -84,6 +104,26 @@ public final class ManagedMemoryEditorSmoke {
             if (rejectedBatch.success
                     || fixtureClass.getField("unsignedValue").getShort(fixture) != (short) 50000)
                 throw new AssertionError("Invalid UInt16 batch partially changed values");
+            ManagedMemoryEditor.Result unsignedHistory = editor.historyPage(0);
+            java.util.ArrayList<Integer> unsignedHistoryIds = new java.util.ArrayList<Integer>();
+            for (ManagedMemoryEditor.Entry entry : unsignedHistory.entries) {
+                if ("60000".equals(entry.originalValue) && "50000".equals(entry.value))
+                    unsignedHistoryIds.add(entry.id);
+            }
+            if (unsignedHistoryIds.size() != 3 || unsignedHistory.total != 5)
+                throw new AssertionError("Bulk edits were not isolated in the history list");
+            ManagedMemoryEditor.Result historyBatch = editor.editHistoryAll(
+                    toIntArray(unsignedHistoryIds), "40000");
+            if (!historyBatch.success
+                    || fixtureClass.getField("unsignedValue").getShort(fixture) != (short) 40000)
+                throw new AssertionError("Bulk editing from the history list failed");
+            for (ManagedMemoryEditor.Entry entry : historyBatch.entries) {
+                if (entry.originalValue.length() > 0
+                        && entry.location.endsWith(".unsignedValue")
+                        && (!"60000".equals(entry.originalValue)
+                                || !"40000".equals(entry.value)))
+                    throw new AssertionError("Re-editing replaced the first original value");
+            }
 
             ManagedMemoryEditor.Result firstPage =
                     editor.search("7777", false, "Int32", 0);
@@ -97,6 +137,46 @@ public final class ManagedMemoryEditorSmoke {
             if (lastPage.entries.size() != 5 || lastPage.pageIndex != 2
                     || lastPage.pageCount != 3)
                 throw new AssertionError("Last result page was not returned");
+
+            int retainedCandidateId = firstPage.entries.get(0).id;
+            editor.edit(retainedCandidateId, "200");
+            ManagedMemoryEditor.Result finalHistory = editor.historyPage(0);
+            boolean foundPageHistory = false;
+            for (ManagedMemoryEditor.Entry entry : finalHistory.entries) {
+                if ("200".equals(entry.value) && "7777".equals(entry.originalValue))
+                    foundPageHistory = true;
+            }
+            if (!foundPageHistory || finalHistory.total != 6)
+                throw new AssertionError("Editing a later search candidate was not recorded");
+            ManagedMemoryEditor.Result repeatedSearch =
+                    editor.search("200", false, "Int32", 0);
+            if (!repeatedSearch.success || repeatedSearch.total != 1)
+                throw new AssertionError("A fresh search could not find the edited value");
+            String repeatedLocation = repeatedSearch.entries.get(0).location;
+            editor.edit(repeatedSearch.entries.get(0).id, "250");
+            ManagedMemoryEditor.Result repeatedEditHistory = editor.historyPage(0);
+            boolean preservedFirstValue = false;
+            for (ManagedMemoryEditor.Entry entry : repeatedEditHistory.entries) {
+                if (entry.location.equals(repeatedLocation))
+                    preservedFirstValue = "7777".equals(entry.originalValue)
+                            && "250".equals(entry.value);
+            }
+            if (!preservedFirstValue || repeatedEditHistory.total != 6)
+                throw new AssertionError("Re-editing created a duplicate or replaced original history");
+            MemoryEditorGuard.resetSession();
+            if (!MemoryEditorGuard.openEditor(false))
+                throw new AssertionError("Offline memory editor did not open");
+            MemoryEditorGuard.closeEditor();
+            if (!MemoryEditorGuard.openEditor(false))
+                throw new AssertionError("Memory editor did not reopen in the same game session");
+            ManagedMemoryEditor.Result reopenedHistory = editor.historyPage(0);
+            boolean retainedEditedValue = false;
+            for (ManagedMemoryEditor.Entry entry : reopenedHistory.entries)
+                if ("250".equals(entry.value) && "7777".equals(entry.originalValue))
+                    retainedEditedValue = true;
+            if (!retainedEditedValue)
+                throw new AssertionError("Edit history was lost after close and reopen");
+            MemoryEditorGuard.closeEditor();
         }
         System.out.println("ManagedMemoryEditorSmoke passed");
     }

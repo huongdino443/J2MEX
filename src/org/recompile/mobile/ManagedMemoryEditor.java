@@ -17,6 +17,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,6 +33,7 @@ import java.util.Vector;
 public final class ManagedMemoryEditor {
     public static final int MAX_VISIBLE_RESULTS = 100;
     public static final int MAX_BATCH_EDIT_VALUES = 20000;
+    public static final int MAX_EDIT_HISTORY_ENTRIES = 20000;
     private static final int MAX_OBJECTS = 30000;
     private static final int MAX_CANDIDATES = MAX_BATCH_EDIT_VALUES;
     private static final int MAX_ARRAY_ELEMENTS = 100000;
@@ -42,13 +44,19 @@ public final class ManagedMemoryEditor {
         public final String value;
         public final String location;
         public final String referenceKind;
+        public final String originalValue;
 
         private Entry(Candidate candidate) {
-            id = candidate.id;
+            this(candidate, candidate.id, "");
+        }
+
+        private Entry(Candidate candidate, int id, String originalValue) {
+            this.id = id;
             type = candidate.typeName();
             value = candidate.displayValue();
             location = candidate.location;
             referenceKind = candidate.referenceKind();
+            this.originalValue = originalValue == null ? "" : originalValue;
         }
     }
 
@@ -162,15 +170,32 @@ public final class ManagedMemoryEditor {
 
         String displayValue() {
             try {
-                Object value = read();
-                if (unsigned16 && value instanceof Short)
-                    return Integer.toString(Short.toUnsignedInt(((Short) value).shortValue()));
-                return value instanceof Character
-                        ? Integer.toString(((Character) value).charValue())
-                        : String.valueOf(value);
+                return displayValue(read());
             } catch (Exception ignored) {
                 return "unavailable";
             }
+        }
+
+        String displayValue(Object value) {
+            if (unsigned16 && value instanceof Short)
+                return Integer.toString(Short.toUnsignedInt(((Short) value).shortValue()));
+            return value instanceof Character
+                    ? Integer.toString(((Character) value).charValue())
+                    : String.valueOf(value);
+        }
+
+        boolean refersToSameTarget(Candidate other) {
+            if (other == null) return false;
+            if (field != null || other.field != null) {
+                if (field == null || other.field == null || !field.equals(other.field))
+                    return false;
+                boolean isStatic = Modifier.isStatic(field.getModifiers());
+                if (isStatic) return Modifier.isStatic(other.field.getModifiers());
+                Object firstOwner = owner();
+                return firstOwner != null && firstOwner == other.owner();
+            }
+            Object firstArray = array();
+            return firstArray != null && firstArray == other.array() && index == other.index;
         }
 
         boolean matches(BigDecimal target) throws Exception {
@@ -182,13 +207,77 @@ public final class ManagedMemoryEditor {
         }
     }
 
+    private static final class HistoryKey {
+        private final Field field;
+        private final boolean staticField;
+        private final WeakReference<Object> target;
+        private final int index;
+        private final int hash;
+
+        HistoryKey(Candidate candidate) {
+            field = candidate.field;
+            staticField = field != null && Modifier.isStatic(field.getModifiers());
+            if (field != null) {
+                Object owner = staticField ? null : candidate.owner();
+                target = owner == null ? null : new WeakReference<Object>(owner);
+                index = -1;
+                hash = 31 * field.hashCode()
+                        + (staticField ? 0 : System.identityHashCode(owner));
+            } else {
+                Object array = candidate.array();
+                target = array == null ? null : new WeakReference<Object>(array);
+                index = candidate.index;
+                hash = 31 * System.identityHashCode(array) + index;
+            }
+        }
+
+        @Override public int hashCode() { return hash; }
+
+        @Override public boolean equals(Object value) {
+            if (this == value) return true;
+            if (!(value instanceof HistoryKey)) return false;
+            HistoryKey other = (HistoryKey) value;
+            if (field != null || other.field != null) {
+                if (field == null || other.field == null || !field.equals(other.field)
+                        || staticField != other.staticField) return false;
+                if (staticField) return true;
+            } else if (index != other.index) {
+                return false;
+            }
+            Object first = target == null ? null : target.get();
+            Object second = other.target == null ? null : other.target.get();
+            return first != null && first == second;
+        }
+    }
+
+    private static final class EditedValue {
+        final int id;
+        final String originalValue;
+        Candidate candidate;
+
+        EditedValue(int id, Candidate candidate, Object originalValue) {
+            this.id = id;
+            this.candidate = candidate;
+            this.originalValue = candidate.displayValue(originalValue);
+        }
+
+        Entry toEntry() { return new Entry(candidate, id, originalValue); }
+    }
+
     private final ClassLoader loader;
     private final MIDletLoader midletLoader;
     private final Object rootOverride;
     private final LinkedHashMap<Integer, Candidate> candidates =
             new LinkedHashMap<Integer, Candidate>();
+    private final ArrayList<EditedValue> editHistory = new ArrayList<EditedValue>();
+    private final HashMap<HistoryKey, EditedValue> editHistoryByTarget =
+            new HashMap<HistoryKey, EditedValue>();
+    private final HashMap<Integer, EditedValue> editHistoryById =
+            new HashMap<Integer, EditedValue>();
     private int nextId = 1;
     private int currentPage;
+    private int nextHistoryId = 1;
+    private int currentHistoryPage;
 
     public ManagedMemoryEditor(MIDletLoader loader) {
         if (loader == null) throw new NullPointerException("loader");
@@ -248,34 +337,69 @@ public final class ManagedMemoryEditor {
         return currentResult();
     }
 
+    public synchronized Result historyPage(int pageIndex) {
+        currentHistoryPage = clampPage(pageIndex, editHistory.size());
+        return currentHistoryResult();
+    }
+
     public synchronized Result edit(int id, String value) {
         Candidate candidate = candidates.get(id);
         if (candidate == null) return failure("Giá trị này không còn khả dụng.");
-        try {
-            candidate.write(value == null ? "" : value.trim());
-            return currentResult();
-        } catch (Throwable error) {
-            return failure("Không thể thay đổi giá trị này.");
-        }
+        ArrayList<Candidate> selected = new ArrayList<Candidate>(1);
+        selected.add(candidate);
+        return editCandidates(selected, value, false);
     }
 
     public synchronized Result editAll(int[] ids, String value) {
         if (ids == null || ids.length == 0)
             return failure("Chọn ít nhất một giá trị.");
+        ArrayList<Candidate> selected = new ArrayList<Candidate>(ids.length);
+        LinkedHashSet<Integer> uniqueIds = new LinkedHashSet<Integer>();
+        for (int id : ids) {
+            if (!uniqueIds.add(id)) continue;
+            Candidate candidate = candidates.get(id);
+            if (candidate == null)
+                return failure("Một hoặc nhiều giá trị đã chọn không còn khả dụng.");
+            selected.add(candidate);
+        }
+        return editCandidates(selected, value, false);
+    }
+
+    public synchronized Result editHistoryAll(int[] ids, String value) {
+        if (ids == null || ids.length == 0)
+            return failure("Chọn ít nhất một giá trị.");
+        ArrayList<Candidate> selected = new ArrayList<Candidate>(ids.length);
+        LinkedHashSet<Integer> uniqueIds = new LinkedHashSet<Integer>();
+        for (int id : ids) {
+            if (!uniqueIds.add(id)) continue;
+            EditedValue edited = editHistoryById.get(id);
+            if (edited == null)
+                return failure("Một hoặc nhiều giá trị đã chọn không còn khả dụng.");
+            selected.add(edited.candidate);
+        }
+        return editCandidates(selected, value, true);
+    }
+
+    private Result editCandidates(ArrayList<Candidate> selected, String value,
+            boolean historyMode) {
         LinkedHashMap<Candidate, Object> previousValues =
                 new LinkedHashMap<Candidate, Object>();
         LinkedHashMap<Candidate, Object> newValues =
                 new LinkedHashMap<Candidate, Object>();
         try {
-            LinkedHashSet<Integer> uniqueIds = new LinkedHashSet<Integer>();
-            for (int id : ids) {
-                if (!uniqueIds.add(id)) continue;
-                Candidate candidate = candidates.get(id);
-                if (candidate == null)
-                    return failure("Một hoặc nhiều giá trị đã chọn không còn khả dụng.");
+            for (Candidate candidate : selected) {
                 previousValues.put(candidate, candidate.read());
                 newValues.put(candidate, candidate.parseEditValue(value == null ? "" : value.trim()));
             }
+            int newHistoryEntries = 0;
+            for (Map.Entry<Candidate, Object> update : newValues.entrySet()) {
+                if (!sameValue(previousValues.get(update.getKey()), update.getValue())
+                        && findHistoryEntry(update.getKey()) == null)
+                    newHistoryEntries++;
+            }
+            if (editHistory.size() + newHistoryEntries > MAX_EDIT_HISTORY_ENTRIES)
+                return failure("Lịch sử chỉnh sửa đã đầy.");
+
             ArrayList<Candidate> written = new ArrayList<Candidate>();
             try {
                 for (Map.Entry<Candidate, Object> update : newValues.entrySet()) {
@@ -291,7 +415,15 @@ public final class ManagedMemoryEditor {
                 }
                 return failure("Không thể sửa đồng loạt: giá trị không phù hợp hoặc đã mất.");
             }
-            return currentResult();
+            for (Map.Entry<Candidate, Object> update : newValues.entrySet()) {
+                Candidate candidate = update.getKey();
+                Object oldValue = previousValues.get(candidate);
+                if (!sameValue(oldValue, update.getValue()))
+                    recordEditedValue(candidate, oldValue);
+                else
+                    refreshHistoryCandidate(candidate);
+            }
+            return historyMode ? currentHistoryResult() : currentResult();
         } catch (Throwable invalidValue) {
             return failure("Không thể sửa đồng loạt: giá trị không phù hợp hoặc đã mất.");
         }
@@ -421,7 +553,9 @@ public final class ManagedMemoryEditor {
         if (candidates.size() >= MAX_CANDIDATES) return;
         int id = nextId++;
         String location = field.getDeclaringClass().getName() + "." + field.getName();
-        candidates.put(id, new Candidate(id, field, owner, null, -1, type, unsigned16, location));
+        Candidate candidate = new Candidate(id, field, owner, null, -1, type, unsigned16, location);
+        candidates.put(id, candidate);
+        refreshHistoryCandidate(candidate);
     }
 
     private void addArrayCandidate(Object array, int index, Class<?> type,
@@ -429,8 +563,49 @@ public final class ManagedMemoryEditor {
         if (candidates.size() >= MAX_CANDIDATES) return;
         int id = nextId++;
         String location = type.getSimpleName() + "[" + index + "]";
-        candidates.put(id, new Candidate(id, null, null, array, index, type,
-                unsigned16, location));
+        Candidate candidate = new Candidate(id, null, null, array, index, type,
+                unsigned16, location);
+        candidates.put(id, candidate);
+        refreshHistoryCandidate(candidate);
+    }
+
+    private HistoryKey historyKey(Candidate candidate) {
+        if (candidate == null) return null;
+        if (candidate.field == null) {
+            if (candidate.array() == null) return null;
+        } else if (!Modifier.isStatic(candidate.field.getModifiers())
+                && candidate.owner() == null) {
+            return null;
+        }
+        return new HistoryKey(candidate);
+    }
+
+    private EditedValue findHistoryEntry(Candidate candidate) {
+        HistoryKey key = historyKey(candidate);
+        return key == null ? null : editHistoryByTarget.get(key);
+    }
+
+    private void refreshHistoryCandidate(Candidate candidate) {
+        EditedValue edited = findHistoryEntry(candidate);
+        if (edited != null) edited.candidate = candidate;
+    }
+
+    private void recordEditedValue(Candidate candidate, Object originalValue) {
+        EditedValue existing = findHistoryEntry(candidate);
+        if (existing != null) {
+            existing.candidate = candidate;
+            return;
+        }
+        HistoryKey key = historyKey(candidate);
+        if (key == null || editHistory.size() >= MAX_EDIT_HISTORY_ENTRIES) return;
+        EditedValue edited = new EditedValue(nextHistoryId++, candidate, originalValue);
+        editHistory.add(0, edited);
+        editHistoryByTarget.put(key, edited);
+        editHistoryById.put(edited.id, edited);
+    }
+
+    private static boolean sameValue(Object first, Object second) {
+        return first == null ? second == null : first.equals(second);
     }
 
     private List<Entry> visiblePage() {
@@ -447,11 +622,24 @@ public final class ManagedMemoryEditor {
     }
 
     private Result currentResult() {
-        int pages = Math.max(1,
-                (candidates.size() + MAX_VISIBLE_RESULTS - 1) / MAX_VISIBLE_RESULTS);
+        int pages = pageCount(candidates.size());
         return new Result(true, candidates.isEmpty()
                 ? "Không tìm thấy giá trị phù hợp." : "", candidates.size(),
                 currentPage, pages, visiblePage());
+    }
+
+    private Result currentHistoryResult() {
+        int pages = pageCount(editHistory.size());
+        ArrayList<Entry> entries = new ArrayList<Entry>(
+                Math.min(MAX_VISIBLE_RESULTS,
+                        Math.max(0, editHistory.size() - currentHistoryPage * MAX_VISIBLE_RESULTS)));
+        int start = currentHistoryPage * MAX_VISIBLE_RESULTS;
+        int end = Math.min(editHistory.size(), start + MAX_VISIBLE_RESULTS);
+        for (int index = start; index < end; index++)
+            entries.add(editHistory.get(index).toEntry());
+        return new Result(true, editHistory.isEmpty()
+                ? "Chưa có giá trị nào được sửa." : "", editHistory.size(),
+                currentHistoryPage, pages, entries);
     }
 
     private static Result failure(String message) {
@@ -459,9 +647,16 @@ public final class ManagedMemoryEditor {
     }
 
     private int clampPage(int requestedPage) {
-        int pages = Math.max(1,
-                (candidates.size() + MAX_VISIBLE_RESULTS - 1) / MAX_VISIBLE_RESULTS);
+        return clampPage(requestedPage, candidates.size());
+    }
+
+    private int clampPage(int requestedPage, int count) {
+        int pages = pageCount(count);
         return Math.max(0, Math.min(requestedPage, pages - 1));
+    }
+
+    private static int pageCount(int count) {
+        return Math.max(1, (count + MAX_VISIBLE_RESULTS - 1) / MAX_VISIBLE_RESULTS);
     }
 
     private static String normalizeFilter(String typeFilter) {

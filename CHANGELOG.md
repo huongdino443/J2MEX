@@ -1,5 +1,34 @@
 # J2MEX Changelog
 
+## J2MEX 0.1.6
+
+#### Multiple game sessions
+
+- Improve isolation and lifecycle handling for up to five active game sessions.
+- Improve foreground notification startup and cleanup for background games.
+
+#### Game library and controls
+
+- Show game display name, vendor, version, description, and other JAR metadata.
+- Improve collection icons, gamepad editing, and per-game physical key mappings.
+- Enable game-requested vibration by default, with a setting to turn it off.
+
+#### MIDP compatibility
+
+- Open MIDlet web links in the Android browser and improve first-launch behavior for cloned MIDlets.
+- Improve shared-storage file access, Bluetooth, and local network connections.
+
+#### Memory editor
+
+- Improve search history, batch editing, and safeguards for memory editing.
+
+#### Interface
+
+- Standardize popup sizing and text-field styling across the app.
+- Improve update, collection, and game-information dialogs.
+
+**Install this update over 0.1.5 without uninstalling; existing app and game data will be retained.**
+
 ## J2MEX 0.1.5
 
 #### Background performance

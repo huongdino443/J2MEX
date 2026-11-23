@@ -1,10 +1,10 @@
 plugins { id 'com.android.application' }
 def fontScalePercent = (project.findProperty('fontScalePercent') ?: '85')
         .toString().toInteger()
-def appBuildVersionCode = (project.findProperty('buildVersionCode') ?: '436')
+def appBuildVersionCode = (project.findProperty('buildVersionCode') ?: '493')
         .toString().toInteger()
 def appBuildVersionName = (project.findProperty('buildVersionName')
-        ?: "0.1.5").toString()
+        ?: "0.1.6").toString()
 def releaseKeystoreFile = file("$rootDir/keys/j2mex-release.p12")
 def releaseKeystorePassword = System.getenv("J2MEX_RELEASE_KEYSTORE_PASSWORD") ?: ""
 if (fontScalePercent < 1 || fontScalePercent > 200)

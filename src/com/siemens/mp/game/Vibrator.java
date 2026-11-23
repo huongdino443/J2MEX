@@ -21,6 +21,12 @@ import org.recompile.mobile.Mobile;
 
 public class Vibrator
 {
-	public static void startVibrator() { }
-	public static void stopVibrator() { }
+public static void startVibrator()
+{
+if (Mobile.getPlatform() != null) Mobile.getPlatform().vibrate(-1, 100);
+}
+public static void stopVibrator()
+{
+if (Mobile.getPlatform() != null) Mobile.getPlatform().stopVibration();
+}
 }

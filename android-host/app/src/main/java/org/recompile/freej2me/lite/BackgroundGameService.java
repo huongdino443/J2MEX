@@ -191,6 +191,15 @@ public class BackgroundGameService extends Service {
         return START_NOT_STICKY;
     }
 
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        if (sessionId != null) {
+            RuntimeSessionStore.remove(this, sessionId);
+        }
+        stopForeground(true);
+        stopSelf();
+        super.onTaskRemoved(rootIntent);
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
@@ -209,11 +218,26 @@ public class BackgroundGameService extends Service {
     private Notification createNotification() {
         Intent returnIntent;
         if (sessionId != null) {
-            returnIntent = new Intent(this, MainActivity.class);
-            returnIntent.putExtra(RuntimeSessionStore.EXTRA_RETURN_TO_SESSION, sessionId);
-            returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, sessionSlot);
-            returnIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            RuntimeSessionStore.Session session = RuntimeSessionStore.find(this, sessionId);
+            Class<? extends RuntimeActivity> activityClass =
+                    RuntimeSessionStore.activityClassForSession(session);
+            if (activityClass != null && session.slot == sessionSlot) {
+                returnIntent = new Intent(this, activityClass);
+                returnIntent.putExtra("jar", session.jarPath);
+                returnIntent.putExtra("title", session.title);
+                returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_ID, session.id);
+                returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, session.slot);
+                returnIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            } else {
+                returnIntent = new Intent(this, MainActivity.class);
+                returnIntent.putExtra(RuntimeSessionStore.EXTRA_RETURN_TO_SESSION, sessionId);
+                returnIntent.putExtra(RuntimeSessionStore.EXTRA_SESSION_SLOT, sessionSlot);
+                returnIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            }
         } else {
             returnIntent = sessionManagerIntent(this);
         }
@@ -233,6 +257,8 @@ public class BackgroundGameService extends Service {
                 .setContentIntent(contentIntent)
                 .setOngoing(true)
                 .setShowWhen(false);
+        if (Build.VERSION.SDK_INT >= 31)
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         if (Build.VERSION.SDK_INT >= 20)
             builder.setGroup(NOTIFICATION_GROUP).setGroupSummary(false);
         return builder.build();
@@ -245,7 +271,7 @@ public class BackgroundGameService extends Service {
     private static Intent sessionManagerIntent(Context context) {
         Intent intent = new Intent(context, MainActivity.class);
         intent.putExtra(RuntimeSessionStore.EXTRA_OPEN_SESSION_MANAGER, true);
-        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         return intent;
     }
@@ -269,7 +295,8 @@ public class BackgroundGameService extends Service {
             inbox.addLine(session.title);
         summary.setSmallIcon(R.drawable.ic_stat_j2mex)
                 .setContentTitle(AppLocalization.text(context, "J2MEX đang chạy nền"))
-                .setContentText(sessions.size() + " " + AppLocalization.text(context, "game đang chạy"))
+                .setContentText(sessions.size() + " "
+                        + AppLocalization.text(context, "game đang chạy"))
                 .setStyle(inbox)
                 .setContentIntent(contentIntent)
                 .setCategory(Notification.CATEGORY_SERVICE)
